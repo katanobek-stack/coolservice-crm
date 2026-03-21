@@ -4,829 +4,373 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a1628">
 <title>CoolService CRM</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-:root {
-  --bg: #0a1628; --bg2: #0f2040; --bg3: #132d5e;
-  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b; --text4: #475569;
-  --accent: #0ea5e9; --accent2: #38bdf8; --accent3: #22d3ee;
-  --green: #4ade80; --yellow: #fbbf24; --red: #f87171;
-  --border: rgba(56,189,248,0.12); --border2: rgba(255,255,255,0.08);
-  --card: linear-gradient(135deg, rgba(15,32,64,0.8), rgba(19,45,94,0.5));
-}
-html,body { height:100%; background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; overflow:hidden; }
-#app { max-width:520px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width:4px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:var(--text4); border-radius:4px; }
-
-/* Login */
-.login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:32px; }
-.login-logo { width:64px; height:64px; border-radius:18px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:16px; box-shadow:0 0 40px rgba(14,165,233,0.3); }
-.login-title { font-size:24px; font-weight:700; background:linear-gradient(90deg,var(--text),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:4px; }
-.login-sub { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:32px; }
-.login-form { width:100%; max-width:320px; }
-.login-form input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border2); background:rgba(255,255,255,0.05); color:var(--text); font-size:15px; font-family:inherit; outline:none; margin-bottom:10px; transition:border-color 0.2s; }
-.login-form input:focus { border-color:var(--accent); }
-.login-form input::placeholder { color:var(--text4); }
-.login-btn { width:100%; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:16px; font-weight:600; font-family:inherit; cursor:pointer; box-shadow:0 4px 15px rgba(14,165,233,0.3); margin-top:6px; transition:opacity 0.2s; }
-.login-btn:disabled { opacity:0.5; cursor:not-allowed; }
-.login-error { color:var(--red); font-size:13px; text-align:center; margin-top:10px; }
-
-/* Header */
-.header { background:linear-gradient(135deg,var(--bg2),var(--bg3),#0c2246); padding:16px 16px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
-.header-top { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
-.logo-icon { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; box-shadow:0 0 20px rgba(14,165,233,0.25); }
-.logo-text { font-size:18px; font-weight:700; background:linear-gradient(90deg,var(--text),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.logo-sub { font-size:10px; color:var(--text3); letter-spacing:0.05em; text-transform:uppercase; font-weight:500; }
-.header-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
-.logout-btn { background:none; border:none; color:var(--text3); font-size:11px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit; }
-.logout-btn:hover { color:var(--text); background:rgba(255,255,255,0.05); }
-.search-bar { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.06); border-radius:12px; padding:8px 14px; border:1px solid var(--border2); }
-.search-bar input { flex:1; border:none; background:transparent; color:var(--text); font-size:14px; font-family:inherit; outline:none; }
-.search-bar input::placeholder { color:var(--text4); }
-.search-clear { background:none; border:none; color:var(--text3); font-size:18px; cursor:pointer; padding:0 2px; line-height:1; }
-
-/* Nav */
-.nav { display:flex; gap:2px; padding:0 12px; background:#0d1f38; border-bottom:1px solid rgba(56,189,248,0.08); flex-shrink:0; }
-.nav-btn { flex:1; padding:11px 4px 9px; border:none; background:transparent; color:var(--text3); font-size:11px; font-weight:500; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; border-bottom:2px solid transparent; transition:all 0.2s; font-family:inherit; }
-.nav-btn.active { color:var(--accent2); font-weight:600; border-bottom-color:var(--accent2); }
-
-/* Content */
-.content { flex:1; overflow-y:auto; padding:12px 16px 90px; }
-
-/* Cards */
-.card { background:var(--card); border-radius:14px; padding:14px 16px; margin-bottom:10px; border:1px solid var(--border); cursor:pointer; transition:all 0.15s; }
-.card:active { transform:scale(0.98); opacity:0.9; }
-.card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px; }
-.client-name { font-size:16px; font-weight:600; color:#f1f5f9; }
-.plate { display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); border-radius:6px; padding:3px 8px; font-size:13px; font-weight:600; color:#cbd5e1; font-family:'JetBrains Mono',monospace; letter-spacing:0.03em; margin-right:5px; margin-top:4px; }
-.meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text3); margin-top:5px; flex-wrap:wrap; }
-.badge { font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px; white-space:nowrap; display:inline-block; }
-.badge-ref { background:rgba(14,165,233,0.15); color:var(--accent2); border:1px solid rgba(14,165,233,0.3); }
-.badge-ac { background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); }
-.badge-freeze { background:rgba(6,182,212,0.15); color:var(--accent3); border:1px solid rgba(6,182,212,0.3); }
-.badge-other { background:rgba(148,163,184,0.15); color:var(--text2); border:1px solid rgba(148,163,184,0.3); }
-.badge-done { background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); }
-.badge-sched { background:rgba(251,191,36,0.15); color:var(--yellow); border:1px solid rgba(251,191,36,0.3); }
-.badge-progress { background:rgba(249,115,22,0.15); color:#fb923c; border:1px solid rgba(249,115,22,0.3); }
-
-/* Detail view */
-.detail-header { display:flex; align-items:center; gap:12px; padding:16px; border-bottom:1px solid var(--border); flex-shrink:0; background:linear-gradient(135deg,var(--bg2),var(--bg3)); }
-.back-btn { background:none; border:none; color:var(--accent2); cursor:pointer; padding:4px; font-size:20px; }
-.section-title { font-size:13px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
-.section-title .add-link { margin-left:auto; color:var(--accent2); cursor:pointer; font-size:12px; text-transform:none; letter-spacing:0; background:none; border:none; font-family:inherit; font-weight:600; }
-.repair-card { background:rgba(255,255,255,0.03); border-radius:12px; padding:12px 14px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); }
-.repair-desc { font-size:13px; color:#cbd5e1; line-height:1.5; margin:6px 0; }
-.repair-meta { display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
-.repair-date { font-size:12px; color:var(--text3); }
-.repair-cost { font-size:14px; font-weight:700; color:var(--green); }
-.action-row { display:flex; gap:6px; }
-.icon-btn { background:none; border:none; color:var(--text3); cursor:pointer; padding:4px; font-size:14px; }
-.icon-btn:hover { color:var(--text); }
-
-/* Photos */
-.photo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
-.photo-thumb { width:100%; aspect-ratio:1; border-radius:10px; object-fit:cover; border:1px solid var(--border2); cursor:pointer; }
-.photo-thumb-wrap { position:relative; }
-.photo-del { position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,0.7); border:none; color:var(--red); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; }
-.add-photo-btn { width:100%; aspect-ratio:1; border-radius:10px; border:2px dashed rgba(56,189,248,0.3); background:rgba(56,189,248,0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; color:var(--accent2); font-size:11px; font-weight:500; }
-
-/* FAB */
-.fab { position:absolute; bottom:20px; right:20px; width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:300; box-shadow:0 4px 20px rgba(14,165,233,0.4); z-index:50; transition:transform 0.15s; }
-.fab:active { transform:scale(0.9); }
-
-/* Modal */
-.overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
-.modal { background:var(--bg2); border-radius:20px 20px 0 0; padding:20px 18px 28px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; border:1px solid var(--border); border-bottom:none; }
-.modal-title { font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; }
-.modal-close { background:none; border:none; color:var(--text3); font-size:24px; cursor:pointer; }
-
-/* Form */
-.form-group { margin-bottom:14px; }
-.form-label { display:block; font-size:12px; font-weight:600; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em; }
-.form-input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border2); background:rgba(255,255,255,0.05); color:var(--text); font-size:14px; font-family:inherit; outline:none; transition:border-color 0.2s; }
-.form-input:focus { border-color:var(--accent); }
-.form-input::placeholder { color:var(--text4); }
-textarea.form-input { min-height:75px; resize:vertical; }
-select.form-input { appearance:none; cursor:pointer; }
-.plate-input { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; text-transform:uppercase; }
-
-/* Type selector */
-.type-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.type-btn { padding:10px 8px; border-radius:10px; border:1px solid var(--border2); background:rgba(255,255,255,0.03); color:var(--text2); font-size:13px; font-weight:500; cursor:pointer; text-align:center; transition:all 0.15s; font-family:inherit; }
-.type-btn.active { border-color:var(--accent2); background:rgba(56,189,248,0.1); color:var(--accent2); font-weight:600; }
-
-/* Buttons */
-.btn-primary { width:100%; padding:12px; border-radius:12px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; box-shadow:0 4px 15px rgba(14,165,233,0.3); transition:opacity 0.2s; }
-.btn-primary:disabled { opacity:0.5; }
-.btn-danger { padding:8px 14px; border-radius:8px; border:1px solid rgba(239,68,68,0.3); background:rgba(239,68,68,0.1); color:var(--red); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:4px; }
-
-/* Stats */
-.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
-.stat-card { background:var(--card); border-radius:14px; padding:16px; border:1px solid var(--border); text-align:center; }
-.stat-value { font-size:28px; font-weight:700; background:linear-gradient(90deg,var(--accent2),var(--accent3)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.stat-label { font-size:11px; color:var(--text3); font-weight:500; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
-.bar-row { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); border-radius:12px; padding:10px 14px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06); }
-.bar-emoji { font-size:22px; }
-.bar-fill-track { height:6px; border-radius:3px; background:rgba(255,255,255,0.06); flex:1; overflow:hidden; }
-.bar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width 0.3s; }
-.bar-count { font-size:14px; font-weight:700; color:var(--text2); min-width:24px; text-align:right; }
-
-/* Empty state */
-.empty { text-align:center; padding:40px 20px; }
-.empty-icon { font-size:36px; margin-bottom:12px; }
-.empty-title { font-size:15px; font-weight:600; color:var(--text3); }
-.empty-text { font-size:13px; color:var(--text4); margin-top:6px; }
-
-/* Loading */
-.loading { display:flex; align-items:center; justify-content:center; height:100%; }
-.spinner { width:36px; height:36px; border:3px solid var(--border2); border-top-color:var(--accent2); border-radius:50%; animation:spin 0.8s linear infinite; }
-@keyframes spin { to { transform:rotate(360deg); } }
-
-/* Image viewer */
-.img-viewer { position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:500; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-.img-viewer img { max-width:95%; max-height:90%; object-fit:contain; border-radius:8px; }
-
-/* Hide scrollbar on mobile */
-@media (max-width:600px) {
-  .content::-webkit-scrollbar { display:none; }
-  .content { -ms-overflow-style:none; scrollbar-width:none; }
-}
-</style>
 </head>
-<body>
-<div id="app"></div>
-
+<body style="margin:0;background:#0a1628;font-family:'DM Sans',sans-serif;color:#e2e8f0;height:100vh;overflow:hidden">
+<div id="app" style="max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative"></div>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+const fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
+const auth=getAuth(fbApp),db=getFirestore(fbApp);
+const SVC=[{id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},{id:"ac",l:"Автокондиционер",e:"❄️",c:"99,102,241"},{id:"freezer",l:"Морозильная камера",e:"🥶",c:"6,182,212"},{id:"other",l:"Другое",e:"🔧",c:"148,163,184"}];
+const getS=id=>SVC.find(t=>t.id===id)||SVC[3];
+const fD=d=>d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
+const fDT=d=>d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):"";
+const gid=()=>"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
+function compress(file,mw=800,q=.6){return new Promise(r=>{const fr=new FileReader;fr.onload=e=>{const img=new Image;img.onload=()=>{const c=document.createElement("canvas");let w=img.width,h=img.height;if(w>mw){h=h*(mw/w);w=mw}c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);r(c.toDataURL("image/jpeg",q))};img.src=e.target.result};fr.readAsDataURL(file)})}
+let S={u:null,ld:true,cl:[],st:[],tab:"clients",q:"",sel:null,mod:null,iv:null,le:"",ll:false},u1=null,u2=null;
+function subCl(){if(u1)u1();u1=onSnapshot(query(collection(db,"clients"),orderBy("createdAt","desc")),s=>{S.cl=s.docs.map(d=>({id:d.id,...d.data()}));R()})}
+function subSt(){if(u2)u2();u2=onSnapshot(collection(db,"staff"),s=>{S.st=s.docs.map(d=>({id:d.id,...d.data()}));R()})}
+const fbA=async d=>addDoc(collection(db,"clients"),{...d,vehicles:[],repairs:[],appointments:[],createdAt:serverTimestamp()});
+const fbU=async(i,d)=>updateDoc(doc(db,"clients",i),d);
+const fbD=async i=>deleteDoc(doc(db,"clients",i));
+const fbUA=async(i,f,a)=>updateDoc(doc(db,"clients",i),{[f]:a});
+const fbSS=async(i,d)=>setDoc(doc(db,"staff",i),d,{merge:true});
+function sN(uid){const s=S.st.find(x=>x.id===uid);return s?.name||uid?.split?.("@")?.[0]||"?"}
+function sL(){return S.st.length?S.st:[{id:S.u?.uid,name:S.u?.email?.split("@")[0]||"Я"}]}
+function rSt(r){const t=r.tasks||[];if(!t.length)return r.status||"in_progress";return t.every(x=>x.status==="done")?"done":"in_progress"}
 
-// ═══ FIREBASE CONFIG ═══
-const firebaseConfig = {
-  apiKey: "AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",
-  authDomain: "coolservice-crm.firebaseapp.com",
-  projectId: "coolservice-crm",
-  storageBucket: "coolservice-crm.firebasestorage.app",
-  messagingSenderId: "871007711725",
-  appId: "1:871007711725:web:0f717e2edc84e6907877e4"
-};
+// ═══ DOM HELPER ═══
+function h(t,a,...c){const e=document.createElement(t);if(a)for(const[k,v]of Object.entries(a)){if(k==="cls")e.className=v;else if(k[0]==="o"&&k[1]==="n")e.addEventListener(k.slice(2).toLowerCase(),v);else if(k==="s"&&typeof v==="object")Object.assign(e.style,v);else e.setAttribute(k,v)}c.flat(9).forEach(x=>{if(x!=null&&x!==false)e.appendChild(typeof x==="string"||typeof x==="number"?document.createTextNode(x):x)});return e}
+// Badge helper
+function badge(text,rgb,extra){return h("span",{s:{fontSize:"11px",fontWeight:"600",padding:"3px 8px",borderRadius:"6px",whiteSpace:"nowrap",display:"inline-block",background:`rgba(${rgb},.15)`,color:`rgb(${rgb})`,border:`1px solid rgba(${rgb},.3)`,...(extra||{})}},text)}
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// ═══ CSS ═══
+const css=document.createElement("style");css.textContent=`
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#475569;border-radius:4px}
+input,select,textarea,button{font-family:inherit}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.md{background:#0f2040;border-radius:20px 20px 0 0;padding:20px 18px 28px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;border:1px solid rgba(56,189,248,.12);border-bottom:none}
+.fi{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);color:#e2e8f0;font-size:14px;outline:none}
+.fi:focus{border-color:#0ea5e9}
+.fi::placeholder{color:#475569}
+textarea.fi{min-height:75px;resize:vertical}
+.bp{width:100%;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(14,165,233,.3)}
+.card{background:linear-gradient(135deg,rgba(15,32,64,.8),rgba(19,45,94,.5));border-radius:14px;padding:14px 16px;margin-bottom:10px;border:1px solid rgba(56,189,248,.12);cursor:pointer;transition:all .15s}
+.card:active{transform:scale(.98);opacity:.9}
+.rc{background:rgba(255,255,255,.03);border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1px solid rgba(255,255,255,.06)}
+.ti{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-top:8px}
+.pg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.pt{width:100%;aspect-ratio:1;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.08);cursor:pointer}
+.nb{display:flex;gap:2px;padding:0 8px;background:#0d1f38;border-bottom:1px solid rgba(56,189,248,.08);flex-shrink:0;overflow-x:auto}
+.nb button{flex:1;min-width:0;padding:11px 2px 9px;border:none;background:0;color:#64748b;font-size:10px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;border-bottom:2px solid transparent;white-space:nowrap}
+.nb button.a{color:#38bdf8;font-weight:600;border-bottom-color:#38bdf8}
+.tb{padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#94a3b8;font-size:13px;font-weight:500;cursor:pointer;text-align:center}
+.tb.a{border-color:#38bdf8;background:rgba(56,189,248,.1);color:#38bdf8;font-weight:600}
+.iv{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:500;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.iv img{max-width:95%;max-height:90%;object-fit:contain;border-radius:8px}
+@media(max-width:600px){.ct::-webkit-scrollbar{display:none}.ct{-ms-overflow-style:none;scrollbar-width:none}}
+`;document.head.appendChild(css);
 
-// ═══ SERVICE TYPES ═══
-const SERVICE_TYPES = [
-  { id:"refrigerator", label:"Рефрижератор", emoji:"🧊", badgeClass:"badge-ref" },
-  { id:"ac", label:"Автокондиционер", emoji:"❄️", badgeClass:"badge-ac" },
-  { id:"freezer", label:"Морозильная камера", emoji:"🥶", badgeClass:"badge-freeze" },
-  { id:"other", label:"Другое", emoji:"🔧", badgeClass:"badge-other" },
-];
-const getType = id => SERVICE_TYPES.find(t=>t.id===id)||SERVICE_TYPES[3];
-const fmtDate = d => d ? new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}) : "";
-const fmtDateTime = d => d ? new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : "";
-
-// ═══ STATE ═══
-let state = {
-  user: null,
-  loading: true,
-  clients: [],
-  tab: "clients",
-  search: "",
-  selectedClient: null,
-  modal: null,
-  imgViewer: null,
-  loginError: "",
-  loginLoading: false,
-};
-let unsubClients = null;
-
-// ═══ COMPRESS IMAGE ═══
-function compressImage(file, maxW=800, quality=0.6) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let w=img.width, h=img.height;
-        if(w>maxW){ h=h*(maxW/w); w=maxW; }
-        canvas.width=w; canvas.height=h;
-        canvas.getContext("2d").drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL("image/jpeg",quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-// ═══ FIREBASE OPERATIONS ═══
-function subscribeClients() {
-  if(unsubClients) unsubClients();
-  const q = query(collection(db,"clients"), orderBy("createdAt","desc"));
-  unsubClients = onSnapshot(q, snap => {
-    state.clients = snap.docs.map(d => ({id:d.id,...d.data()}));
-    render();
-  }, err => { console.error("Firestore error:",err); });
-}
-
-async function fbAddClient(data) {
-  await addDoc(collection(db,"clients"), {...data, vehicles:[], repairs:[], appointments:[], createdAt:serverTimestamp()});
-}
-async function fbUpdateClient(id, data) {
-  await updateDoc(doc(db,"clients",id), data);
-}
-async function fbDeleteClient(id) {
-  await deleteDoc(doc(db,"clients",id));
-}
-
-// Helper: update a client's sub-array
-async function updateClientArray(clientId, field, arr) {
-  await updateDoc(doc(db,"clients",clientId), {[field]:arr});
-}
-
-// ═══ RENDER ENGINE ═══
-function h(tag, attrs, ...children) {
-  const el = document.createElement(tag);
-  if(attrs) Object.entries(attrs).forEach(([k,v]) => {
-    if(k==="className") el.className=v;
-    else if(k.startsWith("on")) el.addEventListener(k.slice(2).toLowerCase(),v);
-    else if(k==="style"&&typeof v==="object") Object.assign(el.style,v);
-    else if(k==="htmlFor") el.setAttribute("for",v);
-    else el.setAttribute(k,v);
-  });
-  children.flat(9).forEach(c => {
-    if(c==null||c===false) return;
-    el.appendChild(typeof c==="string"||typeof c==="number" ? document.createTextNode(c) : c);
-  });
-  return el;
-}
-
-function render() {
-  const root = document.getElementById("app");
-  root.innerHTML = "";
-  if(state.loading) { root.appendChild(h("div",{className:"loading"},h("div",{className:"spinner"}))); return; }
-  if(!state.user) { root.appendChild(renderLogin()); return; }
-  if(state.selectedClient) { root.appendChild(renderClientDetail()); }
-  else { root.appendChild(renderMain()); }
-  if(state.modal) root.appendChild(renderModal());
-  if(state.imgViewer) root.appendChild(renderImgViewer());
+function R(){
+  const root=document.getElementById("app");root.innerHTML="";
+  if(S.ld){root.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%"><div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.08);border-top-color:#38bdf8;border-radius:50%;animation:sp .8s linear infinite"></div></div><style>@keyframes sp{to{transform:rotate(360deg)}}</style>';return}
+  if(!S.u){root.appendChild(loginV());return}
+  if(!S.st.find(x=>x.id===S.u.uid)){root.appendChild(setupV());return}
+  root.appendChild(S.sel?detailV():mainV());
+  if(S.mod)root.appendChild(modalV());
+  if(S.iv)root.appendChild(h("div",{cls:"iv",onClick:()=>{S.iv=null;R()}},h("img",{src:S.iv})));
 }
 
 // ═══ LOGIN ═══
-function renderLogin() {
-  const wrap = h("div",{className:"login-screen"});
-  wrap.appendChild(h("div",{className:"login-logo"},"❄️"));
-  wrap.appendChild(h("div",{className:"login-title"},"CoolService CRM"));
-  wrap.appendChild(h("div",{className:"login-sub"},"Рефрижераторы · Кондиционеры · Морозильные"));
-  
-  const form = h("div",{className:"login-form"});
-  const emailInput = h("input",{type:"email",placeholder:"Email",autocomplete:"email"});
-  const passInput = h("input",{type:"password",placeholder:"Пароль",autocomplete:"current-password"});
-  const btn = h("button",{className:"login-btn",onClick:async()=>{
-    const email=emailInput.value.trim(), pass=passInput.value;
-    if(!email||!pass) return;
-    state.loginLoading=true; state.loginError=""; render();
-    try {
-      await signInWithEmailAndPassword(auth,email,pass);
-    } catch(e) {
-      state.loginError = e.code==="auth/invalid-credential"?"Неверный email или пароль"
-        : e.code==="auth/too-many-requests"?"Слишком много попыток, подождите"
-        : "Ошибка: "+e.message;
-      state.loginLoading=false; render();
-    }
-  }},"Войти");
-
-  // Enter key
-  passInput.addEventListener("keydown",e=>{if(e.key==="Enter")btn.click();});
-
-  form.append(emailInput, passInput, btn);
-  if(state.loginError) form.appendChild(h("div",{className:"login-error"},state.loginError));
-  wrap.appendChild(form);
-  return wrap;
+function loginV(){
+  const w=h("div",{s:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"32px"}});
+  w.append(h("div",{s:{width:"64px",height:"64px",borderRadius:"18px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px",marginBottom:"16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}},"❄️"),h("div",{s:{fontSize:"24px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:"4px"}},"CoolService CRM"),h("div",{s:{fontSize:"12px",color:"#64748b",textTransform:"uppercase",letterSpacing:".08em",marginBottom:"32px"}},"Рефрижераторы · Кондиционеры · Морозильные"));
+  const f=h("div",{s:{width:"100%",maxWidth:"320px"}});
+  const eI=h("input",{cls:"fi",type:"email",placeholder:"Email",autocomplete:"email",s:{marginBottom:"10px"}});
+  const pI=h("input",{cls:"fi",type:"password",placeholder:"Пароль",autocomplete:"current-password",s:{marginBottom:"10px"}});
+  const btn=h("button",{cls:"bp",onClick:async()=>{const em=eI.value.trim(),pw=pI.value;if(!em||!pw)return;S.ll=true;S.le="";R();try{await signInWithEmailAndPassword(auth,em,pw)}catch(e){S.le=e.code==="auth/invalid-credential"?"Неверный email или пароль":"Ошибка: "+e.message;S.ll=false;R()}}},S.ll?"Вход...":"Войти");
+  pI.addEventListener("keydown",e=>{if(e.key==="Enter")btn.click()});
+  f.append(eI,pI,btn);
+  if(S.le)f.appendChild(h("div",{s:{color:"#f87171",fontSize:"13px",textAlign:"center",marginTop:"10px"}},S.le));
+  w.appendChild(f);return w;
 }
 
-// ═══ MAIN VIEW ═══
-function renderMain() {
-  const wrap = h("div",{style:{display:"flex",flexDirection:"column",height:"100%"}});
-  
+// ═══ SETUP PROFILE ═══
+function setupV(){
+  const w=h("div",{s:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"32px"}});
+  w.append(h("div",{s:{fontSize:"48px",marginBottom:"16px"}},"👤"),h("div",{s:{fontSize:"22px",fontWeight:"700",color:"#f1f5f9",marginBottom:"4px"}},"Настройка профиля"),h("div",{s:{fontSize:"12px",color:"#64748b",marginBottom:"32px"}},"Введите ваше имя для отображения в системе"));
+  const f=h("div",{s:{width:"100%",maxWidth:"320px"}});
+  const nI=h("input",{cls:"fi",placeholder:"Ваше имя (например: Алексей)",s:{marginBottom:"10px"}});
+  const rS=h("select",{cls:"fi",s:{marginBottom:"10px"}});
+  [{v:"admin",l:"👑 Админ"},{v:"manager",l:"📋 Менеджер"},{v:"mechanic",l:"🔧 Механик"}].forEach(r=>rS.appendChild(h("option",{value:r.v},r.l)));
+  f.append(nI,rS,h("button",{cls:"bp",onClick:async()=>{const n=nI.value.trim();if(!n)return;await fbSS(S.u.uid,{name:n,role:rS.value,email:S.u.email})}},"Сохранить"),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"13px",cursor:"pointer",marginTop:"16px",width:"100%",textAlign:"center"},onClick:()=>signOut(auth)},"Выйти из аккаунта"));
+  w.appendChild(f);return w;
+}
+
+// ═══ MAIN ═══
+function mainV(){
+  const w=h("div",{s:{display:"flex",flexDirection:"column",height:"100%"}});
+  const me=S.st.find(x=>x.id===S.u.uid);
   // Header
-  const header = h("div",{className:"header"});
-  const top = h("div",{className:"header-top"});
-  top.appendChild(h("div",{className:"logo-icon"},"❄️"));
-  const logoCol = h("div",{});
-  logoCol.appendChild(h("div",{className:"logo-text"},"CoolService CRM"));
-  logoCol.appendChild(h("div",{className:"logo-sub"},"Рефрижераторы · Кондиционеры · Морозильные"));
-  top.appendChild(logoCol);
-  const hRight = h("div",{className:"header-right"});
-  hRight.appendChild(h("div",{style:{fontSize:"11px",color:"#64748b"}},state.user.email.split("@")[0]));
-  hRight.appendChild(h("button",{className:"logout-btn",onClick:()=>signOut(auth)},"Выйти"));
-  top.appendChild(hRight);
-  header.appendChild(top);
-  
+  const hdr=h("div",{s:{background:"linear-gradient(135deg,#0f2040,#132d5e,#0c2246)",padding:"16px 16px 12px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0"}});
+  const top=h("div",{s:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"12px"}});
+  top.append(h("div",{s:{width:"36px",height:"36px",borderRadius:"10px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:"0",boxShadow:"0 0 20px rgba(14,165,233,.25)"}},"❄️"),h("div",{},h("div",{s:{fontSize:"18px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"CoolService CRM"),h("div",{s:{fontSize:"10px",color:"#64748b",letterSpacing:".05em",textTransform:"uppercase"}},"Рефрижераторы · Кондиционеры · Морозильные")));
+  const hr=h("div",{s:{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px"}});
+  hr.append(h("span",{s:{fontSize:"11px",color:"#64748b"}},me?.name||""),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"11px",cursor:"pointer",padding:"4px 8px",borderRadius:"6px"},onClick:()=>signOut(auth)},"Выйти"));
+  top.appendChild(hr);hdr.appendChild(top);
   // Search
-  const searchBar = h("div",{className:"search-bar"});
-  searchBar.appendChild(h("span",{style:{color:"#64748b"}},"🔍"));
-  const searchInput = h("input",{placeholder:"Поиск по имени, номеру, марке...",value:state.search,onInput:e=>{state.search=e.target.value;render();}});
-  searchBar.appendChild(searchInput);
-  if(state.search) searchBar.appendChild(h("button",{className:"search-clear",onClick:()=>{state.search="";render();}},"×"));
-  header.appendChild(searchBar);
-  wrap.appendChild(header);
-
+  const sb=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",background:"rgba(255,255,255,.06)",borderRadius:"12px",padding:"8px 14px",border:"1px solid rgba(255,255,255,.08)"}});
+  sb.append(h("span",{s:{color:"#64748b"}},"🔍"),h("input",{cls:"fi",placeholder:"Поиск...",value:S.q,s:{border:"none",background:"transparent",padding:"0"},onInput:e=>{S.q=e.target.value;R()}}));
+  if(S.q)sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"18px",cursor:"pointer"},onClick:()=>{S.q="";R()}},"×"));
+  hdr.appendChild(sb);w.appendChild(hdr);
   // Nav
-  const nav = h("div",{className:"nav"});
-  [{id:"clients",icon:"👤",label:"Клиенты"},{id:"calendar",icon:"📅",label:"Записи"},{id:"stats",icon:"🔧",label:"Сводка"}].forEach(t=>{
-    nav.appendChild(h("button",{className:"nav-btn"+(state.tab===t.id?" active":""),onClick:()=>{state.tab=t.id;render();}},t.icon+" "+t.label));
-  });
-  wrap.appendChild(nav);
-
+  const nav=h("div",{cls:"nb"});
+  [{id:"clients",t:"👤 Клиенты"},{id:"mytasks",t:"📋 Мои задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда"}].forEach(n=>{
+    const b=h("button",{onClick:()=>{S.tab=n.id;R()}},n.t);if(S.tab===n.id)b.className="a";nav.appendChild(b)});
+  w.appendChild(nav);
   // Content
-  const content = h("div",{className:"content"});
-  if(state.tab==="clients") renderClientsTab(content);
-  else if(state.tab==="calendar") renderCalendarTab(content);
-  else renderStatsTab(content);
-  wrap.appendChild(content);
-
-  // FAB
-  if(state.tab==="clients") {
-    wrap.appendChild(h("button",{className:"fab",onClick:()=>{state.modal={type:"addClient"};render();}},"+"));
-  }
-  return wrap;
+  const ct=h("div",{cls:"ct",s:{flex:"1",overflowY:"auto",padding:"12px 16px 90px"}});
+  ({clients:clientsTab,mytasks:myTasksTab,calendar:calTab,stats:statsTab,team:teamTab})[S.tab]?.(ct);
+  w.appendChild(ct);
+  if(S.tab==="clients")w.appendChild(h("button",{s:{position:"absolute",bottom:"20px",right:"20px",width:"54px",height:"54px",borderRadius:"50%",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",border:"none",cursor:"pointer",fontSize:"28px",boxShadow:"0 4px 20px rgba(14,165,233,.4)",zIndex:"50"},onClick:()=>{S.mod={t:"addCl"};R()}},"+"));
+  return w;
 }
 
-function renderClientsTab(container) {
-  const sl = state.search.toLowerCase();
-  const filtered = state.clients.filter(c => {
-    if(!sl) return true;
-    return c.name?.toLowerCase().includes(sl) || c.phone?.includes(state.search) ||
-      (c.vehicles||[]).some(v => v.plate?.toLowerCase().includes(sl) || v.brand?.toLowerCase().includes(sl));
-  });
-  if(!filtered.length) {
-    const empty = h("div",{className:"empty"});
-    empty.appendChild(h("div",{className:"empty-icon"},state.search?"🔍":"👤"));
-    empty.appendChild(h("div",{className:"empty-title"},state.search?"Ничего не найдено":"Нет клиентов"));
-    empty.appendChild(h("div",{className:"empty-text"},state.search?"Попробуйте другой запрос":"Нажмите + чтобы добавить первого клиента"));
-    container.appendChild(empty);
-    return;
-  }
-  filtered.forEach(c => {
-    const card = h("div",{className:"card",onClick:()=>{state.selectedClient=c.id;render();}});
-    const hdr = h("div",{className:"card-header"});
-    hdr.appendChild(h("div",{className:"client-name"},c.name||""));
-    const emojis = h("div",{style:{display:"flex",gap:"4px"}});
-    [...new Set((c.vehicles||[]).map(v=>v.serviceType))].forEach(st=>{
-      emojis.appendChild(h("span",{style:{fontSize:"16px"},title:getType(st).label},getType(st).emoji));
-    });
-    hdr.appendChild(emojis);
-    card.appendChild(hdr);
-
-    const plates = h("div",{style:{display:"flex",gap:"5px",flexWrap:"wrap"}});
-    (c.vehicles||[]).forEach(v=>plates.appendChild(h("span",{className:"plate"},v.plate||"")));
-    card.appendChild(plates);
-
-    const meta = h("div",{className:"meta-row"});
-    if(c.phone) meta.append(h("span",{},"📞 "+c.phone));
-    const rc = (c.repairs||[]).length;
-    if(rc) { if(c.phone) meta.appendChild(h("span",{}," · ")); meta.appendChild(h("span",{},rc+" ремонт(ов)")); }
-    card.appendChild(meta);
-
-    const upcoming = (c.appointments||[]).find(a=>new Date(a.date)>=new Date());
-    if(upcoming) {
-      const row = h("div",{style:{marginTop:"6px"}});
-      row.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(upcoming.date)));
-      card.appendChild(row);
-    }
-    container.appendChild(card);
+// ═══ TABS ═══
+function clientsTab(ct){
+  const ql=S.q.toLowerCase();
+  const fl=S.cl.filter(c=>!ql||c.name?.toLowerCase().includes(ql)||c.phone?.includes(S.q)||(c.vehicles||[]).some(v=>v.plate?.toLowerCase().includes(ql)||v.brand?.toLowerCase().includes(ql)));
+  if(!fl.length){ct.append(h("div",{s:{textAlign:"center",padding:"40px 20px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},S.q?"🔍":"👤"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},S.q?"Ничего не найдено":"Нет клиентов")));return}
+  fl.forEach(c=>{
+    const cd=h("div",{cls:"card",onClick:()=>{S.sel=c.id;R()}});
+    cd.appendChild(h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9",marginBottom:"5px"}},c.name||""));
+    const pl=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}});
+    (c.vehicles||[]).forEach(v=>{const pw=h("span",{s:{display:"inline-flex",alignItems:"center",gap:"4px"}});if(v.photo)pw.appendChild(h("img",{src:v.photo,s:{width:"20px",height:"20px",borderRadius:"4px",objectFit:"cover"}}));pw.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},v.plate||""));pl.appendChild(pw)});
+    cd.appendChild(pl);
+    const meta=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"#64748b",marginTop:"5px",flexWrap:"wrap"}});
+    if(c.phone)meta.appendChild(h("span",{},"📞 "+c.phone));
+    const ip=(c.repairs||[]).filter(r=>rSt(r)==="in_progress").length;
+    if(ip)meta.appendChild(badge("🔧 "+ip+" в работе","249,115,22"));
+    cd.appendChild(meta);ct.appendChild(cd);
   });
 }
 
-function renderCalendarTab(container) {
-  const all = state.clients.flatMap(c=>(c.appointments||[]).map(a=>({...a,clientId:c.id,clientName:c.name,vehicle:(c.vehicles||[]).find(v=>v.id===a.vehicleId)}))).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  if(!all.length) {
-    container.appendChild(h("div",{className:"empty"},h("div",{className:"empty-icon"},"📅"),h("div",{className:"empty-title"},"Нет записей"),h("div",{className:"empty-text"},"Откройте карточку клиента чтобы записать на визит")));
-    return;
-  }
-  all.forEach(a=>{
-    const past = new Date(a.date)<new Date();
-    const card = h("div",{className:"card",style:{opacity:past?0.5:1},onClick:()=>{state.selectedClient=a.clientId;render();}});
-    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
-    top.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(a.date)));
-    if(past) top.appendChild(h("span",{style:{fontSize:"11px",color:"#64748b"}},"Прошло"));
-    card.appendChild(top);
-    card.appendChild(h("div",{style:{fontSize:"15px",fontWeight:"600",color:"#f1f5f9",marginTop:"8px"}},a.clientName||""));
-    const row = h("div",{style:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
-    if(a.vehicle) row.appendChild(h("span",{className:"plate"},a.vehicle.plate||""));
-    const st=getType(a.serviceType);
-    row.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
-    card.appendChild(row);
-    if(a.description) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
-    container.appendChild(card);
+function myTasksTab(ct){
+  const uid=S.u.uid;const tasks=[];
+  S.cl.forEach(c=>{(c.repairs||[]).forEach(r=>{(r.tasks||[]).forEach(t=>{if(t.assignee===uid)tasks.push({...t,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(x=>x.id===r.vehicleId),rd:r.date})})})});
+  tasks.sort((a,b)=>(a.status==="done"?1:0)-(b.status==="done"?1:0));
+  if(!tasks.length){ct.append(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));return}
+  const active=tasks.filter(t=>t.status!=="done"),done=tasks.filter(t=>t.status==="done");
+  if(active.length){ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"🔧 В работе ("+active.length+")"));active.forEach(t=>ct.appendChild(taskCard(t)))}
+  if(done.length){ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px",marginTop:"16px"}},"✅ Выполнено ("+done.length+")"));done.forEach(t=>ct.appendChild(taskCard(t)))}
+}
+
+function taskCard(t){
+  const cd=h("div",{cls:"rc"});
+  const tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
+  tp.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9",cursor:"pointer"},onClick:()=>{S.sel=t.cid;R()}},t.cn||""));
+  const isDone=t.status==="done";
+  tp.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:async()=>{
+    const cl=S.cl.find(c=>c.id===t.cid);if(!cl)return;const rp=[...(cl.repairs||[])];const ri=rp.findIndex(r=>r.id===t.rid);if(ri<0)return;const ts=[...(rp[ri].tasks||[])];const ti=ts.findIndex(x=>x.id===t.id);if(ti<0)return;ts[ti]={...ts[ti],status:isDone?"in_progress":"done"};rp[ri]={...rp[ri],tasks:ts};await fbUA(t.cid,"repairs",rp)}},isDone?"✅ Готово":"🔧 В работе"));
+  cd.appendChild(tp);
+  if(t.v)cd.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace",marginBottom:"4px"}},t.v.plate||""));
+  if(t.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5"}},t.description));
+  if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
+  if(t.photos?.length){const pg=h("div",{cls:"pg"});t.photos.forEach(p=>pg.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:()=>{S.iv=p.data||p;R()}})));cd.appendChild(pg)}
+  return cd;
+}
+
+function calTab(ct){
+  const all=S.cl.flatMap(c=>(c.appointments||[]).map(a=>({...a,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(v=>v.id===a.vehicleId)}))).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(!all.length){ct.append(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📅"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет записей")));return}
+  all.forEach(a=>{const past=new Date(a.date)<new Date();const cd=h("div",{cls:"card",s:{opacity:past?.5:1},onClick:()=>{S.sel=a.cid;R()}});cd.append(badge("📅 "+fDT(a.date),"251,191,36"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#f1f5f9",marginTop:"8px"}},a.cn||""));const rw=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});if(a.v)rw.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},a.v.plate||""));const s=getS(a.serviceType);rw.appendChild(badge(s.e+" "+s.l,s.c));cd.appendChild(rw);if(a.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));ct.appendChild(cd)});
+}
+
+function statsTab(ct){
+  const allR=S.cl.flatMap(c=>c.repairs||[]);const tR=allR.length;const dR=allR.filter(r=>rSt(r)==="done").length;const tRev=allR.reduce((s,r)=>s+(parseFloat(r.cost)||0),0);
+  const grid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"16px"}});
+  [{v:S.cl.length,l:"Клиентов"},{v:S.cl.reduce((s,c)=>s+(c.vehicles||[]).length,0),l:"Автомобилей"},{v:tR,l:"Ремонтов"},{v:"€"+tRev.toLocaleString(),l:"Выручка"}].forEach(s=>{grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"14px",padding:"16px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},h("div",{s:{fontSize:"28px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),h("div",{s:{fontSize:"11px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)))});
+  ct.appendChild(grid);
+  // Status
+  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"Статус ремонтов"));
+  [{e:"🔧",l:"В работе",n:tR-dR},{e:"✅",l:"Выполнено",n:dR}].forEach(s=>{ct.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"12px",background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"10px 14px",marginBottom:"6px",border:"1px solid rgba(255,255,255,.06)"}},h("span",{s:{fontSize:"18px"}},s.e),h("div",{s:{flex:"1",fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},s.l),h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#94a3b8"}},""+s.n)))});
+  // Per staff
+  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginTop:"16px",marginBottom:"10px"}},"👥 По сотрудникам"));
+  const ss={};S.cl.forEach(c=>{(c.repairs||[]).forEach(r=>{(r.tasks||[]).forEach(t=>{if(!ss[t.assignee])ss[t.assignee]={tot:0,dn:0};ss[t.assignee].tot++;if(t.status==="done")ss[t.assignee].dn++})})});
+  const sa=Object.entries(ss).sort((a,b)=>b[1].dn-a[1].dn);
+  if(!sa.length){ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px"}},"Назначайте задачи сотрудникам для статистики"));return}
+  const mx=Math.max(...sa.map(x=>x[1].dn),1);
+  sa.forEach(([uid,st])=>{const n=sN(uid);ct.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"12px",background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"10px 14px",marginBottom:"6px",border:"1px solid rgba(255,255,255,.06)"}},h("div",{s:{width:"40px",height:"40px",borderRadius:"10px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",fontWeight:"700",color:"#a78bfa"}},n[0]?.toUpperCase()||"?"),h("div",{s:{flex:"1"}},h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},n),h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},"Выполнено: "+st.dn+" из "+st.tot),h("div",{s:{height:"6px",borderRadius:"3px",background:"rgba(255,255,255,.06)",marginTop:"4px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"3px",background:"linear-gradient(90deg,#0ea5e9,#38bdf8)",width:(st.dn/mx*100)+"%"}}))),h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#94a3b8",minWidth:"24px",textAlign:"right"}},""+st.dn)))});
+}
+
+function teamTab(ct){
+  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"👥 Команда"));
+  const me=S.st.find(x=>x.id===S.u.uid);
+  sL().forEach(s=>{
+    const cd=h("div",{s:{background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"12px 14px",marginBottom:"8px",border:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",gap:"12px"}});
+    cd.appendChild(h("div",{s:{width:"40px",height:"40px",borderRadius:"10px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",fontWeight:"700",color:"#a78bfa"}},(s.name||"?")[0].toUpperCase()));
+    const info=h("div",{s:{flex:"1"}});
+    info.append(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},s.name||""),h("div",{s:{fontSize:"12px",color:"#64748b"}},s.email||""),badge({admin:"👑 Админ",manager:"📋 Менеджер",mechanic:"🔧 Механик"}[s.role]||s.role||"","139,92,246",{marginTop:"4px"}));
+    cd.appendChild(info);
+    if(s.id===S.u.uid||me?.role==="admin")cd.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"16px"},onClick:()=>{S.mod={t:"editSt",d:s};R()}},"✏️"));
+    ct.appendChild(cd);
   });
 }
 
-function renderStatsTab(container) {
-  const totalR = state.clients.reduce((s,c)=>s+(c.repairs||[]).length,0);
-  const totalRev = state.clients.reduce((s,c)=>s+(c.repairs||[]).reduce((s2,r)=>s2+(parseFloat(r.cost)||0),0),0);
-  const grid = h("div",{className:"stats-grid"});
-  [{v:state.clients.length,l:"Клиентов"},{v:state.clients.reduce((s,c)=>s+(c.vehicles||[]).length,0),l:"Автомобилей"},{v:totalR,l:"Ремонтов"},{v:"€"+totalRev.toLocaleString(),l:"Выручка"}].forEach(s=>{
-    const card = h("div",{className:"stat-card"});
-    card.appendChild(h("div",{className:"stat-value"},""+s.v));
-    card.appendChild(h("div",{className:"stat-label"},s.l));
-    grid.appendChild(card);
-  });
-  container.appendChild(grid);
-
-  container.appendChild(h("div",{className:"section-title"},"По типу оборудования"));
-  SERVICE_TYPES.forEach(st=>{
-    const count = state.clients.reduce((s,c)=>s+(c.repairs||[]).filter(r=>r.serviceType===st.id).length,0);
-    const total = totalR||1;
-    const row = h("div",{className:"bar-row"});
-    row.appendChild(h("span",{className:"bar-emoji"},st.emoji));
-    const mid = h("div",{style:{flex:"1"}});
-    mid.appendChild(h("div",{style:{fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},st.label));
-    const track = h("div",{className:"bar-fill-track"});
-    track.appendChild(h("div",{className:"bar-fill",style:{width:(count/total*100)+"%"}}));
-    mid.appendChild(track);
-    row.appendChild(mid);
-    row.appendChild(h("span",{className:"bar-count"},""+count));
-    container.appendChild(row);
-  });
-}
-
-// ═══ CLIENT DETAIL ═══
-function renderClientDetail() {
-  const client = state.clients.find(c=>c.id===state.selectedClient);
-  if(!client) { state.selectedClient=null; return renderMain(); }
-  
-  const wrap = h("div",{style:{display:"flex",flexDirection:"column",height:"100%"}});
-  
+// ═══ DETAIL VIEW ═══
+function detailV(){
+  const cl=S.cl.find(c=>c.id===S.sel);if(!cl){S.sel=null;return mainV()}
+  const w=h("div",{s:{display:"flex",flexDirection:"column",height:"100%"}});
   // Header
-  const hdr = h("div",{className:"detail-header"});
-  hdr.appendChild(h("button",{className:"back-btn",onClick:()=>{state.selectedClient=null;render();}},"‹"));
-  const info = h("div",{style:{flex:"1"}});
-  info.appendChild(h("div",{className:"client-name"},client.name||""));
-  if(client.phone) info.appendChild(h("div",{className:"meta-row",style:{marginTop:"2px"}},"📞 "+client.phone));
-  hdr.appendChild(info);
-  hdr.appendChild(h("button",{className:"icon-btn",style:{fontSize:"16px"},onClick:()=>{state.modal={type:"editClient",data:client};render();}},"✏️"));
-  wrap.appendChild(hdr);
-
-  const content = h("div",{className:"content"});
+  const hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"12px",padding:"16px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0",background:"linear-gradient(135deg,#0f2040,#132d5e)"}});
+  hdr.append(h("button",{s:{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",fontSize:"20px"},onClick:()=>{S.sel=null;R()}},"‹"),h("div",{s:{flex:"1"}},h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9"}},cl.name||""),cl.phone?h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"2px"}},"📞 "+cl.phone):null),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"16px"},onClick:()=>{S.mod={t:"editCl",d:cl};R()}},"✏️"));
+  w.appendChild(hdr);
+  const ct=h("div",{cls:"ct",s:{flex:"1",overflowY:"auto",padding:"12px 16px 90px"}});
   
   // Vehicles
-  const vSec = h("div",{style:{marginBottom:"20px"}});
-  const vTitle = h("div",{className:"section-title"});
-  vTitle.append("🚗 Автомобили ("+(client.vehicles||[]).length+")");
-  vTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addVehicle",clientId:client.id};render();}},"+ Добавить"));
-  vSec.appendChild(vTitle);
-  (client.vehicles||[]).forEach(v=>{
-    const st=getType(v.serviceType);
-    const card = h("div",{className:"repair-card"});
-    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
-    const left = h("div",{style:{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}});
-    left.appendChild(h("span",{className:"plate"},v.plate||""));
-    left.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
-    top.appendChild(left);
-    const acts = h("div",{className:"action-row"});
-    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{state.modal={type:"editVehicle",clientId:client.id,data:v};render();}},"✏️"));
-    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить авто и все связанные ремонты?")){
-      const vs=(client.vehicles||[]).filter(x=>x.id!==v.id);
-      const rs=(client.repairs||[]).filter(r=>r.vehicleId!==v.id);
-      const ap=(client.appointments||[]).filter(a=>a.vehicleId!==v.id);
-      fbUpdateClient(client.id,{vehicles:vs,repairs:rs,appointments:ap});
-    }}},"🗑"));
-    top.appendChild(acts);
-    card.appendChild(top);
-    if(v.brand) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},v.brand));
-    if(v.notes) card.appendChild(h("div",{style:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},v.notes));
-    vSec.appendChild(card);
+  secTitle(ct,"🚗 Автомобили ("+(cl.vehicles||[]).length+")",()=>{S.mod={t:"addV",cid:cl.id};R()});
+  (cl.vehicles||[]).forEach(v=>{
+    const s=getS(v.serviceType);const cd=h("div",{cls:"rc"});
+    const row=h("div",{s:{display:"flex",gap:"12px",alignItems:"flex-start"}});
+    row.appendChild(v.photo?h("img",{src:v.photo,s:{width:"56px",height:"56px",borderRadius:"10px",objectFit:"cover",border:"1px solid rgba(255,255,255,.08)",cursor:"pointer"},onClick:()=>{S.iv=v.photo;R()}}):h("div",{s:{width:"56px",height:"56px",borderRadius:"10px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"24px",color:"#475569"}},"🚗"));
+    const rc=h("div",{s:{flex:"1",minWidth:"0"}});
+    const tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+    const lf=h("div",{s:{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}});
+    lf.append(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},v.plate||""),badge(s.e+" "+s.l,s.c));
+    tp.appendChild(lf);
+    tp.appendChild(h("div",{s:{display:"flex",gap:"6px"}},h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:()=>{S.mod={t:"editV",cid:cl.id,d:v};R()}},"✏️"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:()=>{if(confirm("Удалить авто?")){const vs=(cl.vehicles||[]).filter(x=>x.id!==v.id);fbUpd(cl.id,{vehicles:vs,repairs:(cl.repairs||[]).filter(r=>r.vehicleId!==v.id),appointments:(cl.appointments||[]).filter(a=>a.vehicleId!==v.id)})}}},"🗑")));
+    rc.appendChild(tp);
+    if(v.brand)rc.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},v.brand));
+    if(v.notes)rc.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},v.notes));
+    row.appendChild(rc);cd.appendChild(row);ct.appendChild(cd);
   });
-  if(!(client.vehicles||[]).length) vSec.appendChild(h("div",{className:"empty",style:{padding:"16px"}},h("div",{style:{fontSize:"13px",color:"#475569"}},"Нет автомобилей")));
-  content.appendChild(vSec);
 
   // Repairs
-  const rSec = h("div",{style:{marginBottom:"20px"}});
-  const rTitle = h("div",{className:"section-title"});
-  rTitle.append("🔧 История ремонтов ("+(client.repairs||[]).length+")");
-  if((client.vehicles||[]).length) rTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addRepair",clientId:client.id,vehicles:client.vehicles};render();}},"+ Добавить"));
-  rSec.appendChild(rTitle);
-  (client.repairs||[]).forEach(r=>{
-    const st=getType(r.serviceType);
-    const v=(client.vehicles||[]).find(x=>x.id===r.vehicleId);
-    const card = h("div",{className:"repair-card"});
-    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
-    const badges = h("div",{style:{display:"flex",gap:"5px",flexWrap:"wrap"}});
-    badges.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
-    badges.appendChild(h("span",{className:"badge "+(r.status==="done"?"badge-done":r.status==="in_progress"?"badge-progress":"badge-sched")},r.status==="done"?"✅ Готово":"🔧 В работе"));
-    top.appendChild(badges);
-    const acts = h("div",{className:"action-row"});
-    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{state.modal={type:"editRepair",clientId:client.id,vehicles:client.vehicles,data:r};render();}},"✏️"));
-    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить запись о ремонте?")){
-      const rs=(client.repairs||[]).filter(x=>x.id!==r.id);
-      updateClientArray(client.id,"repairs",rs);
-    }}},"🗑"));
-    top.appendChild(acts);
-    card.appendChild(top);
-    if(v) card.appendChild(h("span",{className:"plate",style:{display:"inline-flex",marginBottom:"4px"}},v.plate||""));
-    card.appendChild(h("div",{className:"repair-desc"},r.description||""));
-    const meta = h("div",{className:"repair-meta"});
-    meta.appendChild(h("span",{className:"repair-date"},fmtDate(r.date)));
-    if(r.cost) meta.appendChild(h("span",{className:"repair-cost"},"€"+r.cost));
-    card.appendChild(meta);
-    // Photos
-    if(r.photos&&r.photos.length) {
-      const pg = h("div",{className:"photo-grid"});
-      r.photos.forEach(p=>{
-        const pw = h("div",{className:"photo-thumb-wrap"});
-        pw.appendChild(h("img",{className:"photo-thumb",src:p.data||p,onClick:e=>{e.stopPropagation();state.imgViewer=p.data||p;render();}}));
-        pg.appendChild(pw);
-      });
-      card.appendChild(pg);
-    }
-    rSec.appendChild(card);
+  secTitle(ct,"🔧 Заказ-наряды ("+(cl.repairs||[]).length+")",(cl.vehicles||[]).length?()=>{S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R()}:null);
+  (cl.repairs||[]).forEach(r=>{
+    const s=getS(r.serviceType);const v=(cl.vehicles||[]).find(x=>x.id===r.vehicleId);const os=rSt(r);
+    const cd=h("div",{cls:"rc"});
+    const tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
+    const bg=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap"}});
+    bg.append(badge(s.e+" "+s.l,s.c),badge(os==="done"?"✅ Готово":"🔧 В работе",os==="done"?"34,197,94":"249,115,22"));
+    tp.appendChild(bg);
+    tp.appendChild(h("div",{s:{display:"flex",gap:"6px"}},h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:()=>{S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:()=>{if(confirm("Удалить?")){fbUA(cl.id,"repairs",(cl.repairs||[]).filter(x=>x.id!==r.id))}}},"🗑")));
+    cd.appendChild(tp);
+    if(v)cd.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace",marginBottom:"4px"}},v.plate||""));
+    if(r.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",margin:"6px 0"}},r.description));
+    const meta=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"6px"}});
+    meta.append(h("span",{s:{fontSize:"12px",color:"#64748b"}},fD(r.date)));
+    if(r.cost)meta.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},"€"+r.cost));
+    cd.appendChild(meta);
+    if(r.photos?.length){const pg=h("div",{cls:"pg"});r.photos.forEach(p=>pg.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:()=>{S.iv=p.data||p;R()}})));cd.appendChild(pg)}
+    // Tasks
+    (r.tasks||[]).forEach(t=>{
+      const ti=h("div",{cls:"ti"});
+      const th=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+      th.append(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
+      const isDn=t.status==="done";
+      th.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDn?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDn?"#4ade80":"#fb923c"},onClick:async()=>{const rp=[...(cl.repairs||[])];const ri=rp.findIndex(x=>x.id===r.id);if(ri<0)return;const ts=[...(rp[ri].tasks||[])];const idx=ts.findIndex(x=>x.id===t.id);if(idx<0)return;ts[idx]={...ts[idx],status:isDn?"in_progress":"done"};rp[ri]={...rp[ri],tasks:ts};await fbUA(cl.id,"repairs",rp)}},isDn?"✅ Готово":"🔧 В работе"));
+      ti.appendChild(th);
+      if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"4px"}},t.description));
+      if(t.photos?.length){const pg=h("div",{cls:"pg",s:{marginTop:"6px"}});t.photos.forEach(p=>pg.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:()=>{S.iv=p.data||p;R()}})));ti.appendChild(pg)}
+      cd.appendChild(ti);
+    });
+    cd.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"12px",fontWeight:"500",cursor:"pointer",marginTop:"8px"},onClick:()=>{S.mod={t:"addT",cid:cl.id,rid:r.id};R()}},"+ Добавить задачу"));
+    ct.appendChild(cd);
   });
-  if(!(client.repairs||[]).length) rSec.appendChild(h("div",{className:"empty",style:{padding:"16px"}},h("div",{style:{fontSize:"13px",color:"#475569"}},"Нет записей о ремонтах")));
-  content.appendChild(rSec);
 
   // Appointments
-  const aSec = h("div",{style:{marginBottom:"20px"}});
-  const aTitle = h("div",{className:"section-title"});
-  aTitle.append("📅 Записи на визит ("+(client.appointments||[]).length+")");
-  if((client.vehicles||[]).length) aTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addAppointment",clientId:client.id,vehicles:client.vehicles};render();}},"+ Записать"));
-  aSec.appendChild(aTitle);
-  (client.appointments||[]).forEach(a=>{
-    const st=getType(a.serviceType);
-    const v=(client.vehicles||[]).find(x=>x.id===a.vehicleId);
-    const card = h("div",{className:"repair-card"});
-    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
-    top.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(a.date)));
-    top.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить запись?")){
-      const ap=(client.appointments||[]).filter(x=>x.id!==a.id);
-      updateClientArray(client.id,"appointments",ap);
-    }}},"🗑"));
-    card.appendChild(top);
-    const row = h("div",{style:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
-    if(v) row.appendChild(h("span",{className:"plate"},v.plate||""));
-    row.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
-    card.appendChild(row);
-    if(a.description) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
-    aSec.appendChild(card);
-  });
-  content.appendChild(aSec);
+  secTitle(ct,"📅 Записи ("+(cl.appointments||[]).length+")",(cl.vehicles||[]).length?()=>{S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()}:null);
+  (cl.appointments||[]).forEach(a=>{const s=getS(a.serviceType);const v=(cl.vehicles||[]).find(x=>x.id===a.vehicleId);const cd=h("div",{cls:"rc"});const tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});tp.append(badge("📅 "+fDT(a.date),"251,191,36"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:()=>{if(confirm("Удалить?")){fbUA(cl.id,"appointments",(cl.appointments||[]).filter(x=>x.id!==a.id))}}},"🗑"));cd.appendChild(tp);const rw=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});if(v)rw.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},v.plate||""));rw.appendChild(badge(s.e+" "+s.l,s.c));cd.appendChild(rw);if(a.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));ct.appendChild(cd)});
 
-  // Delete client
-  content.appendChild(h("div",{style:{marginTop:"20px",paddingTop:"20px",borderTop:"1px solid rgba(255,255,255,0.06)"}},
-    h("button",{className:"btn-danger",onClick:()=>{if(confirm('Удалить клиента "'+client.name+'" и все данные?')){fbDeleteClient(client.id);state.selectedClient=null;render();}}},"🗑 Удалить клиента")
-  ));
-  wrap.appendChild(content);
-  return wrap;
+  ct.appendChild(h("div",{s:{marginTop:"20px",paddingTop:"20px",borderTop:"1px solid rgba(255,255,255,.06)"}},h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:"13px",fontWeight:"500",cursor:"pointer"},onClick:()=>{if(confirm('Удалить "'+cl.name+'"?')){fbD(cl.id);S.sel=null;R()}}},"🗑 Удалить клиента")));
+  w.appendChild(ct);return w;
 }
 
-// ═══ IMAGE VIEWER ═══
-function renderImgViewer() {
-  return h("div",{className:"img-viewer",onClick:()=>{state.imgViewer=null;render();}},
-    h("img",{src:state.imgViewer})
-  );
+function secTitle(ct,text,addFn){
+  const st=h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px",marginTop:"16px",display:"flex",alignItems:"center",gap:"6px"}},text);
+  if(addFn)st.appendChild(h("button",{s:{marginLeft:"auto",color:"#38bdf8",cursor:"pointer",fontSize:"12px",fontWeight:"600",background:"none",border:"none"},onClick:addFn},"+ Добавить"));
+  ct.appendChild(st);
 }
 
 // ═══ MODALS ═══
-function renderModal() {
-  const m = state.modal;
-  const overlay = h("div",{className:"overlay",onClick:()=>{state.modal=null;render();}});
-  const modal = h("div",{className:"modal",onClick:e=>e.stopPropagation()});
-  
-  if(m.type==="addClient"||m.type==="editClient") renderClientForm(modal,m);
-  else if(m.type==="addVehicle"||m.type==="editVehicle") renderVehicleForm(modal,m);
-  else if(m.type==="addRepair"||m.type==="editRepair") renderRepairForm(modal,m);
-  else if(m.type==="addAppointment") renderAppointmentForm(modal,m);
-  
-  overlay.appendChild(modal);
-  return overlay;
+function modalV(){
+  const m=S.mod;const ov=h("div",{cls:"ov",onClick:()=>{S.mod=null;R()}});const md=h("div",{cls:"md",onClick:e=>e.stopPropagation()});
+  const map={addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addT:tForm,addA:aForm,editSt:stForm};
+  (map[m.t]||clForm)(md,m);ov.appendChild(md);return ov;
+}
+function mH(md,t){md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#f1f5f9",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},h("span",{},t),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"24px",cursor:"pointer"},onClick:()=>{S.mod=null;R()}},"×")))}
+function fg(label,...els){const g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#94a3b8",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label),...els);return g}
+
+function clForm(md,m){
+  const isE=m.t==="editCl";mH(md,isE?"Редактировать клиента":"Новый клиент");
+  const nI=h("input",{cls:"fi",placeholder:"Имя / Компания",value:m.d?.name||""});
+  const pI=h("input",{cls:"fi",type:"tel",placeholder:"+371 29 123 456",value:m.d?.phone||""});
+  md.append(fg("Имя / Компания",nI),fg("Телефон",pI),h("button",{cls:"bp",onClick:async()=>{const n=nI.value.trim();if(!n)return;if(isE)await fbU(m.d.id,{name:n,phone:pI.value.trim()});else await fbA({name:n,phone:pI.value.trim()});S.mod=null;R()}},isE?"Сохранить":"Добавить клиента"));
 }
 
-function modalHeader(modal, title) {
-  const hdr = h("div",{className:"modal-title"});
-  hdr.appendChild(h("span",{},title));
-  hdr.appendChild(h("button",{className:"modal-close",onClick:()=>{state.modal=null;render();}},"×"));
-  modal.appendChild(hdr);
+function vForm(md,m){
+  const isE=m.t==="editV";mH(md,isE?"Редактировать авто":"Добавить авто");
+  let ph=m.d?.photo||null;
+  const fi=h("input",{type:"file",accept:"image/*",s:{display:"none"},onChange:async e=>{const f=e.target.files[0];if(!f)return;ph=await compress(f,600,.7);e.target.value="";rP()}});
+  const pw=h("div",{});
+  function rP(){pw.innerHTML="";if(ph){const u=h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",overflow:"hidden",position:"relative",cursor:"pointer"},onClick:()=>fi.click()},h("img",{src:ph,s:{width:"100%",height:"100%",objectFit:"cover"}}),h("button",{s:{position:"absolute",top:"6px",right:"6px",width:"24px",height:"24px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:e=>{e.stopPropagation();ph=null;rP()}},"×"));pw.appendChild(u)}else{pw.appendChild(h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",cursor:"pointer",color:"#38bdf8",fontSize:"13px",fontWeight:"500"},onClick:()=>fi.click()},"📷 Добавить фото авто"))}pw.appendChild(fi)}
+  rP();
+  const plI=h("input",{cls:"fi",placeholder:"LV GK-2847",value:m.d?.plate||"",s:{fontFamily:"'JetBrains Mono',monospace",fontSize:"16px",fontWeight:"600",textTransform:"uppercase"}});
+  const brI=h("input",{cls:"fi",placeholder:"Mercedes Sprinter",value:m.d?.brand||""});
+  const noI=h("textarea",{cls:"fi",placeholder:"Carrier Supra 950...",value:m.d?.notes||""});
+  let sT=m.d?.serviceType||"refrigerator";
+  const tG=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
+  function rT(){tG.innerHTML="";SVC.forEach(t=>{tG.appendChild(h("button",{cls:"tb"+(sT===t.id?" a":""),onClick:()=>{sT=t.id;rT()}},t.e+" "+t.l))})}rT();
+  md.append(fg("Фото авто",pw),fg("Гос. номер",plI),fg("Марка / Модель",brI),fg("Тип оборудования",tG),fg("Заметки",noI),h("button",{cls:"bp",onClick:async()=>{const pl=plI.value.trim().toUpperCase();if(!pl)return;const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const vs=[...(cl.vehicles||[])];const vD={plate:pl,brand:brI.value.trim(),serviceType:sT,notes:noI.value.trim(),photo:ph};if(isE){const i=vs.findIndex(v=>v.id===m.d.id);if(i>=0)vs[i]={...vs[i],...vD}}else{vD.id=gid();vs.push(vD)}await fbUA(cl.id,"vehicles",vs);S.mod=null;R()}},isE?"Сохранить":"Добавить авто"));
 }
 
-function renderClientForm(modal, m) {
-  const isEdit = m.type==="editClient";
-  modalHeader(modal, isEdit?"Редактировать клиента":"Новый клиент");
-  
-  const nameIn = h("input",{className:"form-input",placeholder:"Андрей Петров или SIA CoolTrans",value:m.data?.name||""});
-  const phoneIn = h("input",{className:"form-input",type:"tel",placeholder:"+371 29 123 456",value:m.data?.phone||""});
-  
-  modal.append(
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Имя / Компания"),nameIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Телефон"),phoneIn),
-    h("button",{className:"btn-primary",onClick:async()=>{
-      const name=nameIn.value.trim();
-      if(!name)return;
-      if(isEdit) await fbUpdateClient(m.data.id,{name,phone:phoneIn.value.trim()});
-      else await fbAddClient({name,phone:phoneIn.value.trim()});
-      state.modal=null; render();
-    }},isEdit?"Сохранить":"Добавить клиента")
-  );
+function rForm(md,m){
+  const isE=m.t==="editR";mH(md,isE?"Редактировать заказ-наряд":"Новый заказ-наряд");
+  const vs=m.vs||[];let sV=m.d?.vehicleId||vs[0]?.id||"";let sT=m.d?.serviceType||"refrigerator";let photos=[...(m.d?.photos||[])];
+  const vS=h("select",{cls:"fi",onChange:e=>{sV=e.target.value}});
+  vs.forEach(v=>{const o=h("option",{value:v.id},v.plate+" — "+(v.brand||""));if(v.id===sV)o.selected=true;vS.appendChild(o)});
+  const dI=h("input",{cls:"fi",type:"date",value:m.d?.date||new Date().toISOString().slice(0,10)});
+  const deI=h("textarea",{cls:"fi",placeholder:"Описание проблемы / работ...",value:m.d?.description||""});
+  const cI=h("input",{cls:"fi",type:"number",placeholder:"850",value:m.d?.cost||""});
+  const tG=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
+  function rT(){tG.innerHTML="";SVC.forEach(t=>{tG.appendChild(h("button",{cls:"tb"+(sT===t.id?" a":""),onClick:()=>{sT=t.id;rT()}},t.e+" "+t.l))})}rT();
+  const fIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"},onChange:async e=>{for(const f of Array.from(e.target.files)){photos.push({id:gid(),data:await compress(f)})}e.target.value="";rPh()}});
+  const pG=h("div",{cls:"pg"});
+  function rPh(){pG.innerHTML="";photos.forEach(p=>{const pw=h("div",{s:{position:"relative"}});pw.append(h("img",{cls:"pt",src:p.data||p}),h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{photos=photos.filter(x=>x.id!==p.id);rPh()}},"×"));pG.appendChild(pw)});pG.appendChild(h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:()=>fIn.click()},"📷 Фото"))}rPh();
+  const parts=[vs.length>1?fg("Автомобиль",vS):null,fg("Дата",dI),fg("Тип работы",tG),fg("Описание",deI),fg("Стоимость (€)",cI),fg("Фото неисправностей",pG,fIn)];
+  parts.forEach(p=>{if(p)md.appendChild(p)});
+  md.appendChild(h("button",{cls:"bp",onClick:async()=>{const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const rp=[...(cl.repairs||[])];const rD={vehicleId:sV,date:dI.value,serviceType:sT,description:deI.value.trim(),cost:cI.value,photos,tasks:m.d?.tasks||[]};if(isE){const i=rp.findIndex(x=>x.id===m.d.id);if(i>=0)rp[i]={...rp[i],...rD}}else{rD.id=gid();rD.status="in_progress";rp.unshift(rD)}await fbUA(cl.id,"repairs",rp);S.mod=null;R()}},isE?"Сохранить":"Создать заказ-наряд"));
 }
 
-function renderVehicleForm(modal, m) {
-  const isEdit = m.type==="editVehicle";
-  modalHeader(modal, isEdit?"Редактировать авто":"Добавить авто");
-  
-  const plateIn = h("input",{className:"form-input plate-input",placeholder:"LV GK-2847",value:m.data?.plate||""});
-  const brandIn = h("input",{className:"form-input",placeholder:"Mercedes Sprinter",value:m.data?.brand||""});
-  const notesIn = h("textarea",{className:"form-input",placeholder:"Carrier Supra 950, фреон R404a...",value:m.data?.notes||""});
-  let selType = m.data?.serviceType||"refrigerator";
-
-  const typeGrid = h("div",{className:"type-grid"});
-  function renderTypes(){
-    typeGrid.innerHTML="";
-    SERVICE_TYPES.forEach(t=>{
-      typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));
-    });
-  }
-  renderTypes();
-
-  modal.append(
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Гос. номер"),plateIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Марка / Модель"),brandIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип оборудования"),typeGrid),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Заметки"),notesIn),
-    h("button",{className:"btn-primary",onClick:async()=>{
-      const plate=plateIn.value.trim().toUpperCase();
-      if(!plate)return;
-      const client=state.clients.find(c=>c.id===m.clientId);
-      if(!client)return;
-      const vehicles=[...(client.vehicles||[])];
-      const vData={plate,brand:brandIn.value.trim(),serviceType:selType,notes:notesIn.value.trim()};
-      if(isEdit){
-        const idx=vehicles.findIndex(v=>v.id===m.data.id);
-        if(idx>=0) vehicles[idx]={...vehicles[idx],...vData};
-      } else {
-        vData.id = "v"+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
-        vehicles.push(vData);
-      }
-      await updateClientArray(client.id,"vehicles",vehicles);
-      state.modal=null; render();
-    }},isEdit?"Сохранить":"Добавить авто")
-  );
+function tForm(md,m){
+  mH(md,"Добавить задачу");
+  const sl=sL();let assignee=sl[0]?.id||"";
+  const aS=h("select",{cls:"fi",onChange:e=>{assignee=e.target.value}});
+  sl.forEach(s=>{aS.appendChild(h("option",{value:s.id},s.name+({admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"}[s.role]||"")))});
+  const dI=h("textarea",{cls:"fi",placeholder:"Описание: замена компрессора, проводка..."});
+  let photos=[];
+  const fIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"},onChange:async e=>{for(const f of Array.from(e.target.files)){photos.push({id:gid(),data:await compress(f)})}e.target.value="";rPh()}});
+  const pG=h("div",{cls:"pg"});
+  function rPh(){pG.innerHTML="";photos.forEach(p=>{const pw=h("div",{s:{position:"relative"}});pw.append(h("img",{cls:"pt",src:p.data||p}),h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{photos=photos.filter(x=>x.id!==p.id);rPh()}},"×"));pG.appendChild(pw)});pG.appendChild(h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:()=>fIn.click()},"📷 Фото"))}rPh();
+  md.append(fg("Назначить сотруднику",aS),fg("Описание задачи",dI),fg("Фото",pG,fIn),h("button",{cls:"bp",onClick:async()=>{const desc=dI.value.trim();if(!desc)return;const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const rp=[...(cl.repairs||[])];const ri=rp.findIndex(x=>x.id===m.rid);if(ri<0)return;const ts=[...(rp[ri].tasks||[])];ts.push({id:gid(),assignee,description:desc,status:"in_progress",photos,createdAt:new Date().toISOString()});rp[ri]={...rp[ri],tasks:ts};await fbUA(cl.id,"repairs",rp);S.mod=null;R()}},"Добавить задачу"));
 }
 
-function renderRepairForm(modal, m) {
-  const isEdit = m.type==="editRepair";
-  modalHeader(modal, isEdit?"Редактировать ремонт":"Новый ремонт");
-  
-  const vehicles = m.vehicles||[];
-  let selVehicle = m.data?.vehicleId||vehicles[0]?.id||"";
-  let selType = m.data?.serviceType||"refrigerator";
-  let selStatus = m.data?.status||"done";
-  let photos = [...(m.data?.photos||[])];
-
-  // Vehicle select
-  const vSelect = h("select",{className:"form-input",onChange:e=>{selVehicle=e.target.value;}});
-  vehicles.forEach(v=>{
-    const opt = h("option",{value:v.id},v.plate+" — "+(v.brand||""));
-    if(v.id===selVehicle) opt.selected=true;
-    vSelect.appendChild(opt);
-  });
-  
-  const dateIn = h("input",{className:"form-input",type:"date",value:m.data?.date||new Date().toISOString().slice(0,10)});
-  const descIn = h("textarea",{className:"form-input",placeholder:"Замена компрессора, перезаправка фреоном R404a...",value:m.data?.description||""});
-  const costIn = h("input",{className:"form-input",type:"number",placeholder:"850",value:m.data?.cost||""});
-  
-  const typeGrid = h("div",{className:"type-grid"});
-  function renderTypes(){
-    typeGrid.innerHTML="";
-    SERVICE_TYPES.forEach(t=>{typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));});
-  }
-  renderTypes();
-
-  const statusRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"14px"}});
-  function renderStatus(){
-    statusRow.innerHTML="";
-    statusRow.appendChild(h("button",{className:"type-btn"+(selStatus==="done"?" active":""),onClick:()=>{selStatus="done";renderStatus();}},"✅ Выполнено"));
-    statusRow.appendChild(h("button",{className:"type-btn"+(selStatus==="in_progress"?" active":""),onClick:()=>{selStatus="in_progress";renderStatus();}},"🔧 В работе"));
-  }
-  renderStatus();
-
-  // Photos
-  const photoGroup = h("div",{className:"form-group"});
-  photoGroup.appendChild(h("label",{className:"form-label"},"Фото"));
-  const fileIn = h("input",{type:"file",accept:"image/*",multiple:true,style:{display:"none"},onChange:async e=>{
-    const files=Array.from(e.target.files);
-    for(const f of files){
-      const compressed = await compressImage(f);
-      photos.push({id:"p"+Date.now()+Math.random().toString(36).substr(2,3),data:compressed});
-    }
-    e.target.value="";
-    renderPhotos();
-  }});
-  const photoGrid = h("div",{className:"photo-grid"});
-  function renderPhotos(){
-    photoGrid.innerHTML="";
-    photos.forEach(p=>{
-      const pw=h("div",{className:"photo-thumb-wrap"});
-      pw.appendChild(h("img",{className:"photo-thumb",src:p.data||p}));
-      pw.appendChild(h("button",{className:"photo-del",onClick:()=>{photos=photos.filter(x=>x.id!==p.id);renderPhotos();}},"×"));
-      photoGrid.appendChild(pw);
-    });
-    photoGrid.appendChild(h("button",{className:"add-photo-btn",onClick:()=>fileIn.click()},"📷","Фото"));
-  }
-  renderPhotos();
-  photoGroup.append(photoGrid,fileIn);
-
-  const parts = [
-    vehicles.length>1 ? h("div",{className:"form-group"},h("label",{className:"form-label"},"Автомобиль"),vSelect) : null,
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Дата"),dateIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип работы"),typeGrid),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Описание работ"),descIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Стоимость (€)"),costIn),
-    photoGroup,
-    statusRow,
-    h("button",{className:"btn-primary",onClick:async()=>{
-      const desc=descIn.value.trim();
-      if(!desc)return;
-      const client=state.clients.find(c=>c.id===m.clientId);
-      if(!client)return;
-      const repairs=[...(client.repairs||[])];
-      const rData={vehicleId:selVehicle,date:dateIn.value,serviceType:selType,description:desc,cost:costIn.value,photos,status:selStatus};
-      if(isEdit){
-        const idx=repairs.findIndex(r=>r.id===m.data.id);
-        if(idx>=0) repairs[idx]={...repairs[idx],...rData};
-      } else {
-        rData.id="r"+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
-        repairs.unshift(rData);
-      }
-      await updateClientArray(client.id,"repairs",repairs);
-      state.modal=null; render();
-    }},isEdit?"Сохранить":"Добавить ремонт")
-  ];
-  parts.forEach(p=>{if(p)modal.appendChild(p);});
+function aForm(md,m){
+  mH(md,"Записать на визит");const vs=m.vs||[];let sV=vs[0]?.id||"";let sT="refrigerator";
+  const vS=h("select",{cls:"fi",onChange:e=>{sV=e.target.value}});vs.forEach(v=>vS.appendChild(h("option",{value:v.id},v.plate+" — "+(v.brand||""))));
+  const dI=h("input",{cls:"fi",type:"datetime-local"});const deI=h("textarea",{cls:"fi",placeholder:"Плановая диагностика..."});
+  const tG=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
+  function rT(){tG.innerHTML="";SVC.forEach(t=>{tG.appendChild(h("button",{cls:"tb"+(sT===t.id?" a":""),onClick:()=>{sT=t.id;rT()}},t.e+" "+t.l))})}rT();
+  md.append(vs.length>1?fg("Автомобиль",vS):null,fg("Дата и время",dI),fg("Тип работы",tG),fg("Описание",deI),h("button",{cls:"bp",onClick:async()=>{if(!dI.value)return;const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const ap=[...(cl.appointments||[])];ap.push({id:gid(),vehicleId:sV,date:dI.value,serviceType:sT,description:deI.value.trim()});await fbUA(cl.id,"appointments",ap);S.mod=null;R()}},"Записать"));
 }
 
-function renderAppointmentForm(modal, m) {
-  modalHeader(modal, "Записать на визит");
-  const vehicles = m.vehicles||[];
-  let selVehicle = vehicles[0]?.id||"";
-  let selType = "refrigerator";
-
-  const vSelect = h("select",{className:"form-input",onChange:e=>{selVehicle=e.target.value;}});
-  vehicles.forEach(v=>{
-    const opt = h("option",{value:v.id},v.plate+" — "+(v.brand||""));
-    vSelect.appendChild(opt);
-  });
-
-  const dateIn = h("input",{className:"form-input",type:"datetime-local"});
-  const descIn = h("textarea",{className:"form-input",placeholder:"Плановая диагностика..."});
-
-  const typeGrid = h("div",{className:"type-grid"});
-  function renderTypes(){
-    typeGrid.innerHTML="";
-    SERVICE_TYPES.forEach(t=>{typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));});
-  }
-  renderTypes();
-
-  const parts = [
-    vehicles.length>1?h("div",{className:"form-group"},h("label",{className:"form-label"},"Автомобиль"),vSelect):null,
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Дата и время"),dateIn),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип работы"),typeGrid),
-    h("div",{className:"form-group"},h("label",{className:"form-label"},"Описание"),descIn),
-    h("button",{className:"btn-primary",onClick:async()=>{
-      if(!dateIn.value)return;
-      const client=state.clients.find(c=>c.id===m.clientId);
-      if(!client)return;
-      const appointments=[...(client.appointments||[])];
-      appointments.push({id:"a"+Date.now().toString(36)+Math.random().toString(36).substr(2,4),vehicleId:selVehicle,date:dateIn.value,serviceType:selType,description:descIn.value.trim()});
-      await updateClientArray(client.id,"appointments",appointments);
-      state.modal=null; render();
-    }},"Записать")
-  ];
-  parts.forEach(p=>{if(p)modal.appendChild(p);});
+function stForm(md,m){
+  mH(md,"Редактировать сотрудника");
+  const nI=h("input",{cls:"fi",placeholder:"Имя",value:m.d?.name||""});
+  const rS=h("select",{cls:"fi"});
+  [{v:"admin",l:"👑 Админ"},{v:"manager",l:"📋 Менеджер"},{v:"mechanic",l:"🔧 Механик"}].forEach(r=>{const o=h("option",{value:r.v},r.l);if(r.v===m.d?.role)o.selected=true;rS.appendChild(o)});
+  md.append(fg("Имя",nI),fg("Роль",rS),h("button",{cls:"bp",onClick:async()=>{const n=nI.value.trim();if(!n)return;await fbSS(m.d.id,{name:n,role:rS.value});S.mod=null;R()}},"Сохранить"));
 }
 
-// ═══ AUTH LISTENER ═══
-onAuthStateChanged(auth, user => {
-  state.user = user;
-  state.loading = false;
-  state.loginLoading = false;
-  if(user) subscribeClients();
-  else { if(unsubClients){unsubClients();unsubClients=null;} state.clients=[]; }
-  render();
-});
-
-// Initial render
-render();
+// ═══ AUTH ═══
+onAuthStateChanged(auth,u=>{S.u=u;S.ld=false;S.ll=false;if(u){subCl();subSt()}else{if(u1){u1();u1=null}if(u2){u2();u2=null}S.cl=[];S.st=[]}R()});
+R();
 </script>
 </body>
 </html>
