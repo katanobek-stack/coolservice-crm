@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a1628">
+<title>CoolService CRM</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --bg: #0a1628; --bg2: #0f2040; --bg3: #132d5e;
+  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b; --text4: #475569;
+  --accent: #0ea5e9; --accent2: #38bdf8; --accent3: #22d3ee;
+  --green: #4ade80; --yellow: #fbbf24; --red: #f87171;
+  --border: rgba(56,189,248,0.12); --border2: rgba(255,255,255,0.08);
+  --card: linear-gradient(135deg, rgba(15,32,64,0.8), rgba(19,45,94,0.5));
+}
+html,body { height:100%; background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; overflow:hidden; }
+#app { max-width:520px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--text4); border-radius:4px; }
+
+/* Login */
+.login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:32px; }
+.login-logo { width:64px; height:64px; border-radius:18px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:16px; box-shadow:0 0 40px rgba(14,165,233,0.3); }
+.login-title { font-size:24px; font-weight:700; background:linear-gradient(90deg,var(--text),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:4px; }
+.login-sub { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:32px; }
+.login-form { width:100%; max-width:320px; }
+.login-form input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border2); background:rgba(255,255,255,0.05); color:var(--text); font-size:15px; font-family:inherit; outline:none; margin-bottom:10px; transition:border-color 0.2s; }
+.login-form input:focus { border-color:var(--accent); }
+.login-form input::placeholder { color:var(--text4); }
+.login-btn { width:100%; padding:13px; border-radius:12px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:16px; font-weight:600; font-family:inherit; cursor:pointer; box-shadow:0 4px 15px rgba(14,165,233,0.3); margin-top:6px; transition:opacity 0.2s; }
+.login-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.login-error { color:var(--red); font-size:13px; text-align:center; margin-top:10px; }
+
+/* Header */
+.header { background:linear-gradient(135deg,var(--bg2),var(--bg3),#0c2246); padding:16px 16px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.header-top { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.logo-icon { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; box-shadow:0 0 20px rgba(14,165,233,0.25); }
+.logo-text { font-size:18px; font-weight:700; background:linear-gradient(90deg,var(--text),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.logo-sub { font-size:10px; color:var(--text3); letter-spacing:0.05em; text-transform:uppercase; font-weight:500; }
+.header-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.logout-btn { background:none; border:none; color:var(--text3); font-size:11px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit; }
+.logout-btn:hover { color:var(--text); background:rgba(255,255,255,0.05); }
+.search-bar { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.06); border-radius:12px; padding:8px 14px; border:1px solid var(--border2); }
+.search-bar input { flex:1; border:none; background:transparent; color:var(--text); font-size:14px; font-family:inherit; outline:none; }
+.search-bar input::placeholder { color:var(--text4); }
+.search-clear { background:none; border:none; color:var(--text3); font-size:18px; cursor:pointer; padding:0 2px; line-height:1; }
+
+/* Nav */
+.nav { display:flex; gap:2px; padding:0 12px; background:#0d1f38; border-bottom:1px solid rgba(56,189,248,0.08); flex-shrink:0; }
+.nav-btn { flex:1; padding:11px 4px 9px; border:none; background:transparent; color:var(--text3); font-size:11px; font-weight:500; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; border-bottom:2px solid transparent; transition:all 0.2s; font-family:inherit; }
+.nav-btn.active { color:var(--accent2); font-weight:600; border-bottom-color:var(--accent2); }
+
+/* Content */
+.content { flex:1; overflow-y:auto; padding:12px 16px 90px; }
+
+/* Cards */
+.card { background:var(--card); border-radius:14px; padding:14px 16px; margin-bottom:10px; border:1px solid var(--border); cursor:pointer; transition:all 0.15s; }
+.card:active { transform:scale(0.98); opacity:0.9; }
+.card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px; }
+.client-name { font-size:16px; font-weight:600; color:#f1f5f9; }
+.plate { display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); border-radius:6px; padding:3px 8px; font-size:13px; font-weight:600; color:#cbd5e1; font-family:'JetBrains Mono',monospace; letter-spacing:0.03em; margin-right:5px; margin-top:4px; }
+.meta-row { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text3); margin-top:5px; flex-wrap:wrap; }
+.badge { font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px; white-space:nowrap; display:inline-block; }
+.badge-ref { background:rgba(14,165,233,0.15); color:var(--accent2); border:1px solid rgba(14,165,233,0.3); }
+.badge-ac { background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); }
+.badge-freeze { background:rgba(6,182,212,0.15); color:var(--accent3); border:1px solid rgba(6,182,212,0.3); }
+.badge-other { background:rgba(148,163,184,0.15); color:var(--text2); border:1px solid rgba(148,163,184,0.3); }
+.badge-done { background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); }
+.badge-sched { background:rgba(251,191,36,0.15); color:var(--yellow); border:1px solid rgba(251,191,36,0.3); }
+.badge-progress { background:rgba(249,115,22,0.15); color:#fb923c; border:1px solid rgba(249,115,22,0.3); }
+
+/* Detail view */
+.detail-header { display:flex; align-items:center; gap:12px; padding:16px; border-bottom:1px solid var(--border); flex-shrink:0; background:linear-gradient(135deg,var(--bg2),var(--bg3)); }
+.back-btn { background:none; border:none; color:var(--accent2); cursor:pointer; padding:4px; font-size:20px; }
+.section-title { font-size:13px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+.section-title .add-link { margin-left:auto; color:var(--accent2); cursor:pointer; font-size:12px; text-transform:none; letter-spacing:0; background:none; border:none; font-family:inherit; font-weight:600; }
+.repair-card { background:rgba(255,255,255,0.03); border-radius:12px; padding:12px 14px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.06); }
+.repair-desc { font-size:13px; color:#cbd5e1; line-height:1.5; margin:6px 0; }
+.repair-meta { display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+.repair-date { font-size:12px; color:var(--text3); }
+.repair-cost { font-size:14px; font-weight:700; color:var(--green); }
+.action-row { display:flex; gap:6px; }
+.icon-btn { background:none; border:none; color:var(--text3); cursor:pointer; padding:4px; font-size:14px; }
+.icon-btn:hover { color:var(--text); }
+
+/* Photos */
+.photo-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+.photo-thumb { width:100%; aspect-ratio:1; border-radius:10px; object-fit:cover; border:1px solid var(--border2); cursor:pointer; }
+.photo-thumb-wrap { position:relative; }
+.photo-del { position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,0.7); border:none; color:var(--red); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; }
+.add-photo-btn { width:100%; aspect-ratio:1; border-radius:10px; border:2px dashed rgba(56,189,248,0.3); background:rgba(56,189,248,0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; color:var(--accent2); font-size:11px; font-weight:500; }
+
+/* FAB */
+.fab { position:absolute; bottom:20px; right:20px; width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:300; box-shadow:0 4px 20px rgba(14,165,233,0.4); z-index:50; transition:transform 0.15s; }
+.fab:active { transform:scale(0.9); }
+
+/* Modal */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
+.modal { background:var(--bg2); border-radius:20px 20px 0 0; padding:20px 18px 28px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; border:1px solid var(--border); border-bottom:none; }
+.modal-title { font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; }
+.modal-close { background:none; border:none; color:var(--text3); font-size:24px; cursor:pointer; }
+
+/* Form */
+.form-group { margin-bottom:14px; }
+.form-label { display:block; font-size:12px; font-weight:600; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em; }
+.form-input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border2); background:rgba(255,255,255,0.05); color:var(--text); font-size:14px; font-family:inherit; outline:none; transition:border-color 0.2s; }
+.form-input:focus { border-color:var(--accent); }
+.form-input::placeholder { color:var(--text4); }
+textarea.form-input { min-height:75px; resize:vertical; }
+select.form-input { appearance:none; cursor:pointer; }
+.plate-input { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; text-transform:uppercase; }
+
+/* Type selector */
+.type-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.type-btn { padding:10px 8px; border-radius:10px; border:1px solid var(--border2); background:rgba(255,255,255,0.03); color:var(--text2); font-size:13px; font-weight:500; cursor:pointer; text-align:center; transition:all 0.15s; font-family:inherit; }
+.type-btn.active { border-color:var(--accent2); background:rgba(56,189,248,0.1); color:var(--accent2); font-weight:600; }
+
+/* Buttons */
+.btn-primary { width:100%; padding:12px; border-radius:12px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; box-shadow:0 4px 15px rgba(14,165,233,0.3); transition:opacity 0.2s; }
+.btn-primary:disabled { opacity:0.5; }
+.btn-danger { padding:8px 14px; border-radius:8px; border:1px solid rgba(239,68,68,0.3); background:rgba(239,68,68,0.1); color:var(--red); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:4px; }
+
+/* Stats */
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.stat-card { background:var(--card); border-radius:14px; padding:16px; border:1px solid var(--border); text-align:center; }
+.stat-value { font-size:28px; font-weight:700; background:linear-gradient(90deg,var(--accent2),var(--accent3)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.stat-label { font-size:11px; color:var(--text3); font-weight:500; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
+.bar-row { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); border-radius:12px; padding:10px 14px; margin-bottom:6px; border:1px solid rgba(255,255,255,0.06); }
+.bar-emoji { font-size:22px; }
+.bar-fill-track { height:6px; border-radius:3px; background:rgba(255,255,255,0.06); flex:1; overflow:hidden; }
+.bar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width 0.3s; }
+.bar-count { font-size:14px; font-weight:700; color:var(--text2); min-width:24px; text-align:right; }
+
+/* Empty state */
+.empty { text-align:center; padding:40px 20px; }
+.empty-icon { font-size:36px; margin-bottom:12px; }
+.empty-title { font-size:15px; font-weight:600; color:var(--text3); }
+.empty-text { font-size:13px; color:var(--text4); margin-top:6px; }
+
+/* Loading */
+.loading { display:flex; align-items:center; justify-content:center; height:100%; }
+.spinner { width:36px; height:36px; border:3px solid var(--border2); border-top-color:var(--accent2); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Image viewer */
+.img-viewer { position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:500; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.img-viewer img { max-width:95%; max-height:90%; object-fit:contain; border-radius:8px; }
+
+/* Hide scrollbar on mobile */
+@media (max-width:600px) {
+  .content::-webkit-scrollbar { display:none; }
+  .content { -ms-overflow-style:none; scrollbar-width:none; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+// ═══ FIREBASE CONFIG ═══
+const firebaseConfig = {
+  apiKey: "AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",
+  authDomain: "coolservice-crm.firebaseapp.com",
+  projectId: "coolservice-crm",
+  storageBucket: "coolservice-crm.firebasestorage.app",
+  messagingSenderId: "871007711725",
+  appId: "1:871007711725:web:0f717e2edc84e6907877e4"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ═══ SERVICE TYPES ═══
+const SERVICE_TYPES = [
+  { id:"refrigerator", label:"Рефрижератор", emoji:"🧊", badgeClass:"badge-ref" },
+  { id:"ac", label:"Автокондиционер", emoji:"❄️", badgeClass:"badge-ac" },
+  { id:"freezer", label:"Морозильная камера", emoji:"🥶", badgeClass:"badge-freeze" },
+  { id:"other", label:"Другое", emoji:"🔧", badgeClass:"badge-other" },
+];
+const getType = id => SERVICE_TYPES.find(t=>t.id===id)||SERVICE_TYPES[3];
+const fmtDate = d => d ? new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}) : "";
+const fmtDateTime = d => d ? new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : "";
+
+// ═══ STATE ═══
+let state = {
+  user: null,
+  loading: true,
+  clients: [],
+  tab: "clients",
+  search: "",
+  selectedClient: null,
+  modal: null,
+  imgViewer: null,
+  loginError: "",
+  loginLoading: false,
+};
+let unsubClients = null;
+
+// ═══ COMPRESS IMAGE ═══
+function compressImage(file, maxW=800, quality=0.6) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w=img.width, h=img.height;
+        if(w>maxW){ h=h*(maxW/w); w=maxW; }
+        canvas.width=w; canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/jpeg",quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ═══ FIREBASE OPERATIONS ═══
+function subscribeClients() {
+  if(unsubClients) unsubClients();
+  const q = query(collection(db,"clients"), orderBy("createdAt","desc"));
+  unsubClients = onSnapshot(q, snap => {
+    state.clients = snap.docs.map(d => ({id:d.id,...d.data()}));
+    render();
+  }, err => { console.error("Firestore error:",err); });
+}
+
+async function fbAddClient(data) {
+  await addDoc(collection(db,"clients"), {...data, vehicles:[], repairs:[], appointments:[], createdAt:serverTimestamp()});
+}
+async function fbUpdateClient(id, data) {
+  await updateDoc(doc(db,"clients",id), data);
+}
+async function fbDeleteClient(id) {
+  await deleteDoc(doc(db,"clients",id));
+}
+
+// Helper: update a client's sub-array
+async function updateClientArray(clientId, field, arr) {
+  await updateDoc(doc(db,"clients",clientId), {[field]:arr});
+}
+
+// ═══ RENDER ENGINE ═══
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if(attrs) Object.entries(attrs).forEach(([k,v]) => {
+    if(k==="className") el.className=v;
+    else if(k.startsWith("on")) el.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="style"&&typeof v==="object") Object.assign(el.style,v);
+    else if(k==="htmlFor") el.setAttribute("for",v);
+    else el.setAttribute(k,v);
+  });
+  children.flat(9).forEach(c => {
+    if(c==null||c===false) return;
+    el.appendChild(typeof c==="string"||typeof c==="number" ? document.createTextNode(c) : c);
+  });
+  return el;
+}
+
+function render() {
+  const root = document.getElementById("app");
+  root.innerHTML = "";
+  if(state.loading) { root.appendChild(h("div",{className:"loading"},h("div",{className:"spinner"}))); return; }
+  if(!state.user) { root.appendChild(renderLogin()); return; }
+  if(state.selectedClient) { root.appendChild(renderClientDetail()); }
+  else { root.appendChild(renderMain()); }
+  if(state.modal) root.appendChild(renderModal());
+  if(state.imgViewer) root.appendChild(renderImgViewer());
+}
+
+// ═══ LOGIN ═══
+function renderLogin() {
+  const wrap = h("div",{className:"login-screen"});
+  wrap.appendChild(h("div",{className:"login-logo"},"❄️"));
+  wrap.appendChild(h("div",{className:"login-title"},"CoolService CRM"));
+  wrap.appendChild(h("div",{className:"login-sub"},"Рефрижераторы · Кондиционеры · Морозильные"));
+  
+  const form = h("div",{className:"login-form"});
+  const emailInput = h("input",{type:"email",placeholder:"Email",autocomplete:"email"});
+  const passInput = h("input",{type:"password",placeholder:"Пароль",autocomplete:"current-password"});
+  const btn = h("button",{className:"login-btn",onClick:async()=>{
+    const email=emailInput.value.trim(), pass=passInput.value;
+    if(!email||!pass) return;
+    state.loginLoading=true; state.loginError=""; render();
+    try {
+      await signInWithEmailAndPassword(auth,email,pass);
+    } catch(e) {
+      state.loginError = e.code==="auth/invalid-credential"?"Неверный email или пароль"
+        : e.code==="auth/too-many-requests"?"Слишком много попыток, подождите"
+        : "Ошибка: "+e.message;
+      state.loginLoading=false; render();
+    }
+  }},"Войти");
+
+  // Enter key
+  passInput.addEventListener("keydown",e=>{if(e.key==="Enter")btn.click();});
+
+  form.append(emailInput, passInput, btn);
+  if(state.loginError) form.appendChild(h("div",{className:"login-error"},state.loginError));
+  wrap.appendChild(form);
+  return wrap;
+}
+
+// ═══ MAIN VIEW ═══
+function renderMain() {
+  const wrap = h("div",{style:{display:"flex",flexDirection:"column",height:"100%"}});
+  
+  // Header
+  const header = h("div",{className:"header"});
+  const top = h("div",{className:"header-top"});
+  top.appendChild(h("div",{className:"logo-icon"},"❄️"));
+  const logoCol = h("div",{});
+  logoCol.appendChild(h("div",{className:"logo-text"},"CoolService CRM"));
+  logoCol.appendChild(h("div",{className:"logo-sub"},"Рефрижераторы · Кондиционеры · Морозильные"));
+  top.appendChild(logoCol);
+  const hRight = h("div",{className:"header-right"});
+  hRight.appendChild(h("div",{style:{fontSize:"11px",color:"#64748b"}},state.user.email.split("@")[0]));
+  hRight.appendChild(h("button",{className:"logout-btn",onClick:()=>signOut(auth)},"Выйти"));
+  top.appendChild(hRight);
+  header.appendChild(top);
+  
+  // Search
+  const searchBar = h("div",{className:"search-bar"});
+  searchBar.appendChild(h("span",{style:{color:"#64748b"}},"🔍"));
+  const searchInput = h("input",{placeholder:"Поиск по имени, номеру, марке...",value:state.search,onInput:e=>{state.search=e.target.value;render();}});
+  searchBar.appendChild(searchInput);
+  if(state.search) searchBar.appendChild(h("button",{className:"search-clear",onClick:()=>{state.search="";render();}},"×"));
+  header.appendChild(searchBar);
+  wrap.appendChild(header);
+
+  // Nav
+  const nav = h("div",{className:"nav"});
+  [{id:"clients",icon:"👤",label:"Клиенты"},{id:"calendar",icon:"📅",label:"Записи"},{id:"stats",icon:"🔧",label:"Сводка"}].forEach(t=>{
+    nav.appendChild(h("button",{className:"nav-btn"+(state.tab===t.id?" active":""),onClick:()=>{state.tab=t.id;render();}},t.icon+" "+t.label));
+  });
+  wrap.appendChild(nav);
+
+  // Content
+  const content = h("div",{className:"content"});
+  if(state.tab==="clients") renderClientsTab(content);
+  else if(state.tab==="calendar") renderCalendarTab(content);
+  else renderStatsTab(content);
+  wrap.appendChild(content);
+
+  // FAB
+  if(state.tab==="clients") {
+    wrap.appendChild(h("button",{className:"fab",onClick:()=>{state.modal={type:"addClient"};render();}},"+"));
+  }
+  return wrap;
+}
+
+function renderClientsTab(container) {
+  const sl = state.search.toLowerCase();
+  const filtered = state.clients.filter(c => {
+    if(!sl) return true;
+    return c.name?.toLowerCase().includes(sl) || c.phone?.includes(state.search) ||
+      (c.vehicles||[]).some(v => v.plate?.toLowerCase().includes(sl) || v.brand?.toLowerCase().includes(sl));
+  });
+  if(!filtered.length) {
+    const empty = h("div",{className:"empty"});
+    empty.appendChild(h("div",{className:"empty-icon"},state.search?"🔍":"👤"));
+    empty.appendChild(h("div",{className:"empty-title"},state.search?"Ничего не найдено":"Нет клиентов"));
+    empty.appendChild(h("div",{className:"empty-text"},state.search?"Попробуйте другой запрос":"Нажмите + чтобы добавить первого клиента"));
+    container.appendChild(empty);
+    return;
+  }
+  filtered.forEach(c => {
+    const card = h("div",{className:"card",onClick:()=>{state.selectedClient=c.id;render();}});
+    const hdr = h("div",{className:"card-header"});
+    hdr.appendChild(h("div",{className:"client-name"},c.name||""));
+    const emojis = h("div",{style:{display:"flex",gap:"4px"}});
+    [...new Set((c.vehicles||[]).map(v=>v.serviceType))].forEach(st=>{
+      emojis.appendChild(h("span",{style:{fontSize:"16px"},title:getType(st).label},getType(st).emoji));
+    });
+    hdr.appendChild(emojis);
+    card.appendChild(hdr);
+
+    const plates = h("div",{style:{display:"flex",gap:"5px",flexWrap:"wrap"}});
+    (c.vehicles||[]).forEach(v=>plates.appendChild(h("span",{className:"plate"},v.plate||"")));
+    card.appendChild(plates);
+
+    const meta = h("div",{className:"meta-row"});
+    if(c.phone) meta.append(h("span",{},"📞 "+c.phone));
+    const rc = (c.repairs||[]).length;
+    if(rc) { if(c.phone) meta.appendChild(h("span",{}," · ")); meta.appendChild(h("span",{},rc+" ремонт(ов)")); }
+    card.appendChild(meta);
+
+    const upcoming = (c.appointments||[]).find(a=>new Date(a.date)>=new Date());
+    if(upcoming) {
+      const row = h("div",{style:{marginTop:"6px"}});
+      row.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(upcoming.date)));
+      card.appendChild(row);
+    }
+    container.appendChild(card);
+  });
+}
+
+function renderCalendarTab(container) {
+  const all = state.clients.flatMap(c=>(c.appointments||[]).map(a=>({...a,clientId:c.id,clientName:c.name,vehicle:(c.vehicles||[]).find(v=>v.id===a.vehicleId)}))).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(!all.length) {
+    container.appendChild(h("div",{className:"empty"},h("div",{className:"empty-icon"},"📅"),h("div",{className:"empty-title"},"Нет записей"),h("div",{className:"empty-text"},"Откройте карточку клиента чтобы записать на визит")));
+    return;
+  }
+  all.forEach(a=>{
+    const past = new Date(a.date)<new Date();
+    const card = h("div",{className:"card",style:{opacity:past?0.5:1},onClick:()=>{state.selectedClient=a.clientId;render();}});
+    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+    top.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(a.date)));
+    if(past) top.appendChild(h("span",{style:{fontSize:"11px",color:"#64748b"}},"Прошло"));
+    card.appendChild(top);
+    card.appendChild(h("div",{style:{fontSize:"15px",fontWeight:"600",color:"#f1f5f9",marginTop:"8px"}},a.clientName||""));
+    const row = h("div",{style:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
+    if(a.vehicle) row.appendChild(h("span",{className:"plate"},a.vehicle.plate||""));
+    const st=getType(a.serviceType);
+    row.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
+    card.appendChild(row);
+    if(a.description) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
+    container.appendChild(card);
+  });
+}
+
+function renderStatsTab(container) {
+  const totalR = state.clients.reduce((s,c)=>s+(c.repairs||[]).length,0);
+  const totalRev = state.clients.reduce((s,c)=>s+(c.repairs||[]).reduce((s2,r)=>s2+(parseFloat(r.cost)||0),0),0);
+  const grid = h("div",{className:"stats-grid"});
+  [{v:state.clients.length,l:"Клиентов"},{v:state.clients.reduce((s,c)=>s+(c.vehicles||[]).length,0),l:"Автомобилей"},{v:totalR,l:"Ремонтов"},{v:"€"+totalRev.toLocaleString(),l:"Выручка"}].forEach(s=>{
+    const card = h("div",{className:"stat-card"});
+    card.appendChild(h("div",{className:"stat-value"},""+s.v));
+    card.appendChild(h("div",{className:"stat-label"},s.l));
+    grid.appendChild(card);
+  });
+  container.appendChild(grid);
+
+  container.appendChild(h("div",{className:"section-title"},"По типу оборудования"));
+  SERVICE_TYPES.forEach(st=>{
+    const count = state.clients.reduce((s,c)=>s+(c.repairs||[]).filter(r=>r.serviceType===st.id).length,0);
+    const total = totalR||1;
+    const row = h("div",{className:"bar-row"});
+    row.appendChild(h("span",{className:"bar-emoji"},st.emoji));
+    const mid = h("div",{style:{flex:"1"}});
+    mid.appendChild(h("div",{style:{fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},st.label));
+    const track = h("div",{className:"bar-fill-track"});
+    track.appendChild(h("div",{className:"bar-fill",style:{width:(count/total*100)+"%"}}));
+    mid.appendChild(track);
+    row.appendChild(mid);
+    row.appendChild(h("span",{className:"bar-count"},""+count));
+    container.appendChild(row);
+  });
+}
+
+// ═══ CLIENT DETAIL ═══
+function renderClientDetail() {
+  const client = state.clients.find(c=>c.id===state.selectedClient);
+  if(!client) { state.selectedClient=null; return renderMain(); }
+  
+  const wrap = h("div",{style:{display:"flex",flexDirection:"column",height:"100%"}});
+  
+  // Header
+  const hdr = h("div",{className:"detail-header"});
+  hdr.appendChild(h("button",{className:"back-btn",onClick:()=>{state.selectedClient=null;render();}},"‹"));
+  const info = h("div",{style:{flex:"1"}});
+  info.appendChild(h("div",{className:"client-name"},client.name||""));
+  if(client.phone) info.appendChild(h("div",{className:"meta-row",style:{marginTop:"2px"}},"📞 "+client.phone));
+  hdr.appendChild(info);
+  hdr.appendChild(h("button",{className:"icon-btn",style:{fontSize:"16px"},onClick:()=>{state.modal={type:"editClient",data:client};render();}},"✏️"));
+  wrap.appendChild(hdr);
+
+  const content = h("div",{className:"content"});
+  
+  // Vehicles
+  const vSec = h("div",{style:{marginBottom:"20px"}});
+  const vTitle = h("div",{className:"section-title"});
+  vTitle.append("🚗 Автомобили ("+(client.vehicles||[]).length+")");
+  vTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addVehicle",clientId:client.id};render();}},"+ Добавить"));
+  vSec.appendChild(vTitle);
+  (client.vehicles||[]).forEach(v=>{
+    const st=getType(v.serviceType);
+    const card = h("div",{className:"repair-card"});
+    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+    const left = h("div",{style:{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}});
+    left.appendChild(h("span",{className:"plate"},v.plate||""));
+    left.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
+    top.appendChild(left);
+    const acts = h("div",{className:"action-row"});
+    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{state.modal={type:"editVehicle",clientId:client.id,data:v};render();}},"✏️"));
+    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить авто и все связанные ремонты?")){
+      const vs=(client.vehicles||[]).filter(x=>x.id!==v.id);
+      const rs=(client.repairs||[]).filter(r=>r.vehicleId!==v.id);
+      const ap=(client.appointments||[]).filter(a=>a.vehicleId!==v.id);
+      fbUpdateClient(client.id,{vehicles:vs,repairs:rs,appointments:ap});
+    }}},"🗑"));
+    top.appendChild(acts);
+    card.appendChild(top);
+    if(v.brand) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},v.brand));
+    if(v.notes) card.appendChild(h("div",{style:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},v.notes));
+    vSec.appendChild(card);
+  });
+  if(!(client.vehicles||[]).length) vSec.appendChild(h("div",{className:"empty",style:{padding:"16px"}},h("div",{style:{fontSize:"13px",color:"#475569"}},"Нет автомобилей")));
+  content.appendChild(vSec);
+
+  // Repairs
+  const rSec = h("div",{style:{marginBottom:"20px"}});
+  const rTitle = h("div",{className:"section-title"});
+  rTitle.append("🔧 История ремонтов ("+(client.repairs||[]).length+")");
+  if((client.vehicles||[]).length) rTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addRepair",clientId:client.id,vehicles:client.vehicles};render();}},"+ Добавить"));
+  rSec.appendChild(rTitle);
+  (client.repairs||[]).forEach(r=>{
+    const st=getType(r.serviceType);
+    const v=(client.vehicles||[]).find(x=>x.id===r.vehicleId);
+    const card = h("div",{className:"repair-card"});
+    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
+    const badges = h("div",{style:{display:"flex",gap:"5px",flexWrap:"wrap"}});
+    badges.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
+    badges.appendChild(h("span",{className:"badge "+(r.status==="done"?"badge-done":r.status==="in_progress"?"badge-progress":"badge-sched")},r.status==="done"?"✅ Готово":"🔧 В работе"));
+    top.appendChild(badges);
+    const acts = h("div",{className:"action-row"});
+    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{state.modal={type:"editRepair",clientId:client.id,vehicles:client.vehicles,data:r};render();}},"✏️"));
+    acts.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить запись о ремонте?")){
+      const rs=(client.repairs||[]).filter(x=>x.id!==r.id);
+      updateClientArray(client.id,"repairs",rs);
+    }}},"🗑"));
+    top.appendChild(acts);
+    card.appendChild(top);
+    if(v) card.appendChild(h("span",{className:"plate",style:{display:"inline-flex",marginBottom:"4px"}},v.plate||""));
+    card.appendChild(h("div",{className:"repair-desc"},r.description||""));
+    const meta = h("div",{className:"repair-meta"});
+    meta.appendChild(h("span",{className:"repair-date"},fmtDate(r.date)));
+    if(r.cost) meta.appendChild(h("span",{className:"repair-cost"},"€"+r.cost));
+    card.appendChild(meta);
+    // Photos
+    if(r.photos&&r.photos.length) {
+      const pg = h("div",{className:"photo-grid"});
+      r.photos.forEach(p=>{
+        const pw = h("div",{className:"photo-thumb-wrap"});
+        pw.appendChild(h("img",{className:"photo-thumb",src:p.data||p,onClick:e=>{e.stopPropagation();state.imgViewer=p.data||p;render();}}));
+        pg.appendChild(pw);
+      });
+      card.appendChild(pg);
+    }
+    rSec.appendChild(card);
+  });
+  if(!(client.repairs||[]).length) rSec.appendChild(h("div",{className:"empty",style:{padding:"16px"}},h("div",{style:{fontSize:"13px",color:"#475569"}},"Нет записей о ремонтах")));
+  content.appendChild(rSec);
+
+  // Appointments
+  const aSec = h("div",{style:{marginBottom:"20px"}});
+  const aTitle = h("div",{className:"section-title"});
+  aTitle.append("📅 Записи на визит ("+(client.appointments||[]).length+")");
+  if((client.vehicles||[]).length) aTitle.appendChild(h("button",{className:"add-link",onClick:()=>{state.modal={type:"addAppointment",clientId:client.id,vehicles:client.vehicles};render();}},"+ Записать"));
+  aSec.appendChild(aTitle);
+  (client.appointments||[]).forEach(a=>{
+    const st=getType(a.serviceType);
+    const v=(client.vehicles||[]).find(x=>x.id===a.vehicleId);
+    const card = h("div",{className:"repair-card"});
+    const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+    top.appendChild(h("span",{className:"badge badge-sched"},"📅 "+fmtDateTime(a.date)));
+    top.appendChild(h("button",{className:"icon-btn",onClick:()=>{if(confirm("Удалить запись?")){
+      const ap=(client.appointments||[]).filter(x=>x.id!==a.id);
+      updateClientArray(client.id,"appointments",ap);
+    }}},"🗑"));
+    card.appendChild(top);
+    const row = h("div",{style:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
+    if(v) row.appendChild(h("span",{className:"plate"},v.plate||""));
+    row.appendChild(h("span",{className:"badge "+st.badgeClass},st.emoji+" "+st.label));
+    card.appendChild(row);
+    if(a.description) card.appendChild(h("div",{style:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
+    aSec.appendChild(card);
+  });
+  content.appendChild(aSec);
+
+  // Delete client
+  content.appendChild(h("div",{style:{marginTop:"20px",paddingTop:"20px",borderTop:"1px solid rgba(255,255,255,0.06)"}},
+    h("button",{className:"btn-danger",onClick:()=>{if(confirm('Удалить клиента "'+client.name+'" и все данные?')){fbDeleteClient(client.id);state.selectedClient=null;render();}}},"🗑 Удалить клиента")
+  ));
+  wrap.appendChild(content);
+  return wrap;
+}
+
+// ═══ IMAGE VIEWER ═══
+function renderImgViewer() {
+  return h("div",{className:"img-viewer",onClick:()=>{state.imgViewer=null;render();}},
+    h("img",{src:state.imgViewer})
+  );
+}
+
+// ═══ MODALS ═══
+function renderModal() {
+  const m = state.modal;
+  const overlay = h("div",{className:"overlay",onClick:()=>{state.modal=null;render();}});
+  const modal = h("div",{className:"modal",onClick:e=>e.stopPropagation()});
+  
+  if(m.type==="addClient"||m.type==="editClient") renderClientForm(modal,m);
+  else if(m.type==="addVehicle"||m.type==="editVehicle") renderVehicleForm(modal,m);
+  else if(m.type==="addRepair"||m.type==="editRepair") renderRepairForm(modal,m);
+  else if(m.type==="addAppointment") renderAppointmentForm(modal,m);
+  
+  overlay.appendChild(modal);
+  return overlay;
+}
+
+function modalHeader(modal, title) {
+  const hdr = h("div",{className:"modal-title"});
+  hdr.appendChild(h("span",{},title));
+  hdr.appendChild(h("button",{className:"modal-close",onClick:()=>{state.modal=null;render();}},"×"));
+  modal.appendChild(hdr);
+}
+
+function renderClientForm(modal, m) {
+  const isEdit = m.type==="editClient";
+  modalHeader(modal, isEdit?"Редактировать клиента":"Новый клиент");
+  
+  const nameIn = h("input",{className:"form-input",placeholder:"Андрей Петров или SIA CoolTrans",value:m.data?.name||""});
+  const phoneIn = h("input",{className:"form-input",type:"tel",placeholder:"+371 29 123 456",value:m.data?.phone||""});
+  
+  modal.append(
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Имя / Компания"),nameIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Телефон"),phoneIn),
+    h("button",{className:"btn-primary",onClick:async()=>{
+      const name=nameIn.value.trim();
+      if(!name)return;
+      if(isEdit) await fbUpdateClient(m.data.id,{name,phone:phoneIn.value.trim()});
+      else await fbAddClient({name,phone:phoneIn.value.trim()});
+      state.modal=null; render();
+    }},isEdit?"Сохранить":"Добавить клиента")
+  );
+}
+
+function renderVehicleForm(modal, m) {
+  const isEdit = m.type==="editVehicle";
+  modalHeader(modal, isEdit?"Редактировать авто":"Добавить авто");
+  
+  const plateIn = h("input",{className:"form-input plate-input",placeholder:"LV GK-2847",value:m.data?.plate||""});
+  const brandIn = h("input",{className:"form-input",placeholder:"Mercedes Sprinter",value:m.data?.brand||""});
+  const notesIn = h("textarea",{className:"form-input",placeholder:"Carrier Supra 950, фреон R404a...",value:m.data?.notes||""});
+  let selType = m.data?.serviceType||"refrigerator";
+
+  const typeGrid = h("div",{className:"type-grid"});
+  function renderTypes(){
+    typeGrid.innerHTML="";
+    SERVICE_TYPES.forEach(t=>{
+      typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));
+    });
+  }
+  renderTypes();
+
+  modal.append(
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Гос. номер"),plateIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Марка / Модель"),brandIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип оборудования"),typeGrid),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Заметки"),notesIn),
+    h("button",{className:"btn-primary",onClick:async()=>{
+      const plate=plateIn.value.trim().toUpperCase();
+      if(!plate)return;
+      const client=state.clients.find(c=>c.id===m.clientId);
+      if(!client)return;
+      const vehicles=[...(client.vehicles||[])];
+      const vData={plate,brand:brandIn.value.trim(),serviceType:selType,notes:notesIn.value.trim()};
+      if(isEdit){
+        const idx=vehicles.findIndex(v=>v.id===m.data.id);
+        if(idx>=0) vehicles[idx]={...vehicles[idx],...vData};
+      } else {
+        vData.id = "v"+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
+        vehicles.push(vData);
+      }
+      await updateClientArray(client.id,"vehicles",vehicles);
+      state.modal=null; render();
+    }},isEdit?"Сохранить":"Добавить авто")
+  );
+}
+
+function renderRepairForm(modal, m) {
+  const isEdit = m.type==="editRepair";
+  modalHeader(modal, isEdit?"Редактировать ремонт":"Новый ремонт");
+  
+  const vehicles = m.vehicles||[];
+  let selVehicle = m.data?.vehicleId||vehicles[0]?.id||"";
+  let selType = m.data?.serviceType||"refrigerator";
+  let selStatus = m.data?.status||"done";
+  let photos = [...(m.data?.photos||[])];
+
+  // Vehicle select
+  const vSelect = h("select",{className:"form-input",onChange:e=>{selVehicle=e.target.value;}});
+  vehicles.forEach(v=>{
+    const opt = h("option",{value:v.id},v.plate+" — "+(v.brand||""));
+    if(v.id===selVehicle) opt.selected=true;
+    vSelect.appendChild(opt);
+  });
+  
+  const dateIn = h("input",{className:"form-input",type:"date",value:m.data?.date||new Date().toISOString().slice(0,10)});
+  const descIn = h("textarea",{className:"form-input",placeholder:"Замена компрессора, перезаправка фреоном R404a...",value:m.data?.description||""});
+  const costIn = h("input",{className:"form-input",type:"number",placeholder:"850",value:m.data?.cost||""});
+  
+  const typeGrid = h("div",{className:"type-grid"});
+  function renderTypes(){
+    typeGrid.innerHTML="";
+    SERVICE_TYPES.forEach(t=>{typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));});
+  }
+  renderTypes();
+
+  const statusRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"14px"}});
+  function renderStatus(){
+    statusRow.innerHTML="";
+    statusRow.appendChild(h("button",{className:"type-btn"+(selStatus==="done"?" active":""),onClick:()=>{selStatus="done";renderStatus();}},"✅ Выполнено"));
+    statusRow.appendChild(h("button",{className:"type-btn"+(selStatus==="in_progress"?" active":""),onClick:()=>{selStatus="in_progress";renderStatus();}},"🔧 В работе"));
+  }
+  renderStatus();
+
+  // Photos
+  const photoGroup = h("div",{className:"form-group"});
+  photoGroup.appendChild(h("label",{className:"form-label"},"Фото"));
+  const fileIn = h("input",{type:"file",accept:"image/*",multiple:true,style:{display:"none"},onChange:async e=>{
+    const files=Array.from(e.target.files);
+    for(const f of files){
+      const compressed = await compressImage(f);
+      photos.push({id:"p"+Date.now()+Math.random().toString(36).substr(2,3),data:compressed});
+    }
+    e.target.value="";
+    renderPhotos();
+  }});
+  const photoGrid = h("div",{className:"photo-grid"});
+  function renderPhotos(){
+    photoGrid.innerHTML="";
+    photos.forEach(p=>{
+      const pw=h("div",{className:"photo-thumb-wrap"});
+      pw.appendChild(h("img",{className:"photo-thumb",src:p.data||p}));
+      pw.appendChild(h("button",{className:"photo-del",onClick:()=>{photos=photos.filter(x=>x.id!==p.id);renderPhotos();}},"×"));
+      photoGrid.appendChild(pw);
+    });
+    photoGrid.appendChild(h("button",{className:"add-photo-btn",onClick:()=>fileIn.click()},"📷","Фото"));
+  }
+  renderPhotos();
+  photoGroup.append(photoGrid,fileIn);
+
+  const parts = [
+    vehicles.length>1 ? h("div",{className:"form-group"},h("label",{className:"form-label"},"Автомобиль"),vSelect) : null,
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Дата"),dateIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип работы"),typeGrid),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Описание работ"),descIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Стоимость (€)"),costIn),
+    photoGroup,
+    statusRow,
+    h("button",{className:"btn-primary",onClick:async()=>{
+      const desc=descIn.value.trim();
+      if(!desc)return;
+      const client=state.clients.find(c=>c.id===m.clientId);
+      if(!client)return;
+      const repairs=[...(client.repairs||[])];
+      const rData={vehicleId:selVehicle,date:dateIn.value,serviceType:selType,description:desc,cost:costIn.value,photos,status:selStatus};
+      if(isEdit){
+        const idx=repairs.findIndex(r=>r.id===m.data.id);
+        if(idx>=0) repairs[idx]={...repairs[idx],...rData};
+      } else {
+        rData.id="r"+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
+        repairs.unshift(rData);
+      }
+      await updateClientArray(client.id,"repairs",repairs);
+      state.modal=null; render();
+    }},isEdit?"Сохранить":"Добавить ремонт")
+  ];
+  parts.forEach(p=>{if(p)modal.appendChild(p);});
+}
+
+function renderAppointmentForm(modal, m) {
+  modalHeader(modal, "Записать на визит");
+  const vehicles = m.vehicles||[];
+  let selVehicle = vehicles[0]?.id||"";
+  let selType = "refrigerator";
+
+  const vSelect = h("select",{className:"form-input",onChange:e=>{selVehicle=e.target.value;}});
+  vehicles.forEach(v=>{
+    const opt = h("option",{value:v.id},v.plate+" — "+(v.brand||""));
+    vSelect.appendChild(opt);
+  });
+
+  const dateIn = h("input",{className:"form-input",type:"datetime-local"});
+  const descIn = h("textarea",{className:"form-input",placeholder:"Плановая диагностика..."});
+
+  const typeGrid = h("div",{className:"type-grid"});
+  function renderTypes(){
+    typeGrid.innerHTML="";
+    SERVICE_TYPES.forEach(t=>{typeGrid.appendChild(h("button",{className:"type-btn"+(selType===t.id?" active":""),onClick:()=>{selType=t.id;renderTypes();}},t.emoji+" "+t.label));});
+  }
+  renderTypes();
+
+  const parts = [
+    vehicles.length>1?h("div",{className:"form-group"},h("label",{className:"form-label"},"Автомобиль"),vSelect):null,
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Дата и время"),dateIn),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Тип работы"),typeGrid),
+    h("div",{className:"form-group"},h("label",{className:"form-label"},"Описание"),descIn),
+    h("button",{className:"btn-primary",onClick:async()=>{
+      if(!dateIn.value)return;
+      const client=state.clients.find(c=>c.id===m.clientId);
+      if(!client)return;
+      const appointments=[...(client.appointments||[])];
+      appointments.push({id:"a"+Date.now().toString(36)+Math.random().toString(36).substr(2,4),vehicleId:selVehicle,date:dateIn.value,serviceType:selType,description:descIn.value.trim()});
+      await updateClientArray(client.id,"appointments",appointments);
+      state.modal=null; render();
+    }},"Записать")
+  ];
+  parts.forEach(p=>{if(p)modal.appendChild(p);});
+}
+
+// ═══ AUTH LISTENER ═══
+onAuthStateChanged(auth, user => {
+  state.user = user;
+  state.loading = false;
+  state.loginLoading = false;
+  if(user) subscribeClients();
+  else { if(unsubClients){unsubClients();unsubClients=null;} state.clients=[]; }
+  render();
+});
+
+// Initial render
+render();
+</script>
+</body>
+</html>
