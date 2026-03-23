@@ -432,7 +432,19 @@ function rForm(md,m){
   function rPh(){pG.innerHTML="";photos.forEach(p=>{const pw=h("div",{s:{position:"relative"}});pw.append(h("img",{cls:"pt",src:p.data||p}),h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{photos=photos.filter(x=>x.id!==p.id);rPh()}},"×"));pG.appendChild(pw)});pG.appendChild(h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:()=>fIn.click()},"📷 Фото"))}rPh();
   const parts=[vs.length>1?fg("Автомобиль",vS):null,fg("Дата",dI),fg("Тип работы",tG),fg("Описание",deI),fg("Стоимость (€)",cI),fg("🧊 Тип фреона",frTypeS),fg("🧊 Количество фреона (г)",frAmtI),fg("Фото неисправностей",pG,fIn)];
   parts.forEach(p=>{if(p)md.appendChild(p)});
-  md.appendChild(h("button",{cls:"bp",onClick:async()=>{const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const rp=[...(cl.repairs||[])];const rD={vehicleId:sV,date:dI.value,serviceType:sT,description:deI.value.trim(),cost:cI.value,freonType:frTypeS.value,freonAmount:frAmtI.value,photos,tasks:m.d?.tasks||[]};if(isE){const i=rp.findIndex(x=>x.id===m.d.id);if(i>=0)rp[i]={...rp[i],...rD}}else{rD.id=gid();rD.status="in_progress";rp.unshift(rD)}await fbUA(cl.id,"repairs",rp);S.mod=null;R()}},isE?"Сохранить":"Создать заказ-наряд"));
+  md.appendChild(h("button",{cls:"bp",onClick:async()=>{
+    const cid=m.cid;
+    const cl=S.cl.find(c=>c.id===cid);
+    if(!cl){alert("Ошибка: клиент не найден. Попробуйте закрыть и открыть заново.");return}
+    try{
+      const rp=[...(cl.repairs||[])];
+      const rD={vehicleId:sV||((cl.vehicles||[])[0]?.id)||"",date:dI.value,serviceType:sT,description:deI.value.trim(),cost:cI.value,freonType:frTypeS.value,freonAmount:frAmtI.value,photos,tasks:m.d?.tasks||[]};
+      if(isE){const i=rp.findIndex(x=>x.id===m.d.id);if(i>=0)rp[i]={...rp[i],...rD}}
+      else{rD.id=gid();rD.status="in_progress";rp.unshift(rD)}
+      await fbUA(cid,"repairs",rp);
+      S.mod=null;R();
+    }catch(err){alert("Ошибка сохранения: "+err.message);console.error(err)}
+  }},isE?"Сохранить":"Создать заказ-наряд"));
 }
 
 function tForm(md,m){
@@ -445,7 +457,7 @@ function tForm(md,m){
   const fIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"},onChange:async e=>{for(const f of Array.from(e.target.files)){photos.push({id:gid(),data:await compress(f)})}e.target.value="";rPh()}});
   const pG=h("div",{cls:"pg"});
   function rPh(){pG.innerHTML="";photos.forEach(p=>{const pw=h("div",{s:{position:"relative"}});pw.append(h("img",{cls:"pt",src:p.data||p}),h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{photos=photos.filter(x=>x.id!==p.id);rPh()}},"×"));pG.appendChild(pw)});pG.appendChild(h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:()=>fIn.click()},"📷 Фото"))}rPh();
-  md.append(fg("Назначить сотруднику",aS),fg("Описание задачи",dI),fg("Фото",pG,fIn),h("button",{cls:"bp",onClick:async()=>{const desc=dI.value.trim();if(!desc)return;const cl=S.cl.find(c=>c.id===m.cid);if(!cl)return;const rp=[...(cl.repairs||[])];const ri=rp.findIndex(x=>x.id===m.rid);if(ri<0)return;const ts=[...(rp[ri].tasks||[])];ts.push({id:gid(),assignee,description:desc,status:"in_progress",photos,createdAt:new Date().toISOString()});rp[ri]={...rp[ri],tasks:ts};await fbUA(cl.id,"repairs",rp);S.mod=null;R()}},"Добавить задачу"));
+  md.append(fg("Назначить сотруднику",aS),fg("Описание задачи",dI),fg("Фото",pG,fIn),h("button",{cls:"bp",onClick:async()=>{const desc=dI.value.trim();if(!desc)return;const cl=S.cl.find(c=>c.id===m.cid);if(!cl){alert("Ошибка: клиент не найден");return}try{const rp=[...(cl.repairs||[])];const ri=rp.findIndex(x=>x.id===m.rid);if(ri<0){alert("Ошибка: заказ-наряд не найден");return}const ts=[...(rp[ri].tasks||[])];ts.push({id:gid(),assignee,description:desc,status:"in_progress",photos,createdAt:new Date().toISOString()});rp[ri]={...rp[ri],tasks:ts};await fbUA(cl.id,"repairs",rp);S.mod=null;R()}catch(err){alert("Ошибка: "+err.message)}},"Добавить задачу"));
 }
 
 function aForm(md,m){
