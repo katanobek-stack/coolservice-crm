@@ -113,11 +113,20 @@ function mainV(){
   const hr=h("div",{s:{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px"}});
   hr.append(h("span",{s:{fontSize:"11px",color:"#64748b"}},me?.name||""),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"11px",cursor:"pointer",padding:"4px 8px",borderRadius:"6px"},onClick:()=>signOut(auth)},"Выйти"));
   top.appendChild(hr);hdr.appendChild(top);
-  // Search
+  // Search - avoid re-render losing focus
   const sb=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",background:"rgba(255,255,255,.06)",borderRadius:"12px",padding:"8px 14px",border:"1px solid rgba(255,255,255,.08)"}});
-  sb.append(h("span",{s:{color:"#64748b"}},"🔍"),h("input",{cls:"fi",placeholder:"Поиск...",value:S.q,s:{border:"none",background:"transparent",padding:"0"},onInput:e=>{S.q=e.target.value;R()}}));
-  if(S.q)sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"18px",cursor:"pointer"},onClick:()=>{S.q="";R()}},"×"));
+  sb.append(h("span",{s:{color:"#64748b"}},"🔍"));
+  const sInput=h("input",{cls:"fi",placeholder:"Поиск по номеру, имени, марке...",value:S.q,s:{border:"none",background:"transparent",padding:"0"}});
+  let searchTimer=null;
+  sInput.addEventListener("input",e=>{S.q=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{
+    // Only re-render the content area, not the whole page
+    const ctEl=w.querySelector(".ct");if(ctEl){ctEl.innerHTML="";({clients:clientsTab,mytasks:myTasksTab,calendar:calTab,stats:statsTab,team:teamTab})[S.tab]?.(ctEl)}
+  },150)});
+  sb.appendChild(sInput);
+  if(S.q)sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"18px",cursor:"pointer"},onClick:()=>{S.q="";sInput.value="";const ctEl=w.querySelector(".ct");if(ctEl){ctEl.innerHTML="";({clients:clientsTab,mytasks:myTasksTab,calendar:calTab,stats:statsTab,team:teamTab})[S.tab]?.(ctEl)}}},"×"));
   hdr.appendChild(sb);w.appendChild(hdr);
+  // Focus search input after render
+  setTimeout(()=>{if(S.q&&document.activeElement!==sInput){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
   // Nav
   const nav=h("div",{cls:"nb"});
   [{id:"clients",t:"👤 Клиенты"},{id:"mytasks",t:"📋 Мои задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда"}].forEach(n=>{
@@ -192,15 +201,80 @@ function calTab(ct){
 }
 
 function statsTab(ct){
-  const allR=S.cl.flatMap(c=>c.repairs||[]);const tR=allR.length;const dR=allR.filter(r=>rSt(r)==="done").length;const tRev=allR.reduce((s,r)=>s+(parseFloat(r.cost)||0),0);
+  const allR=S.cl.flatMap(c=>(c.repairs||[]).map(r=>({...r,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(x=>x.id===r.vehicleId)})));
+  const tR=allR.length;const dR=allR.filter(r=>rSt(r)==="done").length;const inProg=allR.filter(r=>rSt(r)==="in_progress");
+  const tRev=allR.reduce((s,r)=>s+(parseFloat(r.cost)||0),0);
+  
+  // Stats grid
   const grid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"16px"}});
-  [{v:S.cl.length,l:"Клиентов"},{v:S.cl.reduce((s,c)=>s+(c.vehicles||[]).length,0),l:"Автомобилей"},{v:tR,l:"Ремонтов"},{v:"€"+tRev.toLocaleString(),l:"Выручка"}].forEach(s=>{grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"14px",padding:"16px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},h("div",{s:{fontSize:"28px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),h("div",{s:{fontSize:"11px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)))});
+  [{v:S.cl.length,l:"Клиентов"},{v:inProg.length,l:"🔧 В работе"},{v:dR,l:"✅ Выполнено"},{v:"€"+tRev.toLocaleString(),l:"Выручка"}].forEach(s=>{grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"14px",padding:"16px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},h("div",{s:{fontSize:"28px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),h("div",{s:{fontSize:"11px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)))});
   ct.appendChild(grid);
-  // Status
-  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"Статус ремонтов"));
-  [{e:"🔧",l:"В работе",n:tR-dR},{e:"✅",l:"Выполнено",n:dR}].forEach(s=>{ct.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"12px",background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"10px 14px",marginBottom:"6px",border:"1px solid rgba(255,255,255,.06)"}},h("span",{s:{fontSize:"18px"}},s.e),h("div",{s:{flex:"1",fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},s.l),h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#94a3b8"}},""+s.n)))});
-  // Per staff
-  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginTop:"16px",marginBottom:"10px"}},"👥 По сотрудникам"));
+
+  // Active repairs - cars in work
+  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"🔧 Машины в ремонте ("+inProg.length+")"));
+  if(inProg.length){
+    inProg.forEach(r=>{
+      const s=getS(r.serviceType);
+      const tasks=r.tasks||[];
+      const doneTasks=tasks.filter(t=>t.status==="done").length;
+      const totalTasks=tasks.length;
+      
+      const cd=h("div",{cls:"rc",s:{cursor:"pointer"},onClick:()=>{S.sel=r.cid;R()}});
+      // Top row: client + plate
+      const top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}});
+      const left=h("div",{});
+      left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},r.cn||""));
+      const badges=h("div",{s:{display:"flex",gap:"5px",marginTop:"4px",flexWrap:"wrap",alignItems:"center"}});
+      if(r.v){
+        if(r.v.photo)badges.appendChild(h("img",{src:r.v.photo,s:{width:"20px",height:"20px",borderRadius:"4px",objectFit:"cover"}}));
+        badges.appendChild(h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},r.v.plate||""));
+      }
+      badges.appendChild(badge(s.e+" "+s.l,s.c));
+      left.appendChild(badges);
+      top.appendChild(left);
+      // Progress
+      if(totalTasks){
+        const pct=Math.round(doneTasks/totalTasks*100);
+        top.appendChild(h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"16px",fontWeight:"700",color:pct===100?"#4ade80":"#fb923c"}},pct+"%"),h("div",{s:{fontSize:"10px",color:"#64748b"}},doneTasks+"/"+totalTasks+" задач")));
+      }
+      cd.appendChild(top);
+      
+      // Description
+      if(r.description)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"4px",lineHeight:"1.4"}},r.description.length>80?r.description.slice(0,80)+"...":r.description));
+      
+      // Progress bar
+      if(totalTasks){
+        const pct=doneTasks/totalTasks*100;
+        cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"8px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:pct===100?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:pct+"%",transition:"width .3s"}})));
+      }
+      
+      // Task assignees
+      if(tasks.length){
+        const assigneeRow=h("div",{s:{display:"flex",gap:"6px",marginTop:"8px",flexWrap:"wrap"}});
+        tasks.forEach(t=>{
+          const isDn=t.status==="done";
+          assigneeRow.appendChild(h("span",{s:{fontSize:"11px",padding:"2px 8px",borderRadius:"6px",background:isDn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:isDn?"#4ade80":"#fb923c",border:"1px solid "+(isDn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},sN(t.assignee)+(isDn?" ✅":" 🔧")));
+        });
+        cd.appendChild(assigneeRow);
+      }
+      
+      // Freon
+      if(r.freonType||r.freonAmount){
+        const fr=h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"6px",fontSize:"11px",color:"#22d3ee"}});
+        fr.append(h("span",{},"🧊"));
+        if(r.freonType)fr.appendChild(h("span",{},r.freonType));
+        if(r.freonAmount)fr.appendChild(h("span",{s:{color:"#94a3b8"}},r.freonAmount+"г"));
+        cd.appendChild(fr);
+      }
+      
+      ct.appendChild(cd);
+    });
+  }else{
+    ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"));
+  }
+
+  // Per staff stats
+  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginTop:"20px",marginBottom:"10px"}},"👥 Статистика по сотрудникам"));
   const ss={};S.cl.forEach(c=>{(c.repairs||[]).forEach(r=>{(r.tasks||[]).forEach(t=>{if(!ss[t.assignee])ss[t.assignee]={tot:0,dn:0};ss[t.assignee].tot++;if(t.status==="done")ss[t.assignee].dn++})})});
   const sa=Object.entries(ss).sort((a,b)=>b[1].dn-a[1].dn);
   if(!sa.length){ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px"}},"Назначайте задачи сотрудникам для статистики"));return}
