@@ -60,7 +60,7 @@ const fDT=d=>d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"shor
 const gid=()=>"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
 
 function compress(file,mw,q){
-  mw=mw||800; q=q||0.6;
+  mw=mw||500; q=q||0.4;
   return new Promise(function(resolve){
     var fr=new FileReader();
     fr.onload=function(e){
@@ -405,7 +405,40 @@ function buildTaskCard(t){
   if(t.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",marginTop:"4px"}},t.description));
   if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
   if(t.photos&&t.photos.length){cd.appendChild(photoGrid(t.photos,false))}
+  // Add photo button for active tasks
+  if(!isDone){
+    var fileIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
+    fileIn.addEventListener("change",function(e){
+      var files=Array.from(e.target.files);
+      if(!files.length)return;
+      Promise.all(files.map(function(f){return compress(f)})).then(function(results){
+        addPhotosToTask(t.cid,t.rid,t.id,results);
+        e.target.value="";
+      });
+    });
+    var photoBtn=h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"8px",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){fileIn.click()}},"📷 Добавить фото");
+    cd.appendChild(photoBtn);
+    cd.appendChild(fileIn);
+  }
   return cd;
+}
+
+function addPhotosToTask(cid,rid,tid,photoDataArray){
+  var cl=S.cl.find(function(c){return c.id===cid});
+  if(!cl)return;
+  var rp=(cl.repairs||[]).slice();
+  var ri=rp.findIndex(function(r){return r.id===rid});
+  if(ri<0)return;
+  var ts=(rp[ri].tasks||[]).slice();
+  var ti=ts.findIndex(function(x){return x.id===tid});
+  if(ti<0)return;
+  var existingPhotos=(ts[ti].photos||[]).slice();
+  photoDataArray.forEach(function(data){
+    existingPhotos.push({id:gid(),data:data});
+  });
+  ts[ti]=Object.assign({},ts[ti],{photos:existingPhotos});
+  rp[ri]=Object.assign({},rp[ri],{tasks:ts});
+  fbArr(cid,"repairs",rp).catch(function(err){alert("Ошибка: "+err.message)});
 }
 
 function toggleTask(cid,rid,tid,isDone){
@@ -753,7 +786,7 @@ function vForm(md,m){
   var fileIn=h("input",{type:"file",accept:"image/*",s:{display:"none"}});
   fileIn.addEventListener("change",function(e){
     var f=e.target.files[0];if(!f)return;
-    compress(f,600,0.7).then(function(data){ph=data;e.target.value="";renderPh()});
+    compress(f,400,0.5).then(function(data){ph=data;e.target.value="";renderPh()});
   });
   var phW=h("div",null);
   function renderPh(){
