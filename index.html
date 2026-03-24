@@ -332,7 +332,7 @@ function myTasksTab(ct){
   var uid=S.u.uid;
   // Repair tasks
   var repairTasks=[];
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid)repairTasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair"})})})});
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid)repairTasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||""})})})});
   // Service tasks assigned to me
   var myServiceTasks=S.tasks.filter(function(t){return t.assignee===uid});
   var allTasks=repairTasks.concat(myServiceTasks.map(function(t){return Object.assign({},t,{type:t.taskType||"task"})}));
@@ -372,6 +372,28 @@ function buildTaskCard(t){
   cd.appendChild(tp);
   if(t.v)cd.appendChild(plate(t.v.plate||""));
   if(t.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",marginTop:"4px"}},t.description));
+  // Freon kg display/input
+  if(t.freonTask&&t.type==="repair"){
+    if(isDone&&t.freonKg){
+      cd.appendChild(h("div",{s:{fontSize:"12px",color:"#22d3ee",marginTop:"4px",padding:"4px 8px",background:"rgba(6,182,212,.08)",borderRadius:"6px"}},"🧊 Заправлено: "+t.freonKg+" кг"));
+    }else if(!isDone){
+      var frRow=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"6px"}});
+      frRow.appendChild(h("span",{s:{fontSize:"12px",color:"#22d3ee"}},"🧊 кг:"));
+      var frInput=h("input",{cls:"fi",type:"number",placeholder:"0",value:t.freonKg||"",step:"0.1",s:{width:"80px",padding:"6px 8px",fontSize:"13px",fontWeight:"600"}});
+      frRow.appendChild(frInput);
+      frRow.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(6,182,212,.3)",background:"rgba(6,182,212,.1)",color:"#22d3ee",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){
+        var kg=frInput.value;
+        var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
+        ts[ti]=Object.assign({},ts[ti],{freonKg:kg});
+        // Also update repair freonAmount
+        rp[ri]=Object.assign({},rp[ri],{tasks:ts,freonAmount:kg});
+        fbArr(t.cid,"repairs",rp);
+      }},"Сохранить"));
+      cd.appendChild(frRow);
+    }
+  }
   if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
   if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
   // Add photo button for active tasks
@@ -498,7 +520,14 @@ function statsTab(ct){
   secTitle(ct,"🧊 Расход фреона");
   var freonByMonth={};var freonByType={};var freonTotal=0;
   allR.forEach(function(r){
+    // Get amount from repair level or from freon task
     var amt=parseFloat(r.freonAmount)||0;
+    if(amt<=0){
+      // Check tasks for freonKg
+      (r.tasks||[]).forEach(function(t){
+        if(t.freonTask&&t.freonKg){amt=parseFloat(t.freonKg)||0}
+      });
+    }
     if(amt<=0)return;
     var typ=r.freonType||"Не указан";
     freonTotal+=amt;
@@ -864,29 +893,74 @@ function rForm(md,m){
   var dI=h("input",{cls:"fi",type:"date",value:m.d?m.d.date||new Date().toISOString().slice(0,10):new Date().toISOString().slice(0,10)});
   var deI=h("textarea",{cls:"fi",placeholder:"Описание...",value:m.d?m.d.description||"":""});
   var cI=h("input",{cls:"fi",type:"number",placeholder:"Стоимость €",value:m.d?m.d.cost||"":""});
-  var frTS=h("select",{cls:"fi"});FREONS.forEach(function(f){var o=h("option",{value:f},f||"— фреон —");if(f===(m.d?m.d.freonType||"":""))o.selected=true;frTS.appendChild(o)});
-  var frAI=h("input",{cls:"fi",type:"number",placeholder:"Кол-во (кг)",value:m.d?m.d.freonAmount||"":"",step:"0.1"});
+
+  // Freon type select
+  var freonType=m.d?m.d.freonType||"":"";
+  var frTS=h("select",{cls:"fi"});
+  FREONS.forEach(function(f){
+    var o=document.createElement("option");
+    o.value=f;
+    o.textContent=f||"— не выбран —";
+    if(f===freonType)o.selected=true;
+    frTS.appendChild(o);
+  });
+  frTS.addEventListener("change",function(e){freonType=e.target.value});
+
+  // Freon amount only for edit mode
+  var frAI=null;
+  if(isE){
+    frAI=h("input",{cls:"fi",type:"number",placeholder:"Кол-во (кг)",value:m.d?m.d.freonAmount||"":"",step:"0.1"});
+  }
+
   var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
   var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   if(vs.length>1)md.appendChild(fg("Авто",vS));
-  md.append(fg("Дата",dI),fg("Тип",tgW),fgWithMic("Описание",deI),fg("Стоимость €",cI),fg("🧊 Тип фреона",frTS),fg("🧊 Кол-во фреона (кг)",frAI),fg("Фото",pG,fi),
-    h("button",{cls:"bp",onClick:function(){var cid=m.cid;var cl=S.cl.find(function(c){return c.id===cid});if(!cl){alert("Ошибка");return}
-      var rp=(cl.repairs||[]).slice();var rD={vehicleId:sV||(vs.length?vs[0].id:""),date:dI.value,serviceType:sT,description:deI.value.trim(),cost:cI.value,freonType:frTS.value,freonAmount:frAI.value,photos:photos,tasks:m.d?(m.d.tasks||[]):[]};
-      if(!isE){
-        rD.id=gid();rD.status="in_progress";
-        // Auto-create freon task
-        var frAmt=frAI.value||"0";
-        var frTyp=frTS.value||"не указан";
-        var freonDesc="🧊 Заправка фреоном: "+frTyp+" — "+frAmt+" кг";
-        var existingTasks=rD.tasks||[];
-        existingTasks.unshift({id:gid(),assignee:S.u.uid,description:freonDesc,status:"in_progress",photos:[],createdAt:new Date().toISOString()});
-        rD.tasks=existingTasks;
-        rp.unshift(rD);
-      }else{
-        var i=rp.findIndex(function(x){return x.id===m.d.id});if(i>=0)rp[i]=Object.assign({},rp[i],rD);
-      }
-      fbArr(cid,"repairs",rp).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},isE?"Сохранить":"Создать"))
+  md.appendChild(fg("Дата",dI));
+  md.appendChild(fg("Тип работы",tgW));
+  md.appendChild(fgWithMic("Описание",deI));
+  md.appendChild(fg("Стоимость €",cI));
+  md.appendChild(fg("🧊 Марка фреона",frTS));
+  if(isE&&frAI)md.appendChild(fg("🧊 Кол-во фреона (кг)",frAI));
+  md.appendChild(fg("Фото",pG,fi));
+
+  md.appendChild(h("button",{cls:"bp",onClick:function(){
+    var cid=m.cid;var cl=S.cl.find(function(c){return c.id===cid});
+    if(!cl){alert("Ошибка");return}
+    var rp=(cl.repairs||[]).slice();
+    var rD={
+      vehicleId:sV||(vs.length?vs[0].id:""),
+      date:dI.value,
+      serviceType:sT,
+      description:deI.value.trim(),
+      cost:cI.value,
+      freonType:freonType,
+      freonAmount:isE&&frAI?frAI.value:"",
+      photos:photos,
+      tasks:m.d?(m.d.tasks||[]):[]
+    };
+    if(!isE){
+      rD.id=gid();
+      rD.status="in_progress";
+      // Auto-create freon task
+      var frLabel=freonType?freonType:"не указан";
+      rD.tasks=[{
+        id:gid(),
+        assignee:S.u.uid,
+        description:"🧊 Заправка фреоном "+frLabel,
+        status:"in_progress",
+        photos:[],
+        freonTask:true,
+        freonKg:"",
+        createdAt:new Date().toISOString()
+      }];
+      rp.unshift(rD);
+    }else{
+      var i=rp.findIndex(function(x){return x.id===m.d.id});
+      if(i>=0)rp[i]=Object.assign({},rp[i],rD);
+    }
+    fbArr(cid,"repairs",rp).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)});
+  }},isE?"Сохранить":"Создать заказ-наряд"));
 }
 
 // ═══ REPAIR TASK FORM ═══
