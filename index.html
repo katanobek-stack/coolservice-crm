@@ -535,43 +535,79 @@ function buildTaskCard(t){
   var left=h("div",null);
   if(t.cn)left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9",cursor:"pointer"},onClick:function(){if(t.cid){S.sel=t.cid;R()}}},t.cn));
   if(t.title)left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},t.title));
-  // Type badge
   var typeBadge=t.type==="project"?badge("📐 Проект","245,158,11"):t.type==="task"?badge("📝 Задача","99,102,241"):null;
   if(typeBadge)left.appendChild(typeBadge);
   tp.appendChild(left);
   var isDone=t.status==="done";
-  var statusBtn;
-  if(t.type==="repair"){
-    statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isDone)}},isDone?"✅":"🔧");
+
+  // Status button — freon tasks have different behavior
+  if(t.freonTask&&t.type==="repair"){
+    // Freon task: show status badge, no instant toggle
+    var frBadge=h("span",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",background:isDone?"rgba(34,197,94,.15)":"rgba(6,182,212,.15)",color:isDone?"#4ade80":"#22d3ee"}},isDone?"✅ Готово":"🧊 Фреон");
+    tp.appendChild(frBadge);
   }else{
-    statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧");
+    // Regular tasks: toggle on click
+    var statusBtn;
+    if(t.type==="repair"){
+      statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isDone)}},isDone?"✅":"🔧");
+    }else{
+      statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧");
+    }
+    tp.appendChild(statusBtn);
   }
-  tp.appendChild(statusBtn);
   cd.appendChild(tp);
   if(t.v)cd.appendChild(plate(t.v.plate||""));
   if(t.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",marginTop:"4px"}},t.description));
-  // Freon kg display/input
+
+  // ═══ FREON TASK SPECIAL PANEL ═══
   if(t.freonTask&&t.type==="repair"){
-    if(isDone&&t.freonKg){
-      cd.appendChild(h("div",{s:{fontSize:"12px",color:"#22d3ee",marginTop:"4px",padding:"4px 8px",background:"rgba(6,182,212,.08)",borderRadius:"6px"}},"🧊 Заправлено: "+t.freonKg+" кг"));
-    }else if(!isDone){
-      var frRow=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"6px"}});
-      frRow.appendChild(h("span",{s:{fontSize:"12px",color:"#22d3ee"}},"🧊 кг:"));
-      var frInput=h("input",{cls:"fi",type:"number",placeholder:"0",value:t.freonKg||"",step:"0.1",s:{width:"80px",padding:"6px 8px",fontSize:"13px",fontWeight:"600"}});
+    if(isDone){
+      // Completed freon task — show amount and return button
+      var doneRow=h("div",{s:{marginTop:"6px",padding:"8px 10px",background:"rgba(34,197,94,.06)",borderRadius:"8px",border:"1px solid rgba(34,197,94,.12)"}});
+      if(t.freonKg)doneRow.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#22d3ee",marginBottom:"6px"}},"🧊 Заправлено: "+t.freonKg+" кг"));
+      doneRow.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"6px",border:"1px solid rgba(249,115,22,.3)",background:"rgba(249,115,22,.08)",color:"#fb923c",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){
+        toggleTask(t.cid,t.rid,t.id,true); // isDone=true → set back to in_progress
+      }},"↩ Вернуть в работу"));
+      cd.appendChild(doneRow);
+    }else{
+      // Active freon task — expandable panel
+      var frPanel=h("div",{s:{marginTop:"6px",padding:"10px",background:"rgba(6,182,212,.06)",borderRadius:"10px",border:"1px solid rgba(6,182,212,.15)"}});
+      frPanel.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"600",color:"#22d3ee",marginBottom:"8px"}},"🧊 Укажите количество фреона:"));
+      var frRow=h("div",{s:{display:"flex",alignItems:"center",gap:"8px"}});
+      var frInput=h("input",{cls:"fi",type:"number",placeholder:"0",value:t.freonKg||"",step:"0.1",s:{width:"100px",padding:"8px 10px",fontSize:"15px",fontWeight:"700",textAlign:"center"}});
       frRow.appendChild(frInput);
-      frRow.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(6,182,212,.3)",background:"rgba(6,182,212,.1)",color:"#22d3ee",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){
+      frRow.appendChild(h("span",{s:{fontSize:"13px",color:"#94a3b8",fontWeight:"600"}},"кг"));
+      frPanel.appendChild(frRow);
+      // Save kg without completing
+      var btnRow=h("div",{s:{display:"flex",gap:"6px",marginTop:"8px"}});
+      btnRow.appendChild(h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(6,182,212,.3)",background:"rgba(6,182,212,.1)",color:"#22d3ee",fontSize:"12px",fontWeight:"600",cursor:"pointer",flex:"1"},onClick:function(){
         var kg=frInput.value;
         var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
         var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
         var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
         ts[ti]=Object.assign({},ts[ti],{freonKg:kg});
-        // Also update repair freonAmount
         rp[ri]=Object.assign({},rp[ri],{tasks:ts,freonAmount:kg});
         fbArr(t.cid,"repairs",rp);
-      }},"Сохранить"));
-      cd.appendChild(frRow);
+      }},"💾 Сохранить кг"));
+      btnRow.appendChild(h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"none",background:"linear-gradient(135deg,#059669,#10b981)",color:"#fff",fontSize:"12px",fontWeight:"600",cursor:"pointer",flex:"1"},onClick:function(){
+        var kg=frInput.value;
+        var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
+        ts[ti]=Object.assign({},ts[ti],{freonKg:kg,status:"done"});
+        rp[ri]=Object.assign({},rp[ri],{tasks:ts,freonAmount:kg});
+        fbArr(t.cid,"repairs",rp);
+      }},"✅ Выполнено"));
+      frPanel.appendChild(btnRow);
+      cd.appendChild(frPanel);
     }
   }
+
+  // Regular done tasks — return button
+  if(isDone&&!t.freonTask&&t.type==="repair"){
+    cd.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",border:"1px solid rgba(249,115,22,.2)",background:"rgba(249,115,22,.05)",color:"#fb923c",fontSize:"10px",cursor:"pointer",marginTop:"4px"},onClick:function(){toggleTask(t.cid,t.rid,t.id,true)}},"↩ Вернуть"));
+  }
+
   if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
   if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
   // Add photo button for active tasks
@@ -588,7 +624,7 @@ function buildTaskCard(t){
         fbUpdTask(t.id,{photos:newPhotos})
       }
     }));
-    if(t.type==="repair"){
+    if(t.type==="repair"&&!t.freonTask){
       cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:"4px"},onClick:function(){S.mod={t:"addRepairTask",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
     }
   }
