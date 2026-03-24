@@ -912,12 +912,27 @@ function rForm(md,m){
     frAI=h("input",{cls:"fi",type:"number",placeholder:"Кол-во (кг)",value:m.d?m.d.freonAmount||"":"",step:"0.1"});
   }
 
+  // Mechanic selector
+  var assignee=S.u.uid;
+  var sl=sL();
+  var aS=h("select",{cls:"fi"});
+  var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
+  sl.forEach(function(s){
+    var o=document.createElement("option");
+    o.value=s.id;
+    o.textContent=s.name+(roles[s.role]||"");
+    if(s.id===assignee)o.selected=true;
+    aS.appendChild(o);
+  });
+  aS.addEventListener("change",function(e){assignee=e.target.value});
+
   var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
   var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   if(vs.length>1)md.appendChild(fg("Авто",vS));
   md.appendChild(fg("Дата",dI));
   md.appendChild(fg("Тип работы",tgW));
+  md.appendChild(fg("🔧 Назначить механика",aS));
   md.appendChild(fgWithMic("Описание",deI));
   md.appendChild(fg("Стоимость €",cI));
   md.appendChild(fg("🧊 Марка фреона",frTS));
@@ -942,11 +957,11 @@ function rForm(md,m){
     if(!isE){
       rD.id=gid();
       rD.status="in_progress";
-      // Auto-create freon task
+      // Auto-create freon task assigned to selected mechanic
       var frLabel=freonType?freonType:"не указан";
       rD.tasks=[{
         id:gid(),
-        assignee:S.u.uid,
+        assignee:assignee,
         description:"🧊 Заправка фреоном "+frLabel,
         status:"in_progress",
         photos:[],
