@@ -60,7 +60,7 @@ function compress(file,mw,q){mw=mw||500;q=q||0.4;return new Promise(function(res
 // ═══ VOICE TO TEXT ═══
 function makeMicBtn(textarea){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR)return null; // browser doesn't support
+  if(!SR)return null;
   var btn=h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.25)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"12px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px",marginTop:"6px",transition:"all .2s"}});
   btn.textContent="🎙 Голос";
   var recording=false;
@@ -72,26 +72,22 @@ function makeMicBtn(textarea){
     }
     recognition=new SR();
     recognition.lang="ru-RU";
-    recognition.continuous=true;
-    recognition.interimResults=true;
-    var finalText=textarea.value;
+    recognition.continuous=false;
+    recognition.interimResults=false;
     recording=true;
-    btn.textContent="🔴 Запись...";
+    btn.textContent="🔴 Говорите...";
     btn.style.borderColor="rgba(239,68,68,.6)";
     btn.style.background="rgba(239,68,68,.15)";
     btn.style.animation="notif-pulse 1s infinite";
     recognition.onresult=function(e){
-      var interim="";
-      for(var i=e.resultIndex;i<e.results.length;i++){
-        if(e.results[i].isFinal){
-          var t=e.results[i][0].transcript;
-          finalText+=(finalText?" ":"")+t;
-          textarea.value=finalText;
-        }else{
-          interim+=e.results[i][0].transcript;
-        }
+      var text="";
+      for(var i=0;i<e.results.length;i++){
+        text+=e.results[i][0].transcript;
       }
-      if(interim)textarea.value=finalText+(finalText?" ":"")+interim;
+      if(text){
+        var cur=textarea.value;
+        textarea.value=cur+(cur?" ":"")+text;
+      }
     };
     recognition.onerror=function(){stopRec()};
     recognition.onend=function(){stopRec()};
@@ -880,8 +876,12 @@ function rForm(md,m){
       if(!isE){
         rD.id=gid();rD.status="in_progress";
         // Auto-create freon task
-        var freonDesc="Заправка фреоном"+(frTS.value?" "+frTS.value:"")+(frAI.value?" — "+frAI.value+" кг":" — 0 кг");
-        rD.tasks=[{id:gid(),assignee:S.u.uid,description:freonDesc,status:"in_progress",photos:[],createdAt:new Date().toISOString()}];
+        var frAmt=frAI.value||"0";
+        var frTyp=frTS.value||"не указан";
+        var freonDesc="🧊 Заправка фреоном: "+frTyp+" — "+frAmt+" кг";
+        var existingTasks=rD.tasks||[];
+        existingTasks.unshift({id:gid(),assignee:S.u.uid,description:freonDesc,status:"in_progress",photos:[],createdAt:new Date().toISOString()});
+        rD.tasks=existingTasks;
         rp.unshift(rD);
       }else{
         var i=rp.findIndex(function(x){return x.id===m.d.id});if(i>=0)rp[i]=Object.assign({},rp[i],rD);
