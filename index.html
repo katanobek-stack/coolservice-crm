@@ -180,6 +180,58 @@ function inlineAddPhotoBtn(label,onPhotosAdded){
   return wrap;
 }
 
+function renderRepairCard(cl,r,isHistory){
+  var s=getS(r.serviceType);var v=(cl.vehicles||[]).find(function(x){return x.id===r.vehicleId});var os=rSt(r);
+  var cd=h("div",{cls:"rc",s:isHistory?{opacity:"0.85"}:{}});
+  var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
+  var badges=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap"}});
+  badges.appendChild(badge(s.e+" "+s.l,s.c));
+  badges.appendChild(badge(os==="done"?"✅ Готово":"🔧 В работе",os==="done"?"34,197,94":"249,115,22"));
+  tp.appendChild(badges);
+  if(!isHistory){
+    tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},
+      h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"),
+      h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}))}}},"🗑")));
+  }
+  cd.appendChild(tp);
+  if(v)cd.appendChild(plate(v.plate||""));
+  if(r.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",margin:"4px 0"}},r.description));
+  var meta=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"4px"}});
+  meta.appendChild(h("span",{s:{fontSize:"12px",color:"#64748b"}},fD(r.date)));
+  if(r.cost)meta.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},"€"+r.cost));
+  cd.appendChild(meta);
+  if(r.freonType||r.freonAmount){cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"4px",padding:"4px 8px",background:"rgba(6,182,212,.08)",borderRadius:"6px",border:"1px solid rgba(6,182,212,.15)",fontSize:"11px",color:"#22d3ee"}},"🧊 "+(r.freonType||"")+" "+(r.freonAmount?r.freonAmount+" кг":"")))}
+  if(r.photos&&r.photos.length)cd.appendChild(photoGrid(r.photos,false));
+  // Tasks
+  (r.tasks||[]).forEach(function(t){
+    var ti=h("div",{cls:"ti"});
+    var th=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
+    var isDn=t.status==="done";
+    if(!isHistory){
+      th.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDn?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDn?"#4ade80":"#fb923c"},onClick:function(){toggleTask(cl.id,r.id,t.id,isDn)}},isDn?"✅":"🔧"));
+    }else{
+      th.appendChild(h("span",{s:{fontSize:"11px",color:isDn?"#4ade80":"#fb923c"}},isDn?"✅":"🔧"));
+    }
+    ti.appendChild(th);
+    if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"2px"}},t.description));
+    if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginTop:"2px"}},"🧊 "+t.freonKg+" кг"));
+    if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
+    cd.appendChild(ti);
+  });
+  // Action buttons for active repairs only
+  if(!isHistory){
+    cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
+  }
+  // Repeat visit for completed
+  if(os==="done"&&v){
+    cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(34,197,94,.25)",background:"rgba(34,197,94,.05)",color:"#4ade80",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:isHistory?"0":"6px"},onClick:function(){
+      S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R();
+    }},"🔄 Новый ремонт"));
+  }
+  return cd;
+}
+
 function toggleTask(cid,rid,tid,isDone){
   var cl=S.cl.find(function(c){return c.id===cid});if(!cl)return;
   var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===rid});if(ri<0)return;
@@ -330,24 +382,150 @@ function renderClientCard(ct,c){
 // ═══ MY TASKS TAB ═══
 function myTasksTab(ct){
   var uid=S.u.uid;
-  // Repair tasks
-  var repairTasks=[];
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid)repairTasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||""})})})});
-  // Service tasks assigned to me
-  var myServiceTasks=S.tasks.filter(function(t){return t.assignee===uid});
-  var allTasks=repairTasks.concat(myServiceTasks.map(function(t){return Object.assign({},t,{type:t.taskType||"task"})}));
-  allTasks.sort(function(a,b){return(a.status==="done"?1:0)-(b.status==="done"?1:0)});
+  var now=new Date();
+  var curMonth=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  var prevDate=new Date(now.getFullYear(),now.getMonth()-1,1);
+  var prevMonth=prevDate.getFullYear()+"-"+String(prevDate.getMonth()+1).padStart(2,"0");
+  var monthNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
-  if(!allTasks.length){ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));return}
-  var active=allTasks.filter(function(t){return t.status!=="done"});
-  var done=allTasks.filter(function(t){return t.status==="done"});
-  if(active.length){
-    secTitle(ct,"🔧 В работе ("+active.length+")");
-    active.forEach(function(t){ct.appendChild(buildTaskCard(t))})
+  // ═══ MY PERSONAL TASKS (service tasks + projects) ═══
+  var myServiceTasks=S.tasks.filter(function(t){return t.assignee===uid&&t.status!=="done"});
+  if(myServiceTasks.length){
+    secTitle(ct,"📝 Мои задачи и проекты ("+myServiceTasks.length+")");
+    myServiceTasks.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
   }
-  if(done.length){
-    secTitle(ct,"✅ Выполнено ("+done.length+")");
-    done.forEach(function(t){ct.appendChild(buildTaskCard(t))})
+
+  // ═══ MY REPAIR TASKS (active, assigned to me) ═══
+  var myRepairTasks=[];
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+    var myTasks=(r.tasks||[]).filter(function(t){return t.assignee===uid&&t.status!=="done"});
+    if(myTasks.length){
+      myRepairTasks.push({cid:c.id,cn:c.name,r:r,tasks:myTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
+    }
+  })});
+  if(myRepairTasks.length){
+    secTitle(ct,"🔧 Мои ремонты в работе ("+myRepairTasks.length+")");
+    myRepairTasks.forEach(function(item){
+      item.tasks.forEach(function(t){
+        ct.appendChild(buildTaskCard({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||""}));
+      });
+    });
+  }
+
+  // ═══ ALL REPAIRS BY PERIOD ═══
+  var allRepairs=[];
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+    allRepairs.push({cid:c.id,cn:c.name,phone:c.phone,r:r,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
+  })});
+
+  // Split into periods
+  var curMonthRepairs=[];var prevMonthRepairs=[];var olderRepairs=[];
+  allRepairs.forEach(function(item){
+    var d=item.r.date||"";
+    var mk=d.substring(0,7);
+    if(mk===curMonth)curMonthRepairs.push(item);
+    else if(mk===prevMonth)prevMonthRepairs.push(item);
+    else if(d)olderRepairs.push(item);
+  });
+
+  // Render period section
+  function renderPeriod(title,emoji,repairs,color){
+    if(!repairs.length)return;
+    var inProg=repairs.filter(function(i){return rSt(i.r)==="in_progress"}).length;
+    var done=repairs.length-inProg;
+    secTitle(ct,emoji+" "+title+" ("+repairs.length+": 🔧"+inProg+" ✅"+done+")");
+
+    // Group by client
+    var byClient={};
+    repairs.forEach(function(item){
+      if(!byClient[item.cid])byClient[item.cid]={cn:item.cn,phone:item.phone,repairs:[]};
+      byClient[item.cid].repairs.push(item);
+    });
+
+    Object.keys(byClient).forEach(function(cid){
+      var cl=byClient[cid];
+      var expanded=false;
+      var content=h("div",{s:{display:"none",paddingLeft:"12px",paddingTop:"6px"}});
+      var arrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+
+      // Client header
+      var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba("+color+",.05)",borderRadius:"10px",border:"1px solid rgba("+color+",.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+        expanded=!expanded;
+        content.style.display=expanded?"block":"none";
+        arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+      }});
+      hdr.appendChild(arrow);
+      hdr.appendChild(h("div",{s:{flex:"1"}},
+        h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9"}},cl.cn),
+        h("div",{s:{fontSize:"11px",color:"#64748b"}},cl.repairs.length+" "+(cl.repairs.length===1?"наряд":"нарядов")+(cl.phone?" · "+cl.phone:""))
+      ));
+      // Status counts
+      var clInProg=cl.repairs.filter(function(i){return rSt(i.r)==="in_progress"}).length;
+      if(clInProg)hdr.appendChild(badge("🔧 "+clInProg,"249,115,22"));
+      var clDone=cl.repairs.length-clInProg;
+      if(clDone)hdr.appendChild(badge("✅ "+clDone,"34,197,94"));
+      ct.appendChild(hdr);
+
+      // Repair details inside
+      cl.repairs.forEach(function(item){
+        var r=item.r;var s=getS(r.serviceType);var os=rSt(r);
+        var rcd=h("div",{cls:"rc",s:{cursor:"pointer"},onClick:function(){S.sel=cid;R()}});
+        var rtp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+        var left=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}});
+        if(item.v&&item.v.plate)left.appendChild(plate(item.v.plate));
+        left.appendChild(badge(s.e+" "+s.l,s.c));
+        left.appendChild(badge(os==="done"?"✅":"🔧",os==="done"?"34,197,94":"249,115,22"));
+        rtp.appendChild(left);
+        rtp.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},fD(r.date)));
+        rcd.appendChild(rtp);
+        if(r.description){var desc=r.description.length>50?r.description.substring(0,50)+"...":r.description;rcd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"2px"}},desc))}
+        // Tasks summary
+        var tasks=r.tasks||[];
+        if(tasks.length){
+          var tDone=tasks.filter(function(t){return t.status==="done"}).length;
+          rcd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"4px"}},
+            h("div",{s:{height:"4px",flex:"1",borderRadius:"2px",background:"rgba(255,255,255,.06)",overflow:"hidden"}},
+              h("div",{s:{height:"100%",borderRadius:"2px",background:tDone===tasks.length?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(tDone/tasks.length*100)+"%"}})),
+            h("span",{s:{fontSize:"10px",color:"#64748b"}},tDone+"/"+tasks.length)
+          ));
+        }
+        if(r.photos&&r.photos.length)rcd.appendChild(photoGrid(r.photos,false));
+        if(r.cost)rcd.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"600",color:"#4ade80",marginTop:"4px"}},"€"+r.cost));
+        if(r.freonType)rcd.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginTop:"2px"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
+        // Show tasks details
+        tasks.forEach(function(t){
+          var ti=h("div",{s:{padding:"4px 8px",marginTop:"4px",background:"rgba(255,255,255,.02)",borderRadius:"6px",border:"1px solid rgba(255,255,255,.04)"}});
+          var dn=t.status==="done";
+          ti.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",fontSize:"11px"}},
+            h("span",{s:{color:"#a78bfa"}},"👤 "+sN(t.assignee)),
+            h("span",{s:{color:dn?"#4ade80":"#fb923c"}},dn?"✅ Готово":"🔧 В работе")));
+          if(t.description)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#cbd5e1",marginTop:"2px"}},t.description));
+          if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"10px",color:"#22d3ee"}},"🧊 "+t.freonKg+" кг"));
+          if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
+          rcd.appendChild(ti);
+        });
+        content.appendChild(rcd);
+      });
+      ct.appendChild(content);
+    });
+  }
+
+  var cmLabel=monthNames[now.getMonth()+1]+" "+now.getFullYear();
+  var pmLabel=monthNames[prevDate.getMonth()+1]+" "+prevDate.getFullYear();
+
+  renderPeriod(cmLabel,"📅",curMonthRepairs,"14,165,233");
+  renderPeriod(pmLabel,"📆",prevMonthRepairs,"99,102,241");
+  renderPeriod("Ранее","📂",olderRepairs,"148,163,184");
+
+  // Done service tasks at bottom
+  var doneServiceTasks=S.tasks.filter(function(t){return t.assignee===uid&&t.status==="done"});
+  if(doneServiceTasks.length){
+    secTitle(ct,"✅ Завершённые задачи ("+doneServiceTasks.length+")");
+    doneServiceTasks.slice(0,5).forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
+  }
+
+  if(!myServiceTasks.length&&!myRepairTasks.length&&!allRepairs.length){
+    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
   }
 }
 
@@ -738,46 +916,54 @@ function detailView(){
     row.appendChild(rc);cd.appendChild(row);ct.appendChild(cd)
   });
 
-  // Repairs
+  // Repairs - split into active and history
   var hasV=(cl.vehicles||[]).length>0;
-  secTitle(ct,"🔧 Заказ-наряды ("+(cl.repairs||[]).length+")",hasV?function(){S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R()}:null);
-  (cl.repairs||[]).forEach(function(r){
-    var s=getS(r.serviceType);var v=(cl.vehicles||[]).find(function(x){return x.id===r.vehicleId});var os=rSt(r);
-    var cd=h("div",{cls:"rc"});
-    var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
-    tp.appendChild(h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap"}},badge(s.e+" "+s.l,s.c),badge(os==="done"?"✅ Готово":"🔧 В работе",os==="done"?"34,197,94":"249,115,22")));
-    tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}))}}},"🗑")));
-    cd.appendChild(tp);
-    if(v)cd.appendChild(plate(v.plate||""));
-    if(r.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",margin:"4px 0"}},r.description));
-    var meta=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"4px"}});
-    meta.append(h("span",{s:{fontSize:"12px",color:"#64748b"}},fD(r.date)));
-    if(r.cost)meta.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},"€"+r.cost));
-    cd.appendChild(meta);
-    if(r.freonType||r.freonAmount){cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"4px",padding:"4px 8px",background:"rgba(6,182,212,.08)",borderRadius:"6px",border:"1px solid rgba(6,182,212,.15)",fontSize:"11px",color:"#22d3ee"}},"🧊 "+(r.freonType||"")+" "+(r.freonAmount?r.freonAmount+" кг":"")))}
-    if(r.photos&&r.photos.length)cd.appendChild(photoGrid(r.photos,false));
-    (r.tasks||[]).forEach(function(t){
-      var ti=h("div",{cls:"ti"});
-      var th=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
-      th.append(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
-      var isDn=t.status==="done";
-      th.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDn?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDn?"#4ade80":"#fb923c"},onClick:function(){toggleTask(cl.id,r.id,t.id,isDn)}},isDn?"✅":"🔧"));
-      ti.appendChild(th);
-      if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"2px"}},t.description));
-      if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
-      cd.appendChild(ti)
+  var activeRepairs=(cl.repairs||[]).filter(function(r){return rSt(r)==="in_progress"});
+  var doneRepairs=(cl.repairs||[]).filter(function(r){return rSt(r)==="done"});
+
+  // ═══ ACTIVE REPAIRS ═══
+  secTitle(ct,"🔧 Текущий ремонт ("+activeRepairs.length+")",hasV?function(){S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R()}:null);
+  if(activeRepairs.length){
+    activeRepairs.forEach(function(r){ct.appendChild(renderRepairCard(cl,r,false))});
+  }else{
+    ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},hasV?"Нет активных ремонтов — создайте заказ-наряд":"Сначала добавьте автомобиль"));
+  }
+
+  // ═══ HISTORY ═══
+  if(doneRepairs.length){
+    secTitle(ct,"📋 История ремонта ("+doneRepairs.length+")");
+    // Group by date
+    var byDate={};
+    doneRepairs.forEach(function(r){
+      var dateKey=r.date||"Без даты";
+      if(!byDate[dateKey])byDate[dateKey]=[];
+      byDate[dateKey].push(r);
     });
-    cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
-    // Repeat visit button for completed repairs
-    if(rSt(r)==="done"&&v){
-      cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(34,197,94,.25)",background:"rgba(34,197,94,.05)",color:"#4ade80",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:"6px"},onClick:function(){
-        var appts=(cl.appointments||[]).slice();
-        appts.push({id:gid(),vehicleId:v.id,date:"",serviceType:r.serviceType,description:"🔄 Повторный визит"});
-        fbArr(cl.id,"appointments",appts).then(function(){S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()});
-      }},"🔄 Записать повторно"));
-    }
-    ct.appendChild(cd)
-  });
+    var dateKeys=Object.keys(byDate).sort().reverse();
+    dateKeys.forEach(function(dk){
+      var repairs=byDate[dk];
+      var dateLabel=dk==="Без даты"?dk:fD(dk);
+      // Collapsible header
+      var expanded=false;
+      var content=h("div",{s:{display:"none"}});
+      var arrow=h("span",{s:{transition:"transform .2s",display:"inline-block"}},"▶");
+      var header=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(255,255,255,.03)",borderRadius:"10px",border:"1px solid rgba(255,255,255,.06)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+        expanded=!expanded;
+        content.style.display=expanded?"block":"none";
+        arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+      }});
+      header.appendChild(arrow);
+      header.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},dateLabel));
+      header.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b",marginLeft:"auto"}},repairs.length+" "+(repairs.length===1?"ремонт":"ремонтов")));
+      // Count total cost
+      var totalCost=repairs.reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+      if(totalCost)header.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#4ade80",marginLeft:"8px"}},"€"+totalCost));
+      ct.appendChild(header);
+
+      repairs.forEach(function(r){content.appendChild(renderRepairCard(cl,r,true))});
+      ct.appendChild(content);
+    });
+  }
 
   // Appointments
   secTitle(ct,"📅 Записи ("+(cl.appointments||[]).length+")",hasV?function(){S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()}:null);
