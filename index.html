@@ -26,13 +26,14 @@ textarea.fi{min-height:75px;resize:vertical}
 .ti{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-top:8px}
 .pg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
 .pt{width:100%;aspect-ratio:1;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.08);cursor:pointer}
-.nb{display:flex;gap:2px;padding:0 8px;background:#0d1f38;border-bottom:1px solid rgba(56,189,248,.08);flex-shrink:0;overflow-x:auto}
-.nb button{flex:1;min-width:0;padding:11px 2px 9px;border:none;background:0;color:#64748b;font-size:10px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;border-bottom:2px solid transparent;white-space:nowrap}
+.nb{display:flex;gap:1px;padding:0 4px;background:#0d1f38;border-bottom:1px solid rgba(56,189,248,.08);flex-shrink:0;overflow-x:auto}
+.nb button{flex:1;min-width:0;padding:10px 2px 8px;border:none;background:0;color:#64748b;font-size:9px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;border-bottom:2px solid transparent;white-space:nowrap}
 .nb button.a{color:#38bdf8;font-weight:600;border-bottom-color:#38bdf8}
 .tb{padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#94a3b8;font-size:13px;font-weight:500;cursor:pointer;text-align:center}
 .tb.a{border-color:#38bdf8;background:rgba(56,189,248,.1);color:#38bdf8;font-weight:600}
 .iv{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:500;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .iv img{max-width:95%;max-height:90%;object-fit:contain;border-radius:8px}
+.ct{flex:1;overflow-y:auto;padding:12px 16px 90px}
 .ct::-webkit-scrollbar{display:none}.ct{-ms-overflow-style:none;scrollbar-width:none}
 </style>
 </head>
@@ -43,152 +44,83 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
-const fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
-const auth=getAuth(fbApp);
-const db=getFirestore(fbApp);
+var fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
+var auth=getAuth(fbApp),db=getFirestore(fbApp);
 
-const SVC=[
-  {id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},
-  {id:"ac",l:"Автокондиционер",e:"❄️",c:"99,102,241"},
-  {id:"freezer",l:"Морозильная камера",e:"🥶",c:"6,182,212"},
-  {id:"other",l:"Другое",e:"🔧",c:"148,163,184"}
-];
-const FREONS=["","R134a","R404a","R407c","R410a","R422d","R449a","R452a","R507a","Другой"];
-const getS=id=>SVC.find(t=>t.id===id)||SVC[3];
-const fD=d=>d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):"";
-const fDT=d=>d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):"";
-const gid=()=>"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
+var SVC=[{id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},{id:"ac",l:"Кондиционер",e:"❄️",c:"99,102,241"},{id:"freezer",l:"Морозильная",e:"🥶",c:"6,182,212"},{id:"other",l:"Другое",e:"🔧",c:"148,163,184"}];
+var FREONS=["","R134a","R404a","R407c","R410a","R422d","R449a","R452a","R507a","Другой"];
+var getS=function(id){return SVC.find(function(t){return t.id===id})||SVC[3]};
+var fD=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}):""};
+var fDT=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):""};
+var gid=function(){return"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5)};
 
-function compress(file,mw,q){
-  mw=mw||500; q=q||0.4;
-  return new Promise(function(resolve){
-    var fr=new FileReader();
-    fr.onload=function(e){
-      var img=new Image();
-      img.onload=function(){
-        var c=document.createElement("canvas");
-        var w=img.width, ht=img.height;
-        if(w>mw){ht=ht*(mw/w);w=mw}
-        c.width=w;c.height=ht;
-        c.getContext("2d").drawImage(img,0,0,w,ht);
-        resolve(c.toDataURL("image/jpeg",q));
-      };
-      img.src=e.target.result;
-    };
-    fr.readAsDataURL(file);
-  });
-}
+function compress(file,mw,q){mw=mw||500;q=q||0.4;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);resolve(c.toDataURL("image/jpeg",q))};img.src=e.target.result};fr.readAsDataURL(file)})}
 
 // ═══ STATE ═══
-var S={u:null,ld:true,cl:[],st:[],tab:"clients",q:"",sel:null,mod:null,iv:null,le:"",ll:false};
-var u1=null,u2=null;
+var S={u:null,ld:true,cl:[],st:[],tasks:[],tab:"phys",q:"",sel:null,mod:null,iv:null,le:"",ll:false};
+var u1=null,u2=null,u3=null;
 
 // ═══ FIREBASE ═══
-function subCl(){
-  if(u1)u1();
-  u1=onSnapshot(query(collection(db,"clients"),orderBy("createdAt","desc")),function(snap){
-    S.cl=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
-    R();
-  });
-}
-function subSt(){
-  if(u2)u2();
-  u2=onSnapshot(collection(db,"staff"),function(snap){
-    S.st=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
-    R();
-  });
-}
-function fbAdd(data){return addDoc(collection(db,"clients"),Object.assign({},data,{vehicles:[],repairs:[],appointments:[],createdAt:serverTimestamp()}))}
-function fbUpd(id,data){return updateDoc(doc(db,"clients",id),data)}
-function fbDel(id){return deleteDoc(doc(db,"clients",id))}
-function fbArr(cid,field,arr){var obj={};obj[field]=arr;return updateDoc(doc(db,"clients",cid),obj)}
-function fbStaff(uid,data){return setDoc(doc(db,"staff",uid),data,{merge:true})}
+function subCl(){if(u1)u1();u1=onSnapshot(query(collection(db,"clients"),orderBy("createdAt","desc")),function(s){S.cl=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
+function subSt(){if(u2)u2();u2=onSnapshot(collection(db,"staff"),function(s){S.st=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
+function subTasks(){if(u3)u3();u3=onSnapshot(query(collection(db,"servicetasks"),orderBy("createdAt","desc")),function(s){S.tasks=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
+
+function fbAdd(d){return addDoc(collection(db,"clients"),Object.assign({},d,{vehicles:[],repairs:[],appointments:[],createdAt:serverTimestamp()}))}
+function fbUpd(i,d){return updateDoc(doc(db,"clients",i),d)}
+function fbDel(i){return deleteDoc(doc(db,"clients",i))}
+function fbArr(cid,f,a){var o={};o[f]=a;return updateDoc(doc(db,"clients",cid),o)}
+function fbStaff(uid,d){return setDoc(doc(db,"staff",uid),d,{merge:true})}
+function fbAddTask(d){return addDoc(collection(db,"servicetasks"),Object.assign({},d,{createdAt:serverTimestamp()}))}
+function fbUpdTask(id,d){return updateDoc(doc(db,"servicetasks",id),d)}
+function fbDelTask(id){return deleteDoc(doc(db,"servicetasks",id))}
 
 function sN(uid){var s=S.st.find(function(x){return x.id===uid});return s?s.name:(uid?uid.split("@")[0]:"?")}
 function sL(){return S.st.length?S.st:[{id:S.u?S.u.uid:"",name:S.u?S.u.email.split("@")[0]:"Я"}]}
+function myRole(){var p=S.st.find(function(x){return x.id===S.u.uid});return p?p.role:"mechanic"}
+function canManage(){var r=myRole();return r==="admin"||r==="manager"}
 function rSt(r){var t=r.tasks||[];if(!t.length)return r.status||"in_progress";return t.every(function(x){return x.status==="done"})?"done":"in_progress"}
 
 // ═══ DOM ═══
-function h(tag,attrs){
-  var el=document.createElement(tag);
-  var children=Array.prototype.slice.call(arguments,2);
-  if(attrs){
-    Object.keys(attrs).forEach(function(k){
-      var v=attrs[k];
-      if(k==="cls")el.className=v;
-      else if(k==="s"&&typeof v==="object")Object.assign(el.style,v);
-      else if(k==="value")el.value=v;
-      else if(k.substring(0,2)==="on")el.addEventListener(k.substring(2).toLowerCase(),v);
-      else el.setAttribute(k,v);
-    });
-  }
-  children.forEach(function(c){
-    if(Array.isArray(c))c.forEach(add);
-    else add(c);
+function h(tag,attrs){var el=document.createElement(tag);var children=Array.prototype.slice.call(arguments,2);if(attrs){Object.keys(attrs).forEach(function(k){var v=attrs[k];if(k==="cls")el.className=v;else if(k==="s"&&typeof v==="object")Object.assign(el.style,v);else if(k==="value")el.value=v;else if(k.substring(0,2)==="on")el.addEventListener(k.substring(2).toLowerCase(),v);else el.setAttribute(k,v)})}children.forEach(function(c){if(Array.isArray(c))c.forEach(add);else add(c)});function add(c){if(c!=null&&c!==false)el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c)}return el}
+function badge(text,rgb,extra){var st={fontSize:"11px",fontWeight:"600",padding:"3px 8px",borderRadius:"6px",whiteSpace:"nowrap",display:"inline-block",background:"rgba("+rgb+",.15)",color:"rgb("+rgb+")",border:"1px solid rgba("+rgb+",.3)"};if(extra)Object.assign(st,extra);return h("span",{s:st},text)}
+function fg(label){var els=Array.prototype.slice.call(arguments,1);var g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#94a3b8",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label));els.forEach(function(e){if(e)g.appendChild(e)});return g}
+function mH(md,title){md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#f1f5f9",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},h("span",null,title),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"24px",cursor:"pointer"},onClick:function(){S.mod=null;R()}},"×")))}
+function plate(text){return h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},text)}
+function secTitle(ct,text,addFn){var st=h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px",marginTop:"16px",display:"flex",alignItems:"center",gap:"6px"}},text);if(addFn)st.appendChild(h("button",{s:{marginLeft:"auto",color:"#38bdf8",cursor:"pointer",fontSize:"12px",fontWeight:"600",background:"none",border:"none"},onClick:addFn},"+ Добавить"));ct.appendChild(st)}
+function typeGrid(sel,onSel){var tg=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});SVC.forEach(function(t){tg.appendChild(h("button",{cls:"tb"+(sel===t.id?" a":""),onClick:function(){onSel(t.id)}},t.e+" "+t.l))});return tg}
+
+function photoGrid(photos,editable,onRemove){var pg=h("div",{cls:"pg"});photos.forEach(function(p){var pw=h("div",{s:{position:"relative"}});pw.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:function(){S.iv=p.data||p;R()}}));if(editable){pw.appendChild(h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){onRemove(p.id)}},"×"))}pg.appendChild(pw)});return pg}
+function addPhotoBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:onClick},"📷 Фото")}
+
+function makePhotoUploader(onPhotosAdded){
+  var fi=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
+  fi.addEventListener("change",function(e){
+    var files=Array.from(e.target.files);if(!files.length)return;
+    Promise.all(files.map(function(f){return compress(f)})).then(function(results){
+      onPhotosAdded(results);e.target.value=""
+    })
   });
-  function add(c){if(c!=null&&c!==false)el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c)}
-  return el;
+  return fi;
 }
 
-function badge(text,rgb,extra){
-  var st={fontSize:"11px",fontWeight:"600",padding:"3px 8px",borderRadius:"6px",whiteSpace:"nowrap",display:"inline-block",background:"rgba("+rgb+",.15)",color:"rgb("+rgb+")",border:"1px solid rgba("+rgb+",.3)"};
-  if(extra)Object.assign(st,extra);
-  return h("span",{s:st},text);
+function inlineAddPhotoBtn(label,onPhotosAdded){
+  var fi=makePhotoUploader(onPhotosAdded);
+  var btn=h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){fi.click()}},"📷 "+(label||"Фото"));
+  var wrap=h("span",null,btn,fi);
+  return wrap;
 }
 
-function fg(label){
-  var els=Array.prototype.slice.call(arguments,1);
-  var g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#94a3b8",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label));
-  els.forEach(function(e){if(e)g.appendChild(e)});
-  return g;
-}
-
-function mH(md,title){
-  md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#f1f5f9",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},
-    h("span",null,title),
-    h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"24px",cursor:"pointer"},onClick:function(){S.mod=null;R()}},"×")
-  ));
-}
-
-function plate(text){
-  return h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},text);
-}
-
-function photoGrid(photos,editable,onRemove){
-  var pg=h("div",{cls:"pg"});
-  photos.forEach(function(p){
-    var pw=h("div",{s:{position:"relative"}});
-    pw.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:function(){S.iv=p.data||p;R()}}));
-    if(editable){
-      pw.appendChild(h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){onRemove(p.id)}},"×"));
-    }
-    pg.appendChild(pw);
-  });
-  return pg;
-}
-
-function addPhotoBtn(onClick){
-  return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:onClick},"📷 Фото");
-}
-
-function secTitle(ct,text,addFn){
-  var st=h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px",marginTop:"16px",display:"flex",alignItems:"center",gap:"6px"}},text);
-  if(addFn)st.appendChild(h("button",{s:{marginLeft:"auto",color:"#38bdf8",cursor:"pointer",fontSize:"12px",fontWeight:"600",background:"none",border:"none"},onClick:addFn},"+ Добавить"));
-  ct.appendChild(st);
-}
-
-function typeGrid(selected,onSelect){
-  var tg=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
-  SVC.forEach(function(t){
-    tg.appendChild(h("button",{cls:"tb"+(selected===t.id?" a":""),onClick:function(){onSelect(t.id)}},t.e+" "+t.l));
-  });
-  return tg;
+function toggleTask(cid,rid,tid,isDone){
+  var cl=S.cl.find(function(c){return c.id===cid});if(!cl)return;
+  var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===rid});if(ri<0)return;
+  var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===tid});if(ti<0)return;
+  ts[ti]=Object.assign({},ts[ti],{status:isDone?"in_progress":"done"});
+  rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cid,"repairs",rp)
 }
 
 // ═══ RENDER ═══
 function R(){
-  var root=document.getElementById("app");
-  root.innerHTML="";
+  var root=document.getElementById("app");root.innerHTML="";
   if(S.ld){root.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%"><div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.08);border-top-color:#38bdf8;border-radius:50%;animation:sp .8s linear infinite"></div></div><style>@keyframes sp{to{transform:rotate(360deg)}}</style>';return}
   if(!S.u){root.appendChild(loginView());return}
   var myP=S.st.find(function(x){return x.id===S.u.uid});
@@ -202,831 +134,541 @@ function R(){
 // ═══ LOGIN ═══
 function loginView(){
   var w=h("div",{s:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"32px"}});
-  w.appendChild(h("div",{s:{width:"64px",height:"64px",borderRadius:"18px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px",marginBottom:"16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}},"❄️"));
-  w.appendChild(h("div",{s:{fontSize:"24px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:"4px"}},"CoolService CRM"));
-  w.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",textTransform:"uppercase",letterSpacing:".08em",marginBottom:"32px"}},"Рефрижераторы · Кондиционеры · Морозильные"));
+  w.append(h("div",{s:{width:"64px",height:"64px",borderRadius:"18px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"32px",marginBottom:"16px",boxShadow:"0 0 40px rgba(14,165,233,.3)"}},"❄️"),h("div",{s:{fontSize:"24px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:"4px"}},"CoolService CRM"),h("div",{s:{fontSize:"12px",color:"#64748b",textTransform:"uppercase",letterSpacing:".08em",marginBottom:"32px"}},"РефСервисДВ"));
   var f=h("div",{s:{width:"100%",maxWidth:"320px"}});
   var eI=h("input",{cls:"fi",type:"email",placeholder:"Email",autocomplete:"email",s:{marginBottom:"10px"}});
   var pI=h("input",{cls:"fi",type:"password",placeholder:"Пароль",autocomplete:"current-password",s:{marginBottom:"10px"}});
-  var btn=h("button",{cls:"bp",onClick:function(){
-    var em=eI.value.trim(),pw=pI.value;
-    if(!em||!pw)return;
-    S.ll=true;S.le="";R();
-    signInWithEmailAndPassword(auth,em,pw).catch(function(e){
-      S.le=e.code==="auth/invalid-credential"?"Неверный email или пароль":"Ошибка: "+e.message;
-      S.ll=false;R();
-    });
-  }},S.ll?"Вход...":"Войти");
+  var btn=h("button",{cls:"bp",onClick:function(){var em=eI.value.trim(),pw=pI.value;if(!em||!pw)return;S.ll=true;S.le="";R();signInWithEmailAndPassword(auth,em,pw).catch(function(e){S.le=e.code==="auth/invalid-credential"?"Неверный email или пароль":"Ошибка: "+e.message;S.ll=false;R()})}},S.ll?"Вход...":"Войти");
   pI.addEventListener("keydown",function(e){if(e.key==="Enter")btn.click()});
-  f.appendChild(eI);f.appendChild(pI);f.appendChild(btn);
+  f.append(eI,pI,btn);
   if(S.le)f.appendChild(h("div",{s:{color:"#f87171",fontSize:"13px",textAlign:"center",marginTop:"10px"}},S.le));
-  w.appendChild(f);
-  return w;
+  w.appendChild(f);return w
 }
 
-// ═══ SETUP PROFILE ═══
+// ═══ SETUP ═══
 function setupView(){
   var w=h("div",{s:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"32px"}});
-  w.appendChild(h("div",{s:{fontSize:"48px",marginBottom:"16px"}},"👤"));
-  w.appendChild(h("div",{s:{fontSize:"22px",fontWeight:"700",color:"#f1f5f9",marginBottom:"4px"}},"Настройка профиля"));
-  w.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginBottom:"32px"}},"Введите имя для отображения в системе"));
+  w.append(h("div",{s:{fontSize:"48px",marginBottom:"16px"}},"👤"),h("div",{s:{fontSize:"22px",fontWeight:"700",color:"#f1f5f9",marginBottom:"4px"}},"Настройка профиля"),h("div",{s:{fontSize:"12px",color:"#64748b",marginBottom:"32px"}},"Введите имя для системы"));
   var f=h("div",{s:{width:"100%",maxWidth:"320px"}});
-  var nI=h("input",{cls:"fi",placeholder:"Ваше имя (Алексей)",s:{marginBottom:"10px"}});
+  var nI=h("input",{cls:"fi",placeholder:"Ваше имя",s:{marginBottom:"10px"}});
   var rS=h("select",{cls:"fi",s:{marginBottom:"10px"}});
-  rS.appendChild(h("option",{value:"admin"},"👑 Админ"));
-  rS.appendChild(h("option",{value:"manager"},"📋 Менеджер"));
-  rS.appendChild(h("option",{value:"mechanic"},"🔧 Механик"));
-  f.appendChild(nI);f.appendChild(rS);
-  f.appendChild(h("button",{cls:"bp",onClick:function(){
-    var n=nI.value.trim();if(!n)return;
-    fbStaff(S.u.uid,{name:n,role:rS.value,email:S.u.email});
-  }},"Сохранить"));
-  f.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"13px",cursor:"pointer",marginTop:"16px",width:"100%",textAlign:"center"},onClick:function(){signOut(auth)}},"Выйти"));
-  w.appendChild(f);
-  return w;
+  rS.append(h("option",{value:"admin"},"👑 Админ"),h("option",{value:"manager"},"📋 Менеджер"),h("option",{value:"mechanic"},"🔧 Механик"));
+  f.append(nI,rS,h("button",{cls:"bp",onClick:function(){var n=nI.value.trim();if(!n)return;fbStaff(S.u.uid,{name:n,role:rS.value,email:S.u.email})}},"Сохранить"),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"13px",cursor:"pointer",marginTop:"16px",width:"100%",textAlign:"center"},onClick:function(){signOut(auth)}},"Выйти"));
+  w.appendChild(f);return w
 }
 
-// ═══ MAIN VIEW ═══
+// ═══ MAIN ═══
 function mainView(){
   var w=h("div",{s:{display:"flex",flexDirection:"column",height:"100%"}});
   var me=S.st.find(function(x){return x.id===S.u.uid});
-
   // Header
-  var hdr=h("div",{s:{background:"linear-gradient(135deg,#0f2040,#132d5e,#0c2246)",padding:"16px 16px 12px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0"}});
-  var top=h("div",{s:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"12px"}});
-  top.appendChild(h("div",{s:{width:"36px",height:"36px",borderRadius:"10px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:"0"}},"❄️"));
-  var lc=h("div",null);
-  lc.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"CoolService CRM"));
-  lc.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",letterSpacing:".05em",textTransform:"uppercase"}},"Рефрижераторы · Кондиционеры · Морозильные"));
-  top.appendChild(lc);
+  var hdr=h("div",{s:{background:"linear-gradient(135deg,#0f2040,#132d5e,#0c2246)",padding:"14px 16px 10px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0"}});
+  var top=h("div",{s:{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}});
+  top.append(h("div",{s:{width:"32px",height:"32px",borderRadius:"8px",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:"0"}},"❄️"),h("div",null,h("div",{s:{fontSize:"16px",fontWeight:"700",background:"linear-gradient(90deg,#e2e8f0,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"CoolService CRM")));
   var hr=h("div",{s:{marginLeft:"auto",display:"flex",alignItems:"center",gap:"8px"}});
-  hr.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},me?me.name:""));
-  hr.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"11px",cursor:"pointer",padding:"4px 8px",borderRadius:"6px"},onClick:function(){signOut(auth)}},"Выйти"));
-  top.appendChild(hr);
-  hdr.appendChild(top);
-
+  hr.append(h("span",{s:{fontSize:"11px",color:"#64748b"}},me?me.name:""),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"11px",cursor:"pointer",padding:"4px 8px",borderRadius:"6px"},onClick:function(){signOut(auth)}},"Выйти"));
+  top.appendChild(hr);hdr.appendChild(top);
   // Search
-  var sb=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",background:"rgba(255,255,255,.06)",borderRadius:"12px",padding:"8px 14px",border:"1px solid rgba(255,255,255,.08)"}});
-  sb.appendChild(h("span",{s:{color:"#64748b"}},"🔍"));
-  var sInput=h("input",{cls:"fi",placeholder:"Поиск по номеру, имени, марке...",value:S.q,s:{border:"none",background:"transparent",padding:"0"}});
+  var sb=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",background:"rgba(255,255,255,.06)",borderRadius:"10px",padding:"7px 12px",border:"1px solid rgba(255,255,255,.08)"}});
+  var sInput=h("input",{cls:"fi",placeholder:"Поиск...",value:S.q,s:{border:"none",background:"transparent",padding:"0",fontSize:"13px"}});
   var searchTimer=null;
-  sInput.addEventListener("input",function(e){
-    S.q=e.target.value;
-    clearTimeout(searchTimer);
-    searchTimer=setTimeout(function(){
-      var ctEl=w.querySelector(".ct");
-      if(ctEl){ctEl.innerHTML="";renderTab(ctEl)}
-    },150);
-  });
-  sb.appendChild(sInput);
-  if(S.q){
-    sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"18px",cursor:"pointer"},onClick:function(){
-      S.q="";sInput.value="";
-      var ctEl=w.querySelector(".ct");
-      if(ctEl){ctEl.innerHTML="";renderTab(ctEl)}
-    }},"×"));
-  }
-  hdr.appendChild(sb);
-  w.appendChild(hdr);
+  sInput.addEventListener("input",function(e){S.q=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(function(){var ctEl=w.querySelector(".ct");if(ctEl){ctEl.innerHTML="";renderTab(ctEl)}},150)});
+  sb.append(h("span",{s:{color:"#64748b",fontSize:"13px"}},"🔍"),sInput);
+  if(S.q)sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"16px",cursor:"pointer"},onClick:function(){S.q="";sInput.value="";var ctEl=w.querySelector(".ct");if(ctEl){ctEl.innerHTML="";renderTab(ctEl)}}},"×"));
+  hdr.appendChild(sb);w.appendChild(hdr);
   setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
-
   // Nav
   var nav=h("div",{cls:"nb"});
-  var tabs=[{id:"clients",t:"👤 Клиенты"},{id:"mytasks",t:"📋 Мои задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда"}];
-  tabs.forEach(function(n){
-    var b=h("button",{onClick:function(){S.tab=n.id;R()}},n.t);
-    if(S.tab===n.id)b.className="a";
-    nav.appendChild(b);
-  });
+  var tabs=[{id:"phys",t:"👤 Физ.лица"},{id:"legal",t:"🏢 Юр.лица"},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда"}];
+  tabs.forEach(function(n){var b=h("button",{onClick:function(){S.tab=n.id;R()}},n.t);if(S.tab===n.id)b.className="a";nav.appendChild(b)});
   w.appendChild(nav);
-
-  // Content
-  var ct=h("div",{cls:"ct",s:{flex:"1",overflowY:"auto",padding:"12px 16px 90px"}});
+  var ct=h("div",{cls:"ct"});
   renderTab(ct);
   w.appendChild(ct);
-
-  if(S.tab==="clients"){
-    w.appendChild(h("button",{s:{position:"absolute",bottom:"20px",right:"20px",width:"54px",height:"54px",borderRadius:"50%",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",border:"none",cursor:"pointer",fontSize:"28px",boxShadow:"0 4px 20px rgba(14,165,233,.4)",zIndex:"50"},onClick:function(){S.mod={t:"addCl"};R()}},"+"));
+  // FAB
+  if(S.tab==="phys"||S.tab==="legal"){
+    w.appendChild(h("button",{s:{position:"absolute",bottom:"20px",right:"20px",width:"54px",height:"54px",borderRadius:"50%",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",border:"none",cursor:"pointer",fontSize:"28px",boxShadow:"0 4px 20px rgba(14,165,233,.4)",zIndex:"50"},onClick:function(){S.mod={t:S.tab==="phys"?"addPhys":"addCl"};R()}},"+"))
   }
-  return w;
+  if(S.tab==="stats"&&canManage()){
+    w.appendChild(h("button",{s:{position:"absolute",bottom:"20px",right:"20px",width:"54px",height:"54px",borderRadius:"50%",background:"linear-gradient(135deg,#f59e0b,#f97316)",color:"#fff",border:"none",cursor:"pointer",fontSize:"22px",boxShadow:"0 4px 20px rgba(245,158,11,.4)",zIndex:"50"},onClick:function(){S.mod={t:"addSvcTask"};R()}},"📝"))
+  }
+  return w
 }
 
 function renderTab(ct){
-  if(S.tab==="clients")clientsTab(ct);
-  else if(S.tab==="mytasks")myTasksTab(ct);
-  else if(S.tab==="calendar")calTab(ct);
-  else if(S.tab==="stats")statsTab(ct);
-  else if(S.tab==="team")teamTab(ct);
+  var map={phys:physTab,legal:legalTab,mytasks:myTasksTab,calendar:calTab,stats:statsTab,team:teamTab};
+  var fn=map[S.tab];if(fn)fn(ct)
 }
 
-// ═══ CLIENTS TAB ═══
-function clientsTab(ct){
+// ═══ PHYS TAB (individuals - quick view) ═══
+function physTab(ct){
   var ql=S.q.toLowerCase();
   var fl=S.cl.filter(function(c){
+    if(c.clientType==="legal")return false;
     if(!ql)return true;
-    if(c.name&&c.name.toLowerCase().indexOf(ql)>=0)return true;
-    if(c.phone&&c.phone.indexOf(S.q)>=0)return true;
-    var vs=c.vehicles||[];
-    for(var i=0;i<vs.length;i++){
-      if(vs[i].plate&&vs[i].plate.toLowerCase().indexOf(ql)>=0)return true;
-      if(vs[i].brand&&vs[i].brand.toLowerCase().indexOf(ql)>=0)return true;
-    }
-    return false;
+    return(c.name&&c.name.toLowerCase().indexOf(ql)>=0)||(c.phone&&c.phone.indexOf(S.q)>=0)||(c.vehicles||[]).some(function(v){return(v.plate&&v.plate.toLowerCase().indexOf(ql)>=0)||(v.brand&&v.brand.toLowerCase().indexOf(ql)>=0)})
   });
-  if(!fl.length){
-    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px 20px"}},
-      h("div",{s:{fontSize:"36px",marginBottom:"12px"}},S.q?"🔍":"👤"),
-      h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},S.q?"Ничего не найдено":"Нет клиентов")
-    ));
-    return;
-  }
-  fl.forEach(function(c){
-    var cd=h("div",{cls:"card",onClick:function(){S.sel=c.id;R()}});
-    cd.appendChild(h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9",marginBottom:"5px"}},c.name||""));
-    var pl=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}});
-    (c.vehicles||[]).forEach(function(v){
-      var pw=h("span",{s:{display:"inline-flex",alignItems:"center",gap:"4px"}});
-      if(v.photo)pw.appendChild(h("img",{src:v.photo,s:{width:"20px",height:"20px",borderRadius:"4px",objectFit:"cover"}}));
-      pw.appendChild(plate(v.plate||""));
-      pl.appendChild(pw);
-    });
-    cd.appendChild(pl);
-    var meta=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"#64748b",marginTop:"5px",flexWrap:"wrap"}});
-    if(c.phone)meta.appendChild(h("span",null,"📞 "+c.phone));
-    var ip=(c.repairs||[]).filter(function(r){return rSt(r)==="in_progress"}).length;
-    if(ip)meta.appendChild(badge("🔧 "+ip+" в работе","249,115,22"));
-    cd.appendChild(meta);
-    ct.appendChild(cd);
+  if(!fl.length){ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},S.q?"🔍":"👤"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},S.q?"Не найдено":"Нет клиентов")));return}
+  fl.forEach(function(c){renderClientCard(ct,c)})
+}
+
+// ═══ LEGAL TAB (companies) ═══
+function legalTab(ct){
+  var ql=S.q.toLowerCase();
+  var fl=S.cl.filter(function(c){
+    if(c.clientType!=="legal")return false;
+    if(!ql)return true;
+    return(c.name&&c.name.toLowerCase().indexOf(ql)>=0)||(c.phone&&c.phone.indexOf(S.q)>=0)||(c.vehicles||[]).some(function(v){return(v.plate&&v.plate.toLowerCase().indexOf(ql)>=0)||(v.brand&&v.brand.toLowerCase().indexOf(ql)>=0)})
   });
+  if(!fl.length){ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},S.q?"🔍":"🏢"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},S.q?"Не найдено":"Нет компаний")));return}
+  fl.forEach(function(c){renderClientCard(ct,c)})
+}
+
+function renderClientCard(ct,c){
+  var cd=h("div",{cls:"card",onClick:function(){S.sel=c.id;R()}});
+  cd.appendChild(h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9",marginBottom:"5px"}},c.name||""));
+  var pl=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}});
+  (c.vehicles||[]).forEach(function(v){var pw=h("span",{s:{display:"inline-flex",alignItems:"center",gap:"4px"}});if(v.photo)pw.appendChild(h("img",{src:v.photo,s:{width:"20px",height:"20px",borderRadius:"4px",objectFit:"cover"}}));pw.appendChild(plate(v.plate||""));pl.appendChild(pw)});
+  cd.appendChild(pl);
+  var meta=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:"#64748b",marginTop:"5px",flexWrap:"wrap"}});
+  if(c.phone)meta.appendChild(h("span",null,"📞 "+c.phone));
+  var ip=(c.repairs||[]).filter(function(r){return rSt(r)==="in_progress"}).length;
+  if(ip)meta.appendChild(badge("🔧 "+ip+" в работе","249,115,22"));
+  cd.appendChild(meta);
+  ct.appendChild(cd)
 }
 
 // ═══ MY TASKS TAB ═══
 function myTasksTab(ct){
   var uid=S.u.uid;
-  var tasks=[];
-  S.cl.forEach(function(c){
-    (c.repairs||[]).forEach(function(r){
-      (r.tasks||[]).forEach(function(t){
-        if(t.assignee===uid){
-          tasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date});
-        }
-      });
-    });
-  });
-  tasks.sort(function(a,b){return(a.status==="done"?1:0)-(b.status==="done"?1:0)});
-  if(!tasks.length){
-    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
-    return;
-  }
-  var active=tasks.filter(function(t){return t.status!=="done"});
-  var done=tasks.filter(function(t){return t.status==="done"});
+  // Repair tasks
+  var repairTasks=[];
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid)repairTasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair"})})})});
+  // Service tasks assigned to me
+  var myServiceTasks=S.tasks.filter(function(t){return t.assignee===uid});
+  var allTasks=repairTasks.concat(myServiceTasks.map(function(t){return Object.assign({},t,{type:t.taskType||"task"})}));
+  allTasks.sort(function(a,b){return(a.status==="done"?1:0)-(b.status==="done"?1:0)});
+
+  if(!allTasks.length){ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));return}
+  var active=allTasks.filter(function(t){return t.status!=="done"});
+  var done=allTasks.filter(function(t){return t.status==="done"});
   if(active.length){
-    ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"🔧 В работе ("+active.length+")"));
-    active.forEach(function(t){
-      var card=buildTaskCard(t);
-      card.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addT",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
-      ct.appendChild(card);
-    });
+    secTitle(ct,"🔧 В работе ("+active.length+")");
+    active.forEach(function(t){ct.appendChild(buildTaskCard(t))})
   }
   if(done.length){
-    ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px",marginTop:"16px"}},"✅ Выполнено ("+done.length+")"));
-    done.forEach(function(t){ct.appendChild(buildTaskCard(t))});
+    secTitle(ct,"✅ Выполнено ("+done.length+")");
+    done.forEach(function(t){ct.appendChild(buildTaskCard(t))})
   }
 }
 
 function buildTaskCard(t){
   var cd=h("div",{cls:"rc"});
   var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
-  tp.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9",cursor:"pointer"},onClick:function(){S.sel=t.cid;R()}},t.cn||""));
+  var left=h("div",null);
+  if(t.cn)left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9",cursor:"pointer"},onClick:function(){if(t.cid){S.sel=t.cid;R()}}},t.cn));
+  if(t.title)left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},t.title));
+  // Type badge
+  var typeBadge=t.type==="project"?badge("📐 Проект","245,158,11"):t.type==="task"?badge("📝 Задача","99,102,241"):null;
+  if(typeBadge)left.appendChild(typeBadge);
+  tp.appendChild(left);
   var isDone=t.status==="done";
-  tp.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isDone)}},isDone?"✅ Готово":"🔧 В работе"));
+  var statusBtn;
+  if(t.type==="repair"){
+    statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isDone)}},isDone?"✅":"🔧");
+  }else{
+    statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧");
+  }
+  tp.appendChild(statusBtn);
   cd.appendChild(tp);
   if(t.v)cd.appendChild(plate(t.v.plate||""));
   if(t.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",marginTop:"4px"}},t.description));
   if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
-  if(t.photos&&t.photos.length){cd.appendChild(photoGrid(t.photos,false))}
+  if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
   // Add photo button for active tasks
   if(!isDone){
-    var fileIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
-    fileIn.addEventListener("change",function(e){
-      var files=Array.from(e.target.files);
-      if(!files.length)return;
-      Promise.all(files.map(function(f){return compress(f)})).then(function(results){
-        addPhotosToTask(t.cid,t.rid,t.id,results);
-        e.target.value="";
-      });
-    });
-    var photoBtn=h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"8px",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){fileIn.click()}},"📷 Добавить фото");
-    cd.appendChild(photoBtn);
-    cd.appendChild(fileIn);
+    cd.appendChild(inlineAddPhotoBtn("Добавить фото",function(results){
+      var newPhotos=(t.photos||[]).slice();
+      results.forEach(function(data){newPhotos.push({id:gid(),data:data})});
+      if(t.type==="repair"){
+        var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
+        ts[ti]=Object.assign({},ts[ti],{photos:newPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp)
+      }else{
+        fbUpdTask(t.id,{photos:newPhotos})
+      }
+    }));
+    if(t.type==="repair"){
+      cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:"4px"},onClick:function(){S.mod={t:"addRepairTask",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
+    }
   }
-  return cd;
-}
-
-function addPhotosToTask(cid,rid,tid,photoDataArray){
-  var cl=S.cl.find(function(c){return c.id===cid});
-  if(!cl)return;
-  var rp=(cl.repairs||[]).slice();
-  var ri=rp.findIndex(function(r){return r.id===rid});
-  if(ri<0)return;
-  var ts=(rp[ri].tasks||[]).slice();
-  var ti=ts.findIndex(function(x){return x.id===tid});
-  if(ti<0)return;
-  var existingPhotos=(ts[ti].photos||[]).slice();
-  photoDataArray.forEach(function(data){
-    existingPhotos.push({id:gid(),data:data});
-  });
-  ts[ti]=Object.assign({},ts[ti],{photos:existingPhotos});
-  rp[ri]=Object.assign({},rp[ri],{tasks:ts});
-  fbArr(cid,"repairs",rp).catch(function(err){alert("Ошибка: "+err.message)});
-}
-
-function toggleTask(cid,rid,tid,isDone){
-  var cl=S.cl.find(function(c){return c.id===cid});
-  if(!cl)return;
-  var rp=(cl.repairs||[]).slice();
-  var ri=rp.findIndex(function(r){return r.id===rid});
-  if(ri<0)return;
-  var ts=(rp[ri].tasks||[]).slice();
-  var ti=ts.findIndex(function(x){return x.id===tid});
-  if(ti<0)return;
-  ts[ti]=Object.assign({},ts[ti],{status:isDone?"in_progress":"done"});
-  rp[ri]=Object.assign({},rp[ri],{tasks:ts});
-  fbArr(cid,"repairs",rp);
+  return cd
 }
 
 // ═══ CALENDAR TAB ═══
 function calTab(ct){
   var all=[];
-  S.cl.forEach(function(c){
-    (c.appointments||[]).forEach(function(a){
-      all.push(Object.assign({},a,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(v){return v.id===a.vehicleId})}));
-    });
-  });
+  S.cl.forEach(function(c){(c.appointments||[]).forEach(function(a){all.push(Object.assign({},a,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(v){return v.id===a.vehicleId})}))})});
   all.sort(function(a,b){return new Date(a.date)-new Date(b.date)});
-  if(!all.length){
-    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📅"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет записей")));
-    return;
-  }
+  if(!all.length){ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📅"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет записей")));return}
   all.forEach(function(a){
     var past=new Date(a.date)<new Date();
     var cd=h("div",{cls:"card",s:{opacity:past?0.5:1},onClick:function(){S.sel=a.cid;R()}});
-    cd.appendChild(badge("📅 "+fDT(a.date),"251,191,36"));
-    cd.appendChild(h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#f1f5f9",marginTop:"8px"}},a.cn||""));
+    cd.append(badge("📅 "+fDT(a.date),"251,191,36"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#f1f5f9",marginTop:"8px"}},a.cn||""));
     var rw=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
     if(a.v)rw.appendChild(plate(a.v.plate||""));
-    var s=getS(a.serviceType);
-    rw.appendChild(badge(s.e+" "+s.l,s.c));
+    var s=getS(a.serviceType);rw.appendChild(badge(s.e+" "+s.l,s.c));
     cd.appendChild(rw);
     if(a.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
-    ct.appendChild(cd);
-  });
+    ct.appendChild(cd)
+  })
 }
 
 // ═══ STATS TAB ═══
 function statsTab(ct){
+  // Repair stats
   var allR=[];
-  S.cl.forEach(function(c){
-    (c.repairs||[]).forEach(function(r){
-      allR.push(Object.assign({},r,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})}));
-    });
-  });
-  var dR=allR.filter(function(r){return rSt(r)==="done"}).length;
-  var inProg=allR.filter(function(r){return rSt(r)==="in_progress"});
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){allR.push(Object.assign({},r,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})}))})});
+  var inProgR=allR.filter(function(r){return rSt(r)==="in_progress"});
+  var doneR=allR.filter(function(r){return rSt(r)==="done"}).length;
   var tRev=allR.reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
 
-  // Stats grid
-  var grid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"16px"}});
-  [{v:S.cl.length,l:"Клиентов"},{v:inProg.length,l:"🔧 В работе"},{v:dR,l:"✅ Выполнено"},{v:"€"+tRev.toLocaleString(),l:"Выручка"}].forEach(function(s){
-    grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"14px",padding:"16px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},
-      h("div",{s:{fontSize:"28px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),
-      h("div",{s:{fontSize:"11px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)
-    ));
-  });
+  // Service tasks & projects
+  var svcTasks=S.tasks.filter(function(t){return t.taskType==="task"});
+  var svcProjects=S.tasks.filter(function(t){return t.taskType==="project"});
+
+  // Grid stats
+  var grid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"14px"}});
+  [{v:inProgR.length,l:"🔧 В работе"},{v:doneR,l:"✅ Выполнено"},{v:svcTasks.filter(function(t){return t.status!=="done"}).length,l:"📝 Задачи"},{v:"€"+tRev.toLocaleString(),l:"💰 Выручка"}].forEach(function(s){
+    grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"12px",padding:"14px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},
+      h("div",{s:{fontSize:"24px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),
+      h("div",{s:{fontSize:"10px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)))});
   ct.appendChild(grid);
 
-  // Active repairs
-  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"🔧 Машины в ремонте ("+inProg.length+")"));
-  if(inProg.length){
-    inProg.forEach(function(r){
-      var s=getS(r.serviceType);
-      var tasks=r.tasks||[];
+  // ═══ ACTIVE REPAIRS with photo add ═══
+  secTitle(ct,"🔧 Заказ-наряды в работе ("+inProgR.length+")");
+  if(inProgR.length){
+    inProgR.forEach(function(r){
+      var s=getS(r.serviceType);var tasks=r.tasks||[];
       var doneTasks=tasks.filter(function(t){return t.status==="done"}).length;
       var totalTasks=tasks.length;
       var cd=h("div",{cls:"rc",s:{cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
-
       var top2=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}});
       var left=h("div",null);
       left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},r.cn||""));
       var badges=h("div",{s:{display:"flex",gap:"5px",marginTop:"4px",flexWrap:"wrap",alignItems:"center"}});
-      if(r.v){
-        if(r.v.photo)badges.appendChild(h("img",{src:r.v.photo,s:{width:"20px",height:"20px",borderRadius:"4px",objectFit:"cover"}}));
-        badges.appendChild(plate(r.v.plate||""));
-      }
+      if(r.v&&r.v.plate)badges.appendChild(plate(r.v.plate));
       badges.appendChild(badge(s.e+" "+s.l,s.c));
-      left.appendChild(badges);
-      top2.appendChild(left);
-
+      left.appendChild(badges);top2.appendChild(left);
       if(totalTasks){
         var pct=Math.round(doneTasks/totalTasks*100);
-        var prog=h("div",{s:{textAlign:"right"}});
-        prog.appendChild(h("div",{s:{fontSize:"16px",fontWeight:"700",color:pct===100?"#4ade80":"#fb923c"}},pct+"%"));
-        prog.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b"}},doneTasks+"/"+totalTasks+" задач"));
-        top2.appendChild(prog);
+        top2.appendChild(h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"16px",fontWeight:"700",color:pct===100?"#4ade80":"#fb923c"}},pct+"%"),h("div",{s:{fontSize:"10px",color:"#64748b"}},doneTasks+"/"+totalTasks)))
       }
       cd.appendChild(top2);
+      if(r.description){var desc=r.description.length>60?r.description.substring(0,60)+"...":r.description;cd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"2px"}},desc))}
+      if(totalTasks){cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"6px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:doneTasks===totalTasks?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(doneTasks/totalTasks*100)+"%"}})))}
+      if(tasks.length){var ar=h("div",{s:{display:"flex",gap:"4px",marginTop:"6px",flexWrap:"wrap"}});tasks.forEach(function(t2){var dn=t2.status==="done";ar.appendChild(h("span",{s:{fontSize:"10px",padding:"2px 6px",borderRadius:"6px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},sN(t2.assignee)+(dn?" ✅":" 🔧")))});cd.appendChild(ar)}
+      // PHOTO ADD from stats
+      var photoWrap=h("div",{s:{marginTop:"6px"},onClick:function(e){e.stopPropagation()}});
+      photoWrap.appendChild(inlineAddPhotoBtn("Добавить фото",function(results){
+        var cl=S.cl.find(function(c){return c.id===r.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===r.id});if(ri<0)return;
+        var photos=(rp[ri].photos||[]).slice();
+        results.forEach(function(data){photos.push({id:gid(),data:data})});
+        rp[ri]=Object.assign({},rp[ri],{photos:photos});
+        fbArr(r.cid,"repairs",rp)
+      }));
+      cd.appendChild(photoWrap);
+      if(r.freonType||r.freonAmount){cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"4px",fontSize:"11px",color:"#22d3ee"}},"🧊 "+(r.freonType||"")+" "+(r.freonAmount?r.freonAmount+"г":"")))}
+      ct.appendChild(cd)
+    })
+  }else{ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"))}
 
-      if(r.description){
-        var desc=r.description.length>80?r.description.substring(0,80)+"...":r.description;
-        cd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"4px",lineHeight:"1.4"}},desc));
-      }
-
-      if(totalTasks){
-        var pctN=doneTasks/totalTasks*100;
-        cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"8px",overflow:"hidden"}},
-          h("div",{s:{height:"100%",borderRadius:"2px",background:pctN===100?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:pctN+"%"}})
-        ));
-      }
-
-      if(tasks.length){
-        var ar=h("div",{s:{display:"flex",gap:"6px",marginTop:"8px",flexWrap:"wrap"}});
-        tasks.forEach(function(t2){
-          var dn=t2.status==="done";
-          ar.appendChild(h("span",{s:{fontSize:"11px",padding:"2px 8px",borderRadius:"6px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},sN(t2.assignee)+(dn?" ✅":" 🔧")));
-        });
-        cd.appendChild(ar);
-      }
-
-      if(r.freonType||r.freonAmount){
-        var fr=h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"6px",fontSize:"11px",color:"#22d3ee"}});
-        fr.appendChild(h("span",null,"🧊"));
-        if(r.freonType)fr.appendChild(h("span",null,r.freonType));
-        if(r.freonAmount)fr.appendChild(h("span",{s:{color:"#94a3b8"}},r.freonAmount+"г"));
-        cd.appendChild(fr);
-      }
-      ct.appendChild(cd);
-    });
-  }else{
-    ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"));
+  // ═══ SERVICE TASKS ═══
+  var activeTasks=svcTasks.filter(function(t){return t.status!=="done"});
+  var doneTasks2=svcTasks.filter(function(t){return t.status==="done"});
+  secTitle(ct,"📝 Задачи сервиса ("+activeTasks.length+" активных)",canManage()?function(){S.mod={t:"addSvcTask",taskType:"task"};R()}:null);
+  if(activeTasks.length){activeTasks.forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})}
+  if(doneTasks2.length){
+    ct.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Выполнено: "+doneTasks2.length));
+    doneTasks2.slice(0,3).forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})
   }
 
-  // Per staff
-  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginTop:"20px",marginBottom:"10px"}},"👥 По сотрудникам"));
-  var ss={};
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){
-    if(!ss[t.assignee])ss[t.assignee]={tot:0,dn:0};
-    ss[t.assignee].tot++;
-    if(t.status==="done")ss[t.assignee].dn++;
-  })})});
+  // ═══ PROJECTS ═══
+  var activeProjects=svcProjects.filter(function(t){return t.status!=="done"});
+  var doneProjects=svcProjects.filter(function(t){return t.status==="done"});
+  secTitle(ct,"📐 Проекты ("+activeProjects.length+" активных)",canManage()?function(){S.mod={t:"addSvcTask",taskType:"project"};R()}:null);
+  if(activeProjects.length){activeProjects.forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})}
+  if(doneProjects.length){
+    ct.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Завершено: "+doneProjects.length));
+    doneProjects.slice(0,3).forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})
+  }
+
+  // ═══ STAFF STATS ═══
+  secTitle(ct,"👥 По сотрудникам");
+  var ss={};S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(!ss[t.assignee])ss[t.assignee]={tot:0,dn:0};ss[t.assignee].tot++;if(t.status==="done")ss[t.assignee].dn++})})});
   var sa=Object.entries(ss).sort(function(a,b){return b[1].dn-a[1].dn});
-  if(!sa.length){ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px"}},"Назначайте задачи для статистики"));return}
+  if(!sa.length){ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px"}},"Нет данных"));return}
   var mx=Math.max.apply(null,sa.map(function(x){return x[1].dn}).concat([1]));
-  sa.forEach(function(item){
-    var uid=item[0],st=item[1],n=sN(uid);
-    ct.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"12px",background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"10px 14px",marginBottom:"6px",border:"1px solid rgba(255,255,255,.06)"}},
-      h("div",{s:{width:"40px",height:"40px",borderRadius:"10px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",fontWeight:"700",color:"#a78bfa"}},n[0]?n[0].toUpperCase():"?"),
-      h("div",{s:{flex:"1"}},
-        h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#cbd5e1"}},n),
-        h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},"Выполнено: "+st.dn+" из "+st.tot),
-        h("div",{s:{height:"6px",borderRadius:"3px",background:"rgba(255,255,255,.06)",marginTop:"4px",overflow:"hidden"}},
-          h("div",{s:{height:"100%",borderRadius:"3px",background:"linear-gradient(90deg,#0ea5e9,#38bdf8)",width:(st.dn/mx*100)+"%"}}))
-      ),
-      h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#94a3b8",minWidth:"24px",textAlign:"right"}},""+st.dn)
-    ));
-  });
+  sa.forEach(function(item){var uid=item[0],st=item[1],n=sN(uid);
+    ct.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"10px",background:"rgba(255,255,255,.03)",borderRadius:"10px",padding:"8px 12px",marginBottom:"5px",border:"1px solid rgba(255,255,255,.06)"}},
+      h("div",{s:{width:"32px",height:"32px",borderRadius:"8px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",fontWeight:"700",color:"#a78bfa"}},n[0]?n[0].toUpperCase():"?"),
+      h("div",{s:{flex:"1"}},h("div",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},n),h("div",{s:{fontSize:"10px",color:"#64748b"}},""+st.dn+"/"+st.tot),h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"3px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:"linear-gradient(90deg,#0ea5e9,#38bdf8)",width:(st.dn/mx*100)+"%"}}))),
+      h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#94a3b8"}},""+st.dn)))})
+}
+
+function renderSvcTaskCard(t){
+  var isDone=t.status==="done";
+  var isProject=t.taskType==="project";
+  var cd=h("div",{cls:"rc"});
+  var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+  var left=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
+  left.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9"}},t.title||"Без названия"));
+  left.appendChild(badge(isProject?"📐 Проект":"📝 Задача",isProject?"245,158,11":"99,102,241"));
+  tp.appendChild(left);
+  tp.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧"));
+  cd.appendChild(tp);
+  cd.appendChild(h("div",{s:{fontSize:"11px",color:"#a78bfa",marginBottom:"4px"}},"👤 "+sN(t.assignee)));
+  if(t.description)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.4"}},t.description));
+  if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
+  if(!isDone){
+    var wrap=h("div",{s:{marginTop:"6px",display:"flex",gap:"6px",flexWrap:"wrap"}});
+    wrap.appendChild(inlineAddPhotoBtn("Фото",function(results){
+      var photos=(t.photos||[]).slice();
+      results.forEach(function(data){photos.push({id:gid(),data:data})});
+      fbUpdTask(t.id,{photos:photos})
+    }));
+    if(canManage()){wrap.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer"},onClick:function(){if(confirm("Удалить?"))fbDelTask(t.id)}},"🗑"))}
+    cd.appendChild(wrap)
+  }
+  return cd
 }
 
 // ═══ TEAM TAB ═══
 function teamTab(ct){
-  ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#64748b",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"👥 Команда"));
+  secTitle(ct,"👥 Команда");
   var me=S.st.find(function(x){return x.id===S.u.uid});
   var roles={admin:"👑 Админ",manager:"📋 Менеджер",mechanic:"🔧 Механик"};
   sL().forEach(function(s){
     var cd=h("div",{s:{background:"rgba(255,255,255,.03)",borderRadius:"12px",padding:"12px 14px",marginBottom:"8px",border:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",gap:"12px"}});
-    cd.appendChild(h("div",{s:{width:"40px",height:"40px",borderRadius:"10px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",fontWeight:"700",color:"#a78bfa"}},(s.name||"?")[0].toUpperCase()));
+    cd.appendChild(h("div",{s:{width:"36px",height:"36px",borderRadius:"8px",background:"rgba(139,92,246,.15)",border:"1px solid rgba(139,92,246,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",fontWeight:"700",color:"#a78bfa"}},(s.name||"?")[0].toUpperCase()));
     var info=h("div",{s:{flex:"1"}});
-    info.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},s.name||""));
-    info.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b"}},s.email||""));
-    info.appendChild(badge(roles[s.role]||s.role||"","139,92,246",{marginTop:"4px"}));
+    info.append(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},s.name||""),h("div",{s:{fontSize:"12px",color:"#64748b"}},s.email||""),badge(roles[s.role]||"","139,92,246",{marginTop:"4px"}));
     cd.appendChild(info);
-    if(s.id===S.u.uid||(me&&me.role==="admin")){
-      cd.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"16px"},onClick:function(){S.mod={t:"editSt",d:s};R()}},"✏️"));
-    }
-    ct.appendChild(cd);
-  });
+    if(s.id===S.u.uid||(me&&me.role==="admin"))cd.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){S.mod={t:"editSt",d:s};R()}},"✏️"));
+    ct.appendChild(cd)
+  })
 }
 
 // ═══ DETAIL VIEW ═══
 function detailView(){
-  var cl=S.cl.find(function(c){return c.id===S.sel});
-  if(!cl){S.sel=null;return mainView()}
+  var cl=S.cl.find(function(c){return c.id===S.sel});if(!cl){S.sel=null;return mainView()}
   var w=h("div",{s:{display:"flex",flexDirection:"column",height:"100%"}});
-
-  // Header
-  var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"12px",padding:"16px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0",background:"linear-gradient(135deg,#0f2040,#132d5e)"}});
-  hdr.appendChild(h("button",{s:{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",fontSize:"20px"},onClick:function(){S.sel=null;R()}},"‹"));
-  var info=h("div",{s:{flex:"1"}});
-  info.appendChild(h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9"}},cl.name||""));
-  if(cl.phone)info.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"2px"}},"📞 "+cl.phone));
-  hdr.appendChild(info);
-  hdr.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"16px"},onClick:function(){S.mod={t:"editCl",d:cl};R()}},"✏️"));
+  var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"12px",padding:"14px 16px",borderBottom:"1px solid rgba(56,189,248,.12)",flexShrink:"0",background:"linear-gradient(135deg,#0f2040,#132d5e)"}});
+  hdr.append(h("button",{s:{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",fontSize:"20px"},onClick:function(){S.sel=null;R()}},"‹"),h("div",{s:{flex:"1"}},h("div",{s:{fontSize:"16px",fontWeight:"600",color:"#f1f5f9"}},cl.name||""),cl.phone?h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"2px"}},"📞 "+cl.phone):null),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){S.mod={t:"editCl",d:cl};R()}},"✏️"));
   w.appendChild(hdr);
-
-  var ct=h("div",{cls:"ct",s:{flex:"1",overflowY:"auto",padding:"12px 16px 90px"}});
+  var ct=h("div",{cls:"ct"});
 
   // Vehicles
   secTitle(ct,"🚗 Автомобили ("+(cl.vehicles||[]).length+")",function(){S.mod={t:"addV",cid:cl.id};R()});
   (cl.vehicles||[]).forEach(function(v){
-    var s=getS(v.serviceType);
-    var cd=h("div",{cls:"rc"});
-    var row=h("div",{s:{display:"flex",gap:"12px",alignItems:"flex-start"}});
-    if(v.photo)row.appendChild(h("img",{src:v.photo,s:{width:"56px",height:"56px",borderRadius:"10px",objectFit:"cover",border:"1px solid rgba(255,255,255,.08)",cursor:"pointer"},onClick:function(){S.iv=v.photo;R()}}));
-    else row.appendChild(h("div",{s:{width:"56px",height:"56px",borderRadius:"10px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"24px",color:"#475569"}},"🚗"));
+    var s=getS(v.serviceType);var cd=h("div",{cls:"rc"});
+    var row=h("div",{s:{display:"flex",gap:"10px",alignItems:"flex-start"}});
+    row.appendChild(v.photo?h("img",{src:v.photo,s:{width:"48px",height:"48px",borderRadius:"8px",objectFit:"cover",border:"1px solid rgba(255,255,255,.08)",cursor:"pointer"},onClick:function(){S.iv=v.photo;R()}}):h("div",{s:{width:"48px",height:"48px",borderRadius:"8px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",color:"#475569"}},"🚗"));
     var rc=h("div",{s:{flex:"1",minWidth:"0"}});
     var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
-    var lf=h("div",{s:{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}});
-    lf.appendChild(plate(v.plate||""));
-    lf.appendChild(badge(s.e+" "+s.l,s.c));
-    tp.appendChild(lf);
-    var acts=h("div",{s:{display:"flex",gap:"6px"}});
-    acts.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){S.mod={t:"editV",cid:cl.id,d:v};R()}},"✏️"));
-    acts.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){
-      if(confirm("Удалить авто?")){
-        fbUpd(cl.id,{
-          vehicles:(cl.vehicles||[]).filter(function(x){return x.id!==v.id}),
-          repairs:(cl.repairs||[]).filter(function(r){return r.vehicleId!==v.id}),
-          appointments:(cl.appointments||[]).filter(function(a){return a.vehicleId!==v.id})
-        });
-      }
-    }},"🗑"));
-    tp.appendChild(acts);
+    tp.appendChild(h("div",{s:{display:"flex",gap:"6px",flexWrap:"wrap",alignItems:"center"}},plate(v.plate||""),badge(s.e+" "+s.l,s.c)));
+    tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editV",cid:cl.id,d:v};R()}},"✏️"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить авто?")){fbUpd(cl.id,{vehicles:(cl.vehicles||[]).filter(function(x){return x.id!==v.id}),repairs:(cl.repairs||[]).filter(function(r){return r.vehicleId!==v.id}),appointments:(cl.appointments||[]).filter(function(a){return a.vehicleId!==v.id})})}}},"🗑")));
     rc.appendChild(tp);
-    if(v.brand)rc.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},v.brand));
-    if(v.notes)rc.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},v.notes));
-    row.appendChild(rc);
-    cd.appendChild(row);
-    ct.appendChild(cd);
+    if(v.brand)rc.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"4px"}},v.brand));
+    if(v.notes)rc.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},v.notes));
+    row.appendChild(rc);cd.appendChild(row);ct.appendChild(cd)
   });
 
   // Repairs
-  var hasVehicles=(cl.vehicles||[]).length>0;
-  secTitle(ct,"🔧 Заказ-наряды ("+(cl.repairs||[]).length+")",hasVehicles?function(){S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R()}:null);
+  var hasV=(cl.vehicles||[]).length>0;
+  secTitle(ct,"🔧 Заказ-наряды ("+(cl.repairs||[]).length+")",hasV?function(){S.mod={t:"addR",cid:cl.id,vs:cl.vehicles};R()}:null);
   (cl.repairs||[]).forEach(function(r){
-    var s=getS(r.serviceType);
-    var v=(cl.vehicles||[]).find(function(x){return x.id===r.vehicleId});
-    var os=rSt(r);
+    var s=getS(r.serviceType);var v=(cl.vehicles||[]).find(function(x){return x.id===r.vehicleId});var os=rSt(r);
     var cd=h("div",{cls:"rc"});
     var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
-    var bg=h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap"}});
-    bg.appendChild(badge(s.e+" "+s.l,s.c));
-    bg.appendChild(badge(os==="done"?"✅ Готово":"🔧 В работе",os==="done"?"34,197,94":"249,115,22"));
-    tp.appendChild(bg);
-    var acts2=h("div",{s:{display:"flex",gap:"6px"}});
-    acts2.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"));
-    acts2.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){
-      if(confirm("Удалить?")){fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}))}
-    }},"🗑"));
-    tp.appendChild(acts2);
+    tp.appendChild(h("div",{s:{display:"flex",gap:"5px",flexWrap:"wrap"}},badge(s.e+" "+s.l,s.c),badge(os==="done"?"✅ Готово":"🔧 В работе",os==="done"?"34,197,94":"249,115,22")));
+    tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}))}}},"🗑")));
     cd.appendChild(tp);
     if(v)cd.appendChild(plate(v.plate||""));
-    if(r.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",margin:"6px 0"}},r.description));
-    var meta=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"6px"}});
-    meta.appendChild(h("span",{s:{fontSize:"12px",color:"#64748b"}},fD(r.date)));
+    if(r.description)cd.appendChild(h("div",{s:{fontSize:"13px",color:"#cbd5e1",lineHeight:"1.5",margin:"4px 0"}},r.description));
+    var meta=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"4px"}});
+    meta.append(h("span",{s:{fontSize:"12px",color:"#64748b"}},fD(r.date)));
     if(r.cost)meta.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},"€"+r.cost));
     cd.appendChild(meta);
-    // Freon
-    if(r.freonType||r.freonAmount){
-      var fr=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"6px",padding:"6px 10px",background:"rgba(6,182,212,.08)",borderRadius:"8px",border:"1px solid rgba(6,182,212,.15)"}});
-      fr.appendChild(h("span",{s:{fontSize:"14px"}},"🧊"));
-      if(r.freonType)fr.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#22d3ee"}},r.freonType));
-      if(r.freonAmount)fr.appendChild(h("span",{s:{fontSize:"12px",color:"#94a3b8"}},r.freonAmount+"г"));
-      cd.appendChild(fr);
-    }
-    // Photos
+    if(r.freonType||r.freonAmount){cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"4px",padding:"4px 8px",background:"rgba(6,182,212,.08)",borderRadius:"6px",border:"1px solid rgba(6,182,212,.15)",fontSize:"11px",color:"#22d3ee"}},"🧊 "+(r.freonType||"")+" "+(r.freonAmount?r.freonAmount+"г":"")))}
     if(r.photos&&r.photos.length)cd.appendChild(photoGrid(r.photos,false));
-    // Tasks
     (r.tasks||[]).forEach(function(t){
       var ti=h("div",{cls:"ti"});
       var th=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
-      th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
+      th.append(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
       var isDn=t.status==="done";
-      th.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDn?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDn?"#4ade80":"#fb923c"},onClick:function(){toggleTask(cl.id,r.id,t.id,isDn)}},isDn?"✅ Готово":"🔧 В работе"));
+      th.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDn?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDn?"#4ade80":"#fb923c"},onClick:function(){toggleTask(cl.id,r.id,t.id,isDn)}},isDn?"✅":"🔧"));
       ti.appendChild(th);
-      if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"4px"}},t.description));
+      if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"2px"}},t.description));
       if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
-      cd.appendChild(ti);
+      cd.appendChild(ti)
     });
-    cd.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"12px",fontWeight:"500",cursor:"pointer",marginTop:"8px"},onClick:function(){S.mod={t:"addT",cid:cl.id,rid:r.id};R()}},"+ Добавить задачу"));
-    ct.appendChild(cd);
+    cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
+    ct.appendChild(cd)
   });
 
   // Appointments
-  secTitle(ct,"📅 Записи ("+(cl.appointments||[]).length+")",hasVehicles?function(){S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()}:null);
-  (cl.appointments||[]).forEach(function(a){
-    var s2=getS(a.serviceType);
-    var v2=(cl.vehicles||[]).find(function(x){return x.id===a.vehicleId});
-    var cd2=h("div",{cls:"rc"});
-    var tp2=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
-    tp2.appendChild(badge("📅 "+fDT(a.date),"251,191,36"));
-    tp2.appendChild(h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"14px"},onClick:function(){
-      if(confirm("Удалить?")){fbArr(cl.id,"appointments",(cl.appointments||[]).filter(function(x){return x.id!==a.id}))}
-    }},"🗑"));
-    cd2.appendChild(tp2);
-    var rw=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
-    if(v2)rw.appendChild(plate(v2.plate||""));
-    rw.appendChild(badge(s2.e+" "+s2.l,s2.c));
-    cd2.appendChild(rw);
-    if(a.description)cd2.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"6px"}},a.description));
-    ct.appendChild(cd2);
-  });
+  secTitle(ct,"📅 Записи ("+(cl.appointments||[]).length+")",hasV?function(){S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()}:null);
+  (cl.appointments||[]).forEach(function(a){var s2=getS(a.serviceType);var v2=(cl.vehicles||[]).find(function(x){return x.id===a.vehicleId});var cd2=h("div",{cls:"rc"});cd2.append(h("div",{s:{display:"flex",justifyContent:"space-between"}},badge("📅 "+fDT(a.date),"251,191,36"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"appointments",(cl.appointments||[]).filter(function(x){return x.id!==a.id}))}}},"🗑")));if(v2)cd2.appendChild(plate(v2.plate||""));if(a.description)cd2.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"4px"}},a.description));ct.appendChild(cd2)});
 
-  // Delete client
-  ct.appendChild(h("div",{s:{marginTop:"20px",paddingTop:"20px",borderTop:"1px solid rgba(255,255,255,.06)"}},
-    h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:"13px",fontWeight:"500",cursor:"pointer"},onClick:function(){
-      if(confirm('Удалить "'+cl.name+'"?')){fbDel(cl.id);S.sel=null;R()}
-    }},"🗑 Удалить клиента")
-  ));
-  w.appendChild(ct);
-  return w;
+  ct.appendChild(h("div",{s:{marginTop:"20px",paddingTop:"16px",borderTop:"1px solid rgba(255,255,255,.06)"}},h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:"13px",fontWeight:"500",cursor:"pointer"},onClick:function(){if(confirm('Удалить "'+cl.name+'"?')){fbDel(cl.id);S.sel=null;R()}}},"🗑 Удалить")));
+  w.appendChild(ct);return w
 }
 
 // ═══ MODALS ═══
 function modalView(){
-  var m=S.mod;
-  var ov=h("div",{cls:"ov",onClick:function(){S.mod=null;R()}});
-  var md=h("div",{cls:"md",onClick:function(e){e.stopPropagation()}});
-  var map={addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addT:tForm,addA:aForm,editSt:stForm};
-  var fn=map[m.t];
-  if(fn)fn(md,m);
-  ov.appendChild(md);
-  return ov;
+  var m=S.mod;var ov=h("div",{cls:"ov",onClick:function(){S.mod=null;R()}});var md=h("div",{cls:"md",onClick:function(e){e.stopPropagation()}});
+  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm};
+  var fn=map[m.t];if(fn)fn(md,m);ov.appendChild(md);return ov
 }
 
-// ═══ CLIENT FORM ═══
+// ═══ PHYS PERSON QUICK FORM ═══
+function physForm(md,m){
+  mH(md,"Новый клиент (физ. лицо)");
+  var nI=h("input",{cls:"fi",placeholder:"Имя клиента",s:{marginBottom:"8px"}});
+  var phI=h("input",{cls:"fi",type:"tel",placeholder:"Телефон",s:{marginBottom:"8px"}});
+  var brI=h("input",{cls:"fi",placeholder:"Марка авто (Toyota Dyna)",s:{marginBottom:"8px"}});
+  var plI=h("input",{cls:"fi",placeholder:"Гос. номер",s:{marginBottom:"8px",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase"}});
+  var descI=h("textarea",{cls:"fi",placeholder:"Неисправность",s:{marginBottom:"8px"}});
+  var sT="refrigerator";
+  var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
+  var photos=[];
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var pG=h("div",{cls:"pg"});
+  function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
+
+  md.append(fg("Имя",nI),fg("Телефон",phI),fg("Марка авто",brI),fg("Гос. номер",plI),fg("Тип",tgW),fg("Неисправность",descI),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){
+      var name=nI.value.trim();if(!name)return;
+      var vid=gid();
+      fbAdd({name:name,phone:phI.value.trim(),clientType:"phys",vehicles:[{id:vid,plate:plI.value.trim().toUpperCase(),brand:brI.value.trim(),serviceType:sT,notes:"",photo:null}],repairs:descI.value.trim()?[{id:gid(),vehicleId:vid,date:new Date().toISOString().slice(0,10),serviceType:sT,description:descI.value.trim(),cost:"",photos:photos,tasks:[],status:"in_progress",freonType:"",freonAmount:""}]:[],appointments:[]}).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})
+    }},"Добавить клиента"))
+}
+
+// ═══ CLIENT FORM (legal) ═══
 function clForm(md,m){
-  var isE=m.t==="editCl";
-  mH(md,isE?"Редактировать клиента":"Новый клиент");
-  var nI=h("input",{cls:"fi",placeholder:"Имя / Компания",value:m.d?m.d.name||"":""});
-  var pI=h("input",{cls:"fi",type:"tel",placeholder:"+371 29 123 456",value:m.d?m.d.phone||"":""});
-  md.appendChild(fg("Имя / Компания",nI));
-  md.appendChild(fg("Телефон",pI));
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    var n=nI.value.trim();if(!n)return;
-    if(isE)fbUpd(m.d.id,{name:n,phone:pI.value.trim()});
-    else fbAdd({name:n,phone:pI.value.trim()});
-    S.mod=null;R();
-  }},isE?"Сохранить":"Добавить клиента"));
+  var isE=m.t==="editCl";mH(md,isE?"Редактировать":"Новая компания");
+  var nI=h("input",{cls:"fi",placeholder:"Название компании",value:m.d?m.d.name||"":""});
+  var pI=h("input",{cls:"fi",type:"tel",placeholder:"Телефон",value:m.d?m.d.phone||"":""});
+  md.append(fg("Компания",nI),fg("Телефон",pI),
+    h("button",{cls:"bp",onClick:function(){var n=nI.value.trim();if(!n)return;if(isE)fbUpd(m.d.id,{name:n,phone:pI.value.trim()});else fbAdd({name:n,phone:pI.value.trim(),clientType:"legal"});S.mod=null;R()}},isE?"Сохранить":"Добавить компанию"))
 }
 
 // ═══ VEHICLE FORM ═══
 function vForm(md,m){
-  var isE=m.t==="editV";
-  mH(md,isE?"Редактировать авто":"Добавить авто");
+  var isE=m.t==="editV";mH(md,isE?"Редактировать авто":"Добавить авто");
   var ph=m.d?m.d.photo||null:null;
   var fileIn=h("input",{type:"file",accept:"image/*",s:{display:"none"}});
-  fileIn.addEventListener("change",function(e){
-    var f=e.target.files[0];if(!f)return;
-    compress(f,400,0.5).then(function(data){ph=data;e.target.value="";renderPh()});
-  });
+  fileIn.addEventListener("change",function(e){var f=e.target.files[0];if(!f)return;compress(f,400,0.5).then(function(data){ph=data;e.target.value="";renderPh()})});
   var phW=h("div",null);
-  function renderPh(){
-    phW.innerHTML="";
-    if(ph){
-      var wrap=h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",overflow:"hidden",position:"relative",cursor:"pointer"},onClick:function(){fileIn.click()}});
-      wrap.appendChild(h("img",{src:ph,s:{width:"100%",height:"100%",objectFit:"cover"}}));
-      wrap.appendChild(h("button",{s:{position:"absolute",top:"6px",right:"6px",width:"24px",height:"24px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(e){e.stopPropagation();ph=null;renderPh()}},"×"));
-      phW.appendChild(wrap);
-    }else{
-      phW.appendChild(h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",cursor:"pointer",color:"#38bdf8",fontSize:"13px"},onClick:function(){fileIn.click()}},"📷 Добавить фото авто"));
-    }
-    phW.appendChild(fileIn);
-  }
-  renderPh();
-  var plI=h("input",{cls:"fi",placeholder:"LV GK-2847",value:m.d?m.d.plate||"":"",s:{fontFamily:"'JetBrains Mono',monospace",fontSize:"16px",fontWeight:"600",textTransform:"uppercase"}});
-  var brI=h("input",{cls:"fi",placeholder:"Mercedes Sprinter",value:m.d?m.d.brand||"":""});
-  var noI=h("textarea",{cls:"fi",placeholder:"Carrier Supra 950...",value:m.d?m.d.notes||"":""});
+  function renderPh(){phW.innerHTML="";if(ph){var wrap=h("div",{s:{width:"100%",height:"100px",borderRadius:"10px",overflow:"hidden",position:"relative",cursor:"pointer"},onClick:function(){fileIn.click()}},h("img",{src:ph,s:{width:"100%",height:"100%",objectFit:"cover"}}),h("button",{s:{position:"absolute",top:"4px",right:"4px",width:"22px",height:"22px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(e){e.stopPropagation();ph=null;renderPh()}},"×"));phW.appendChild(wrap)}else{phW.appendChild(h("div",{s:{width:"100%",height:"100px",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#38bdf8",fontSize:"13px"},onClick:function(){fileIn.click()}},"📷 Фото авто"))}phW.appendChild(fileIn)}renderPh();
+  var plI=h("input",{cls:"fi",placeholder:"Гос. номер",value:m.d?m.d.plate||"":"",s:{fontFamily:"'JetBrains Mono',monospace",fontSize:"16px",fontWeight:"600",textTransform:"uppercase"}});
+  var brI=h("input",{cls:"fi",placeholder:"Марка",value:m.d?m.d.brand||"":""});
+  var noI=h("textarea",{cls:"fi",placeholder:"Заметки...",value:m.d?m.d.notes||"":""});
   var sT=m.d?m.d.serviceType||"refrigerator":"refrigerator";
-  var tgW=h("div",null);
-  function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}
-  rTG();
-  md.appendChild(fg("Фото авто",phW));
-  md.appendChild(fg("Гос. номер",plI));
-  md.appendChild(fg("Марка / Модель",brI));
-  md.appendChild(fg("Тип оборудования",tgW));
-  md.appendChild(fg("Заметки",noI));
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    var p=plI.value.trim().toUpperCase();if(!p)return;
-    var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl){alert("Ошибка");return}
-    var vs=(cl.vehicles||[]).slice();
-    var vD={plate:p,brand:brI.value.trim(),serviceType:sT,notes:noI.value.trim(),photo:ph};
-    if(isE){var i=vs.findIndex(function(v){return v.id===m.d.id});if(i>=0)vs[i]=Object.assign({},vs[i],vD)}
-    else{vD.id=gid();vs.push(vD)}
-    fbArr(cl.id,"vehicles",vs);
-    S.mod=null;R();
-  }},isE?"Сохранить":"Добавить авто"));
+  var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
+  md.append(fg("Фото",phW),fg("Номер",plI),fg("Марка",brI),fg("Тип",tgW),fg("Заметки",noI),
+    h("button",{cls:"bp",onClick:function(){var p=plI.value.trim().toUpperCase();if(!p)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;var vs=(cl.vehicles||[]).slice();var vD={plate:p,brand:brI.value.trim(),serviceType:sT,notes:noI.value.trim(),photo:ph};if(isE){var i=vs.findIndex(function(v){return v.id===m.d.id});if(i>=0)vs[i]=Object.assign({},vs[i],vD)}else{vD.id=gid();vs.push(vD)}fbArr(cl.id,"vehicles",vs);S.mod=null;R()}},isE?"Сохранить":"Добавить"))
 }
 
 // ═══ REPAIR FORM ═══
 function rForm(md,m){
-  var isE=m.t==="editR";
-  mH(md,isE?"Редактировать заказ-наряд":"Новый заказ-наряд");
-  var vs=m.vs||[];
-  var sV=m.d?m.d.vehicleId||"":"";
-  if(!sV&&vs.length)sV=vs[0].id;
-  var sT=m.d?m.d.serviceType||"refrigerator":"refrigerator";
-  var photos=m.d?(m.d.photos||[]).slice():[];
-
-  var vS=h("select",{cls:"fi"});
-  vs.forEach(function(v){
-    var o=h("option",{value:v.id},v.plate+" — "+(v.brand||""));
-    if(v.id===sV)o.selected=true;
-    vS.appendChild(o);
-  });
-  vS.addEventListener("change",function(e){sV=e.target.value});
-
+  var isE=m.t==="editR";mH(md,isE?"Редактировать наряд":"Новый заказ-наряд");
+  var vs=m.vs||[];var sV=m.d?m.d.vehicleId||"":"";if(!sV&&vs.length)sV=vs[0].id;
+  var sT=m.d?m.d.serviceType||"refrigerator":"refrigerator";var photos=m.d?(m.d.photos||[]).slice():[];
+  var vS=h("select",{cls:"fi"});vs.forEach(function(v){var o=h("option",{value:v.id},v.plate+" "+(v.brand||""));if(v.id===sV)o.selected=true;vS.appendChild(o)});vS.addEventListener("change",function(e){sV=e.target.value});
   var dI=h("input",{cls:"fi",type:"date",value:m.d?m.d.date||new Date().toISOString().slice(0,10):new Date().toISOString().slice(0,10)});
-  var deI=h("textarea",{cls:"fi",placeholder:"Описание проблемы / работ...",value:m.d?m.d.description||"":""});
-  var cI=h("input",{cls:"fi",type:"number",placeholder:"850",value:m.d?m.d.cost||"":""});
-
-  // Freon
-  var frTypeS=h("select",{cls:"fi"});
-  FREONS.forEach(function(f){
-    var o=h("option",{value:f},f||"— не указан —");
-    if(f===(m.d?m.d.freonType||"":""))o.selected=true;
-    frTypeS.appendChild(o);
-  });
-  var frAmtI=h("input",{cls:"fi",type:"number",placeholder:"Количество в граммах",value:m.d?m.d.freonAmount||"":""});
-
-  var tgW=h("div",null);
-  function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}
-  rTG();
-
-  // Photos
-  var fIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
-  fIn.addEventListener("change",function(e){
-    var files=Array.from(e.target.files);
-    var promises=files.map(function(f){return compress(f)});
-    Promise.all(promises).then(function(results){
-      results.forEach(function(data){photos.push({id:gid(),data:data})});
-      e.target.value="";
-      rPh();
-    });
-  });
-  var pG=h("div",{cls:"pg"});
-  function rPh(){
-    pG.innerHTML="";
-    var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});
-    while(g.firstChild)pG.appendChild(g.firstChild);
-    pG.appendChild(addPhotoBtn(function(){fIn.click()}));
-  }
-  rPh();
-
-  if(vs.length>1)md.appendChild(fg("Автомобиль",vS));
-  md.appendChild(fg("Дата",dI));
-  md.appendChild(fg("Тип работы",tgW));
-  md.appendChild(fg("Описание",deI));
-  md.appendChild(fg("Стоимость (€)",cI));
-  md.appendChild(fg("🧊 Тип фреона",frTypeS));
-  md.appendChild(fg("🧊 Количество фреона (г)",frAmtI));
-  md.appendChild(fg("Фото неисправностей",pG,fIn));
-
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    var cid=m.cid;
-    var cl=S.cl.find(function(c){return c.id===cid});
-    if(!cl){alert("Ошибка: клиент не найден");return}
-    var rp=(cl.repairs||[]).slice();
-    var rD={
-      vehicleId:sV||(vs.length?vs[0].id:""),
-      date:dI.value,
-      serviceType:sT,
-      description:deI.value.trim(),
-      cost:cI.value,
-      freonType:frTypeS.value,
-      freonAmount:frAmtI.value,
-      photos:photos,
-      tasks:m.d?(m.d.tasks||[]):[]
-    };
-    if(isE){
-      var i=rp.findIndex(function(x){return x.id===m.d.id});
-      if(i>=0)rp[i]=Object.assign({},rp[i],rD);
-    }else{
-      rD.id=gid();
-      rD.status="in_progress";
-      rp.unshift(rD);
-    }
-    fbArr(cid,"repairs",rp).then(function(){
-      S.mod=null;R();
-    }).catch(function(err){
-      alert("Ошибка сохранения: "+err.message);
-    });
-  }},isE?"Сохранить":"Создать заказ-наряд"));
+  var deI=h("textarea",{cls:"fi",placeholder:"Описание...",value:m.d?m.d.description||"":""});
+  var cI=h("input",{cls:"fi",type:"number",placeholder:"Стоимость €",value:m.d?m.d.cost||"":""});
+  var frTS=h("select",{cls:"fi"});FREONS.forEach(function(f){var o=h("option",{value:f},f||"— фреон —");if(f===(m.d?m.d.freonType||"":""))o.selected=true;frTS.appendChild(o)});
+  var frAI=h("input",{cls:"fi",type:"number",placeholder:"Кол-во (г)",value:m.d?m.d.freonAmount||"":""});
+  var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
+  if(vs.length>1)md.appendChild(fg("Авто",vS));
+  md.append(fg("Дата",dI),fg("Тип",tgW),fg("Описание",deI),fg("Стоимость €",cI),fg("Фреон",frTS),fg("Кол-во фреона (г)",frAI),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){var cid=m.cid;var cl=S.cl.find(function(c){return c.id===cid});if(!cl){alert("Ошибка");return}
+      var rp=(cl.repairs||[]).slice();var rD={vehicleId:sV||(vs.length?vs[0].id:""),date:dI.value,serviceType:sT,description:deI.value.trim(),cost:cI.value,freonType:frTS.value,freonAmount:frAI.value,photos:photos,tasks:m.d?(m.d.tasks||[]):[]};
+      if(isE){var i=rp.findIndex(function(x){return x.id===m.d.id});if(i>=0)rp[i]=Object.assign({},rp[i],rD)}else{rD.id=gid();rD.status="in_progress";rp.unshift(rD)}
+      fbArr(cid,"repairs",rp).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},isE?"Сохранить":"Создать"))
 }
 
-// ═══ TASK FORM ═══
-function tForm(md,m){
-  mH(md,"Добавить задачу / доп. неисправность");
-  var sl=sL();
-  var assignee=S.u.uid;
-  var aS=h("select",{cls:"fi"});
-  var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
-  sl.forEach(function(s){
-    var o=h("option",{value:s.id},s.name+(roles[s.role]||""));
-    if(s.id===assignee)o.selected=true;
-    aS.appendChild(o);
-  });
+// ═══ REPAIR TASK FORM ═══
+function repairTaskForm(md,m){
+  mH(md,"Добавить задачу");
+  var sl=sL();var assignee=S.u.uid;
+  var aS=h("select",{cls:"fi"});var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
+  sl.forEach(function(s){var o=h("option",{value:s.id},s.name+(roles[s.role]||""));if(s.id===assignee)o.selected=true;aS.appendChild(o)});
   aS.addEventListener("change",function(e){assignee=e.target.value});
-  var dI=h("textarea",{cls:"fi",placeholder:"Обнаружена утечка, трещина в трубке..."});
-  var photos=[];
-  var fIn=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
-  fIn.addEventListener("change",function(e){
-    var promises=Array.from(e.target.files).map(function(f){return compress(f)});
-    Promise.all(promises).then(function(results){
-      results.forEach(function(data){photos.push({id:gid(),data:data})});
-      e.target.value="";rPh();
-    });
-  });
-  var pG=h("div",{cls:"pg"});
-  function rPh(){
-    pG.innerHTML="";
-    var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});
-    while(g.firstChild)pG.appendChild(g.firstChild);
-    pG.appendChild(addPhotoBtn(function(){fIn.click()}));
-  }
-  rPh();
+  var dI=h("textarea",{cls:"fi",placeholder:"Описание задачи..."});
+  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
+  md.append(fg("Исполнитель",aS),fg("Описание",dI),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){var desc=dI.value.trim();if(!desc)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;
+      var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===m.rid});if(ri<0)return;
+      var ts=(rp[ri].tasks||[]).slice();ts.push({id:gid(),assignee:assignee,description:desc,status:"in_progress",photos:photos,createdAt:new Date().toISOString()});
+      rp[ri]=Object.assign({},rp[ri],{tasks:ts});
+      fbArr(cl.id,"repairs",rp).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},
+    "Добавить"))
+}
 
-  md.appendChild(fg("Назначить сотруднику",aS));
-  md.appendChild(fg("Описание задачи",dI));
-  md.appendChild(fg("Фото",pG,fIn));
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    var desc=dI.value.trim();if(!desc)return;
-    var cl=S.cl.find(function(c){return c.id===m.cid});
-    if(!cl){alert("Ошибка: клиент не найден");return}
-    var rp=(cl.repairs||[]).slice();
-    var ri=rp.findIndex(function(x){return x.id===m.rid});
-    if(ri<0){alert("Ошибка: заказ-наряд не найден");return}
-    var ts=(rp[ri].tasks||[]).slice();
-    ts.push({id:gid(),assignee:assignee,description:desc,status:"in_progress",photos:photos,createdAt:new Date().toISOString()});
-    rp[ri]=Object.assign({},rp[ri],{tasks:ts});
-    fbArr(cl.id,"repairs",rp).then(function(){
-      S.mod=null;R();
-    }).catch(function(err){alert("Ошибка: "+err.message)});
-  }},"Добавить задачу"));
+// ═══ SERVICE TASK / PROJECT FORM ═══
+function svcTaskForm(md,m){
+  var taskType=m.taskType||"task";
+  mH(md,taskType==="project"?"Новый проект":"Новая задача сервиса");
+  var ttI=h("input",{cls:"fi",placeholder:"Название"});
+  var descI=h("textarea",{cls:"fi",placeholder:"Описание..."});
+  var sl=sL();var assignee=S.u.uid;
+  var aS=h("select",{cls:"fi"});var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
+  sl.forEach(function(s){var o=h("option",{value:s.id},s.name+(roles[s.role]||""));if(s.id===assignee)o.selected=true;aS.appendChild(o)});
+  aS.addEventListener("change",function(e){assignee=e.target.value});
+  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
+  // Type toggle
+  var typeRow=h("div",{s:{display:"flex",gap:"8px",marginBottom:"14px"}});
+  typeRow.append(h("button",{cls:"tb"+(taskType==="task"?" a":""),onClick:function(){taskType="task";typeRow.children[0].className="tb a";typeRow.children[1].className="tb"}},"📝 Задача"),h("button",{cls:"tb"+(taskType==="project"?" a":""),onClick:function(){taskType="project";typeRow.children[0].className="tb";typeRow.children[1].className="tb a"}},"📐 Проект"));
+
+  md.append(typeRow,fg("Название",ttI),fg("Описание",descI),fg("Исполнитель",aS),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){var title=ttI.value.trim();if(!title)return;
+      fbAddTask({title:title,description:descI.value.trim(),assignee:assignee,taskType:taskType,status:"in_progress",photos:photos,createdBy:S.u.uid}).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},
+    "Создать"))
 }
 
 // ═══ APPOINTMENT FORM ═══
 function aForm(md,m){
-  mH(md,"Записать на визит");
-  var vs=m.vs||[];
-  var sV=vs.length?vs[0].id:"";
-  var sT="refrigerator";
-  var vS=h("select",{cls:"fi"});
-  vs.forEach(function(v){vS.appendChild(h("option",{value:v.id},v.plate+" — "+(v.brand||"")))});
-  vS.addEventListener("change",function(e){sV=e.target.value});
-  var dI=h("input",{cls:"fi",type:"datetime-local"});
-  var deI=h("textarea",{cls:"fi",placeholder:"Плановая диагностика..."});
-  var tgW=h("div",null);
-  function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}
-  rTG();
-  if(vs.length>1)md.appendChild(fg("Автомобиль",vS));
-  md.appendChild(fg("Дата и время",dI));
-  md.appendChild(fg("Тип работы",tgW));
-  md.appendChild(fg("Описание",deI));
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    if(!dI.value)return;
-    var cl=S.cl.find(function(c){return c.id===m.cid});
-    if(!cl){alert("Ошибка");return}
-    var ap=(cl.appointments||[]).slice();
-    ap.push({id:gid(),vehicleId:sV,date:dI.value,serviceType:sT,description:deI.value.trim()});
-    fbArr(cl.id,"appointments",ap).then(function(){S.mod=null;R()});
-  }},"Записать"));
+  mH(md,"Запись на визит");var vs=m.vs||[];var sV=vs.length?vs[0].id:"";var sT="refrigerator";
+  var vS=h("select",{cls:"fi"});vs.forEach(function(v){vS.appendChild(h("option",{value:v.id},v.plate+" "+(v.brand||"")))});vS.addEventListener("change",function(e){sV=e.target.value});
+  var dI=h("input",{cls:"fi",type:"datetime-local"});var deI=h("textarea",{cls:"fi",placeholder:"Описание..."});
+  var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
+  if(vs.length>1)md.appendChild(fg("Авто",vS));
+  md.append(fg("Дата",dI),fg("Тип",tgW),fg("Описание",deI),
+    h("button",{cls:"bp",onClick:function(){if(!dI.value)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;var ap=(cl.appointments||[]).slice();ap.push({id:gid(),vehicleId:sV,date:dI.value,serviceType:sT,description:deI.value.trim()});fbArr(cl.id,"appointments",ap).then(function(){S.mod=null;R()})}},
+    "Записать"))
 }
 
 // ═══ STAFF FORM ═══
 function stForm(md,m){
-  mH(md,"Редактировать сотрудника");
+  mH(md,"Сотрудник");
   var nI=h("input",{cls:"fi",placeholder:"Имя",value:m.d?m.d.name||"":""});
   var rS=h("select",{cls:"fi"});
-  [{v:"admin",l:"👑 Админ"},{v:"manager",l:"📋 Менеджер"},{v:"mechanic",l:"🔧 Механик"}].forEach(function(r){
-    var o=h("option",{value:r.v},r.l);
-    if(r.v===(m.d?m.d.role:""))o.selected=true;
-    rS.appendChild(o);
-  });
-  md.appendChild(fg("Имя",nI));
-  md.appendChild(fg("Роль",rS));
-  md.appendChild(h("button",{cls:"bp",onClick:function(){
-    var n=nI.value.trim();if(!n)return;
-    fbStaff(m.d.id,{name:n,role:rS.value});
-    S.mod=null;R();
-  }},"Сохранить"));
+  [{v:"admin",l:"👑 Админ"},{v:"manager",l:"📋 Менеджер"},{v:"mechanic",l:"🔧 Механик"}].forEach(function(r){var o=h("option",{value:r.v},r.l);if(r.v===(m.d?m.d.role:""))o.selected=true;rS.appendChild(o)});
+  md.append(fg("Имя",nI),fg("Роль",rS),h("button",{cls:"bp",onClick:function(){var n=nI.value.trim();if(!n)return;fbStaff(m.d.id,{name:n,role:rS.value});S.mod=null;R()}},"Сохранить"))
 }
 
 // ═══ AUTH ═══
-onAuthStateChanged(auth,function(user){
-  S.u=user;S.ld=false;S.ll=false;
-  if(user){subCl();subSt()}
-  else{if(u1){u1();u1=null}if(u2){u2();u2=null}S.cl=[];S.st=[]}
-  R();
-});
+onAuthStateChanged(auth,function(user){S.u=user;S.ld=false;S.ll=false;if(user){subCl();subSt();subTasks()}else{if(u1){u1();u1=null}if(u2){u2();u2=null}if(u3){u3();u3=null}S.cl=[];S.st=[];S.tasks=[]}R()});
 R();
 </script>
 </body>
