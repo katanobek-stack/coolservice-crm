@@ -119,14 +119,14 @@ var u1=null,u2=null,u3=null;
 // ═══ FIREBASE ═══
 function subCl(){if(u1)u1();u1=onSnapshot(query(collection(db,"clients"),orderBy("createdAt","desc")),function(s){S.cl=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
 function subSt(){if(u2)u2();u2=onSnapshot(collection(db,"staff"),function(s){S.st=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
-function subTasks(){if(u3)u3();u3=onSnapshot(query(collection(db,"servicetasks"),orderBy("createdAt","desc")),function(s){S.tasks=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
+function subTasks(){if(u3)u3();u3=onSnapshot(collection(db,"servicetasks"),function(s){S.tasks=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
 
 function fbAdd(d){var obj=Object.assign({vehicles:[],repairs:[],appointments:[],createdAt:serverTimestamp()},d);return addDoc(collection(db,"clients"),obj)}
 function fbUpd(i,d){return updateDoc(doc(db,"clients",i),d)}
 function fbDel(i){return deleteDoc(doc(db,"clients",i))}
 function fbArr(cid,f,a){var o={};o[f]=a;return updateDoc(doc(db,"clients",cid),o)}
 function fbStaff(uid,d){return setDoc(doc(db,"staff",uid),d,{merge:true})}
-function fbAddTask(d){return addDoc(collection(db,"servicetasks"),Object.assign({},d,{createdAt:serverTimestamp()}))}
+function fbAddTask(d){console.log("Creating task:",d);return addDoc(collection(db,"servicetasks"),Object.assign({},d,{createdAt:serverTimestamp()}))}
 function fbUpdTask(id,d){return updateDoc(doc(db,"servicetasks",id),d)}
 function fbDelTask(id){return deleteDoc(doc(db,"servicetasks",id))}
 
