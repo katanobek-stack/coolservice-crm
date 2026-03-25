@@ -210,11 +210,18 @@ function renderRepairCard(cl,r,isHistory){
   // Tasks
   (r.tasks||[]).forEach(function(t){
     var ti=h("div",{cls:"ti",s:isCancelled?{opacity:"0.6"}:{}});
-    var th=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
-    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},"👤 "+sN(t.assignee)));
+    var th=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginBottom:"4px"}});
+    // Delete × on the left (only for active, non-history)
+    if(!isHistory&&!isCancelled){
+      th.appendChild(h("button",{s:{width:"18px",height:"18px",borderRadius:"50%",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0",padding:"0"},onClick:function(){
+        if(!confirm("Удалить задачу?"))return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===r.id});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cl.id,"repairs",rp);
+      }},"×"));
+    }
+    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa",flex:"1"}},"👤 "+sN(t.assignee)));
     var isDn=t.status==="done";
     if(!isHistory&&!isCancelled){
-      // Freon tasks: no instant toggle
       if(t.freonTask){
         th.appendChild(h("span",{s:{padding:"4px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",background:isDn?"rgba(34,197,94,.15)":"rgba(6,182,212,.15)",color:isDn?"#4ade80":"#22d3ee"}},isDn?"✅":"🧊"));
       }else{
@@ -253,35 +260,31 @@ function renderRepairCard(cl,r,isHistory){
       ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginTop:"2px"}},"🧊 "+t.freonKg+" кг"));
     }
     if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
-    // Delete task button
-    if(!isHistory&&!isCancelled){
-      ti.appendChild(h("button",{s:{padding:"2px 6px",borderRadius:"4px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"9px",cursor:"pointer",marginTop:"3px",float:"right"},onClick:function(){
-        if(!confirm("Удалить задачу?"))return;
-        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===r.id});if(ri<0)return;
-        var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cl.id,"repairs",rp);
-      }},"🗑"));
-    }
     cd.appendChild(ti);
   });
-  // Action buttons for active repairs only
+  // Action buttons
+  var btnRow=h("div",{s:{display:"flex",gap:"5px",marginTop:"6px",flexWrap:"wrap"}});
   if(!isHistory&&!isCancelled&&os==="in_progress"){
-    var btnRow=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px",flexWrap:"wrap"}});
-    btnRow.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
-    btnRow.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(148,163,184,.25)",background:"rgba(148,163,184,.08)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){
+    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"10px",cursor:"pointer"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
+    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(148,163,184,.25)",background:"rgba(148,163,184,.08)",color:"#94a3b8",fontSize:"10px",cursor:"pointer"},onClick:function(){
       if(!confirm("Клиент отказался от ремонта?"))return;
       var rp=(cl.repairs||[]).slice();
       var ri=rp.findIndex(function(x){return x.id===r.id});
       if(ri>=0){rp[ri]=Object.assign({},rp[ri],{status:"cancelled"});fbArr(cl.id,"repairs",rp)}
-    }},"🚫 Клиент отказался"));
-    cd.appendChild(btnRow);
-  }
-  // Delete repair button (always available)
-  if(!isCancelled||isHistory){
-    cd.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"6px"},onClick:function(){
-      if(!confirm("Удалить заказ-наряд? Это действие нельзя отменить."))return;
+    }},"🚫 Отказ"));
+    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer"},onClick:function(){
+      if(!confirm("Удалить заказ-наряд?"))return;
       fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
-    }},"🗑 Удалить наряд"));
+    }},"Удалить"));
   }
+  // For history and cancelled - just delete
+  if(isHistory||isCancelled){
+    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer"},onClick:function(){
+      if(!confirm("Удалить заказ-наряд?"))return;
+      fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
+    }},"🗑 Удалить"));
+  }
+  if(btnRow.children.length)cd.appendChild(btnRow);
   // Cancelled — restore button
   if(isCancelled){
     cd.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(249,115,22,.3)",background:"rgba(249,115,22,.08)",color:"#fb923c",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(){
