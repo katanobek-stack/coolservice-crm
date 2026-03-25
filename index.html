@@ -134,7 +134,65 @@ function sN(uid){var s=S.st.find(function(x){return x.id===uid});return s?s.name
 function sL(){return S.st.length?S.st:[{id:S.u?S.u.uid:"",name:S.u?S.u.email.split("@")[0]:"Я"}]}
 function myRole(){var p=S.st.find(function(x){return x.id===S.u.uid});return p?p.role:"mechanic"}
 function canManage(){var r=myRole();return r==="admin"||r==="manager"}
-function rSt(r){if(r.status==="cancelled")return"cancelled";var t=r.tasks||[];if(!t.length)return r.status||"in_progress";return t.every(function(x){return x.status==="done"})?"done":"in_progress"}
+function rSt(r){if(r.status==="cancelled")return"cancelled";var t=r.tasks||[];if(!t.length)return r.status||"in_progress";return t.every(function(x){return tSt(x)==="done"})?"done":"in_progress"}
+
+// Multi-assignee helpers
+function getAssignees(t){if(t.assignees&&t.assignees.length)return t.assignees;if(t.assignee)return[t.assignee];return[]}
+function getDoneBy(t){return t.doneBy||[]}
+function tSt(t){
+  // Task status considering multi-assignee
+  if(t.status==="done"&&!t.assignees)return"done"; // legacy
+  var a=getAssignees(t);var d=getDoneBy(t);
+  if(!a.length)return t.status||"in_progress";
+  return a.every(function(uid){return d.indexOf(uid)>=0})?"done":"in_progress";
+}
+function isMyTask(t){var uid=S.u?S.u.uid:"";var a=getAssignees(t);return a.indexOf(uid)>=0}
+function assigneeNames(t){return getAssignees(t).map(function(uid){return sN(uid)}).join(", ")}
+function toggleMultiTask(t,cid,rid,tid){
+  // Toggle current user's done status in multi-assignee task
+  var uid=S.u.uid;
+  var cl=S.cl.find(function(c){return c.id===cid});if(!cl)return;
+  var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===rid});if(ri<0)return;
+  var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===tid});if(ti<0)return;
+  var task=ts[ti];var doneBy=(task.doneBy||[]).slice();
+  var idx=doneBy.indexOf(uid);
+  if(idx>=0)doneBy.splice(idx,1);else doneBy.push(uid);
+  var allDone=getAssignees(task).every(function(u){return doneBy.indexOf(u)>=0});
+  ts[ti]=Object.assign({},task,{doneBy:doneBy,status:allDone?"done":"in_progress"});
+  rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cid,"repairs",rp);
+}
+// Multi-select staff widget
+function makeStaffPicker(selectedIds){
+  var wrap=h("div",{s:{display:"flex",flexDirection:"column",gap:"4px"}});
+  sL().forEach(function(s){
+    var roles={admin:" 👑",manager:" 📋",mechanic:" 🔧"};
+    var isChecked=selectedIds.indexOf(s.id)>=0;
+    var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"6px 10px",borderRadius:"8px",border:"1px solid "+(isChecked?"rgba(56,189,248,.3)":"rgba(255,255,255,.06)"),background:isChecked?"rgba(56,189,248,.08)":"rgba(255,255,255,.02)",cursor:"pointer",transition:"all .15s"},onClick:function(){
+      var idx=selectedIds.indexOf(s.id);
+      if(idx>=0)selectedIds.splice(idx,1);else selectedIds.push(s.id);
+      renderPicker();
+    }});
+    row.appendChild(h("div",{s:{width:"20px",height:"20px",borderRadius:"6px",border:"2px solid "+(isChecked?"#38bdf8":"rgba(255,255,255,.15)"),background:isChecked?"#0ea5e9":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",color:"#fff",flexShrink:"0"}},isChecked?"✓":""));
+    row.appendChild(h("span",{s:{fontSize:"13px",color:isChecked?"#f1f5f9":"#94a3b8",fontWeight:isChecked?"600":"400"}},s.name+(roles[s.role]||"")));
+    wrap.appendChild(row);
+  });
+  function renderPicker(){
+    wrap.innerHTML="";
+    sL().forEach(function(s){
+      var roles={admin:" 👑",manager:" 📋",mechanic:" 🔧"};
+      var isC=selectedIds.indexOf(s.id)>=0;
+      var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"6px 10px",borderRadius:"8px",border:"1px solid "+(isC?"rgba(56,189,248,.3)":"rgba(255,255,255,.06)"),background:isC?"rgba(56,189,248,.08)":"rgba(255,255,255,.02)",cursor:"pointer",transition:"all .15s"},onClick:function(){
+        var idx2=selectedIds.indexOf(s.id);
+        if(idx2>=0)selectedIds.splice(idx2,1);else selectedIds.push(s.id);
+        renderPicker();
+      }});
+      row.appendChild(h("div",{s:{width:"20px",height:"20px",borderRadius:"6px",border:"2px solid "+(isC?"#38bdf8":"rgba(255,255,255,.15)"),background:isC?"#0ea5e9":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",color:"#fff",flexShrink:"0"}},isC?"✓":""));
+      row.appendChild(h("span",{s:{fontSize:"13px",color:isC?"#f1f5f9":"#94a3b8",fontWeight:isC?"600":"400"}},s.name+(roles[s.role]||"")));
+      wrap.appendChild(row);
+    });
+  }
+  return wrap;
+}
 
 // ═══ DOM ═══
 function h(tag,attrs){var el=document.createElement(tag);var children=Array.prototype.slice.call(arguments,2);if(attrs){Object.keys(attrs).forEach(function(k){var v=attrs[k];if(k==="cls")el.className=v;else if(k==="s"&&typeof v==="object")Object.assign(el.style,v);else if(k==="value")el.value=v;else if(k.substring(0,2)==="on")el.addEventListener(k.substring(2).toLowerCase(),v);else el.setAttribute(k,v)})}children.forEach(function(c){if(Array.isArray(c))c.forEach(add);else add(c)});function add(c){if(c!=null&&c!==false)el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c)}return el}
@@ -219,7 +277,7 @@ function renderRepairCard(cl,r,isHistory){
         var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cl.id,"repairs",rp);
       }},"×"));
     }
-    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa",flex:"1"}},"👤 "+sN(t.assignee)));
+    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa",flex:"1"}},"👤 "+assigneeNames(t)));
     var isDn=t.status==="done";
     if(!isHistory&&!isCancelled){
       if(t.freonTask){
@@ -308,11 +366,28 @@ function renderRepairCard(cl,r,isHistory){
 }
 
 function toggleTask(cid,rid,tid,isDone){
+  var uid=S.u.uid;
   var cl=S.cl.find(function(c){return c.id===cid});if(!cl)return;
   var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===rid});if(ri<0)return;
   var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===tid});if(ti<0)return;
-  ts[ti]=Object.assign({},ts[ti],{status:isDone?"in_progress":"done"});
-  rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cid,"repairs",rp)
+  var task=ts[ti];
+  if(task.assignees&&task.assignees.length){
+    // Multi-assignee: toggle current user in doneBy
+    var doneBy=(task.doneBy||[]).slice();
+    var idx=doneBy.indexOf(uid);
+    if(isDone){
+      // Remove from doneBy if reverting
+      if(idx>=0)doneBy.splice(idx,1);
+    }else{
+      if(idx<0)doneBy.push(uid);
+    }
+    var allDone=task.assignees.every(function(u){return doneBy.indexOf(u)>=0});
+    ts[ti]=Object.assign({},task,{doneBy:doneBy,status:allDone?"done":"in_progress"});
+  }else{
+    // Legacy single assignee
+    ts[ti]=Object.assign({},task,{status:isDone?"in_progress":"done"});
+  }
+  rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cid,"repairs",rp);
 }
 
 // ═══ RENDER ═══
@@ -385,8 +460,8 @@ function mainView(){
   // Count active tasks for current user
   var myActiveCount=0;
   var uid=S.u?S.u.uid:"";
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid&&t.status!=="done")myActiveCount++})})});
-  S.tasks.forEach(function(t){if(t.assignee===uid&&t.status!=="done")myActiveCount++});
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")myActiveCount++})})});
+  S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")myActiveCount++});
 
   tabs.forEach(function(n){
     var label=n.t;
@@ -464,7 +539,7 @@ function myTasksTab(ct){
   var hasAnything=false;
 
   // ═══ MY PERSONAL TASKS (service tasks + projects) ═══
-  var myActiveSvc=S.tasks.filter(function(t){return t.assignee===uid&&t.status!=="done"});
+  var myActiveSvc=S.tasks.filter(function(t){return isMyTask(t)&&tSt(t)!=="done"});
   if(myActiveSvc.length){
     hasAnything=true;
     secTitle(ct,"📝 Мои задачи и проекты ("+myActiveSvc.length+")");
@@ -475,7 +550,7 @@ function myTasksTab(ct){
   var myRepairTasks=[];
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
     if(rSt(r)==="cancelled")return;
-    var myTasks=(r.tasks||[]).filter(function(t){return t.assignee===uid&&t.status!=="done"});
+    var myTasks=(r.tasks||[]).filter(function(t){return isMyTask(t)&&tSt(t)!=="done"});
     if(myTasks.length){
       myRepairTasks.push({cid:c.id,cn:c.name,r:r,tasks:myTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
     }
@@ -515,7 +590,7 @@ function buildTaskCard(t){
     // Regular tasks: toggle on click
     var statusBtn;
     if(t.type==="repair"){
-      statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isDone)}},isDone?"✅":"🔧");
+      statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleMultiTask(t,t.cid,t.rid,t.id)}},isDone?"✅":"🔧");
     }else{
       statusBtn=h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧");
     }
@@ -677,9 +752,13 @@ function statsTab(ct){
   var svcTasks=S.tasks.filter(function(t){return t.taskType==="task"});
   var svcProjects=S.tasks.filter(function(t){return t.taskType==="project"});
 
+  var activeTasksCount=svcTasks.filter(function(t){return t.status!=="done"}).length;
+  var activeProjectsCount=svcProjects.filter(function(t){return t.status!=="done"}).length;
+  var totalInWork=inProgR.length+activeTasksCount+activeProjectsCount;
+
   // Grid stats
   var grid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"14px"}});
-  [{v:inProgR.length,l:"🔧 В работе"},{v:doneR,l:"✅ Выполнено"},{v:svcTasks.filter(function(t){return t.status!=="done"}).length,l:"📝 Задачи"},{v:"€"+tRev.toLocaleString(),l:"💰 Выручка"}].forEach(function(s){
+  [{v:totalInWork,l:"🔧 Всего в работе"},{v:doneR,l:"✅ Выполнено"},{v:activeTasksCount,l:"📝 Задачи"},{v:activeProjectsCount,l:"📐 Проекты"}].forEach(function(s){
     grid.appendChild(h("div",{s:{background:"linear-gradient(135deg,rgba(15,32,64,.9),rgba(19,45,94,.6))",borderRadius:"12px",padding:"14px",border:"1px solid rgba(56,189,248,.12)",textAlign:"center"}},
       h("div",{s:{fontSize:"24px",fontWeight:"700",background:"linear-gradient(90deg,#38bdf8,#22d3ee)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},""+s.v),
       h("div",{s:{fontSize:"10px",color:"#64748b",fontWeight:"500",marginTop:"2px",textTransform:"uppercase",letterSpacing:".05em"}},s.l)))});
@@ -707,7 +786,7 @@ function statsTab(ct){
       cd.appendChild(top2);
       if(r.description){var desc=r.description.length>60?r.description.substring(0,60)+"...":r.description;cd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"2px"}},desc))}
       if(totalTasks){cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"6px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:doneTasks===totalTasks?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(doneTasks/totalTasks*100)+"%"}})))}
-      if(tasks.length){var ar=h("div",{s:{display:"flex",gap:"4px",marginTop:"6px",flexWrap:"wrap"}});tasks.forEach(function(t2){var dn=t2.status==="done";ar.appendChild(h("span",{s:{fontSize:"10px",padding:"2px 6px",borderRadius:"6px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},sN(t2.assignee)+(dn?" ✅":" 🔧")))});cd.appendChild(ar)}
+      if(tasks.length){var ar=h("div",{s:{display:"flex",gap:"4px",marginTop:"6px",flexWrap:"wrap"}});tasks.forEach(function(t2){var dn=t2.status==="done";ar.appendChild(h("span",{s:{fontSize:"10px",padding:"2px 6px",borderRadius:"6px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},assigneeNames(t2)+(dn?" ✅":" 🔧")))});cd.appendChild(ar)}
       // PHOTO ADD from stats
       var photoWrap=h("div",{s:{marginTop:"6px"},onClick:function(e){e.stopPropagation()}});
       photoWrap.appendChild(inlineAddPhotoBtn("Добавить фото",function(results){
@@ -862,28 +941,36 @@ function statsTab(ct){
   secTitle(ct,"👥 По сотрудникам");
   // Build stats: per person -> machines, repair tasks, service tasks, projects
   var ss={};
+  function ensureSS(uid){if(!ss[uid])ss[uid]={repairs:{},repTasksDone:0,repTasksTotal:0,svcTasksDone:0,svcTasksTotal:0,projectsDone:0,projectsTotal:0}}
   // Repair data
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
     (r.tasks||[]).forEach(function(t){
-      if(!ss[t.assignee])ss[t.assignee]={repairs:{},repTasksDone:0,repTasksTotal:0,svcTasksDone:0,svcTasksTotal:0,projectsDone:0,projectsTotal:0};
-      ss[t.assignee].repTasksTotal++;
-      if(t.status==="done")ss[t.assignee].repTasksDone++;
-      var key=c.id+"_"+r.id;
-      if(!ss[t.assignee].repairs[key])ss[t.assignee].repairs[key]={done:true};
-      if(t.status!=="done")ss[t.assignee].repairs[key].done=false;
+      var assignees=getAssignees(t);
+      var isDone=tSt(t)==="done";
+      assignees.forEach(function(uid){
+        ensureSS(uid);
+        ss[uid].repTasksTotal++;
+        if(isDone)ss[uid].repTasksDone++;
+        var key=c.id+"_"+r.id;
+        if(!ss[uid].repairs[key])ss[uid].repairs[key]={done:true};
+        if(!isDone)ss[uid].repairs[key].done=false;
+      });
     })
   })});
   // Service tasks & projects
   S.tasks.forEach(function(t){
-    if(!t.assignee)return;
-    if(!ss[t.assignee])ss[t.assignee]={repairs:{},repTasksDone:0,repTasksTotal:0,svcTasksDone:0,svcTasksTotal:0,projectsDone:0,projectsTotal:0};
-    if(t.taskType==="project"){
-      ss[t.assignee].projectsTotal++;
-      if(t.status==="done")ss[t.assignee].projectsDone++;
-    }else{
-      ss[t.assignee].svcTasksTotal++;
-      if(t.status==="done")ss[t.assignee].svcTasksDone++;
-    }
+    var assignees=getAssignees(t);
+    if(!assignees.length)return;
+    assignees.forEach(function(uid){
+      ensureSS(uid);
+      if(t.taskType==="project"){
+        ss[uid].projectsTotal++;
+        if(t.status==="done")ss[uid].projectsDone++;
+      }else{
+        ss[uid].svcTasksTotal++;
+        if(t.status==="done")ss[uid].svcTasksDone++;
+      }
+    });
   });
   var sa=Object.entries(ss).map(function(item){
     var uid=item[0],st=item[1];
@@ -949,13 +1036,13 @@ function statsTab(ct){
     var doneTasks=[];
     S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
       (r.tasks||[]).forEach(function(t){
-        if(t.assignee===st.uid&&t.status==="done"){
+        if(getAssignees(t).indexOf(st.uid)>=0&&tSt(t)==="done"){
           doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||"",comment:t.workComment||""});
         }
       });
     })});
     S.tasks.forEach(function(t){
-      if(t.assignee===st.uid&&t.status==="done"){
+      if(getAssignees(t).indexOf(st.uid)>=0&&tSt(t)==="done"){
         doneTasks.push({desc:t.title||t.description||"",date:"",cn:"",type:t.taskType});
       }
     });
@@ -989,6 +1076,9 @@ function statsTab(ct){
 function renderSvcTaskCard(t){
   var isDone=t.status==="done";
   var isProject=t.taskType==="project";
+  var subtasks=t.subtasks||[];
+  var subDone=subtasks.filter(function(s){return s.status==="done"}).length;
+  // Auto-status: done only if all subtasks done (if there are any)
   var cd=h("div",{cls:"rc"});
   var tp=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
   var left=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
@@ -997,9 +1087,68 @@ function renderSvcTaskCard(t){
   tp.appendChild(left);
   tp.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){fbUpdTask(t.id,{status:isDone?"in_progress":"done"})}},isDone?"✅":"🔧"));
   cd.appendChild(tp);
-  cd.appendChild(h("div",{s:{fontSize:"11px",color:"#a78bfa",marginBottom:"4px"}},"👤 "+sN(t.assignee)));
+  cd.appendChild(h("div",{s:{fontSize:"11px",color:"#a78bfa",marginBottom:"4px"}},"👤 "+assigneeNames(t)));
   if(t.description)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.4"}},t.description));
   if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
+
+  // Progress bar if subtasks exist
+  if(subtasks.length){
+    cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"6px"}},
+      h("div",{s:{height:"4px",flex:"1",borderRadius:"2px",background:"rgba(255,255,255,.06)",overflow:"hidden"}},
+        h("div",{s:{height:"100%",borderRadius:"2px",background:subDone===subtasks.length?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(subDone/subtasks.length*100)+"%"}})),
+      h("span",{s:{fontSize:"10px",color:"#64748b"}},subDone+"/"+subtasks.length)
+    ));
+  }
+
+  // Render subtasks
+  subtasks.forEach(function(st){
+    var ti=h("div",{cls:"ti"});
+    var th=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginBottom:"4px"}});
+    // Delete × (admin only)
+    if(myRole()==="admin"&&!isDone){
+      th.appendChild(h("button",{s:{width:"18px",height:"18px",borderRadius:"50%",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0",padding:"0"},onClick:function(){
+        if(!confirm("Удалить подзадачу?"))return;
+        var newSubs=subtasks.filter(function(x){return x.id!==st.id});
+        fbUpdTask(t.id,{subtasks:newSubs});
+      }},"×"));
+    }
+    th.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa",flex:"1"}},"👤 "+assigneeNames(st)));
+    var stDone=st.status==="done";
+    th.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",fontSize:"11px",fontWeight:"600",cursor:"pointer",border:"none",background:stDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:stDone?"#4ade80":"#fb923c"},onClick:function(){
+      var newSubs=subtasks.slice();var si=newSubs.findIndex(function(x){return x.id===st.id});
+      if(si>=0){newSubs[si]=Object.assign({},newSubs[si],{status:stDone?"in_progress":"done"});fbUpdTask(t.id,{subtasks:newSubs})}
+    }},stDone?"✅":"🔧"));
+    ti.appendChild(th);
+    if(st.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"2px"}},st.description));
+    if(st.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{fontSize:"10px",color:"#a78bfa",fontWeight:"600"}},"📝 "),st.workComment));
+    if(st.photos&&st.photos.length)ti.appendChild(photoGrid(st.photos,false));
+    // Action buttons for active subtasks
+    if(!stDone&&!isDone){
+      var subAct=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"4px"}});
+      subAct.appendChild(inlineAddPhotoBtn("Фото",function(results){
+        var newSubs=subtasks.slice();var si=newSubs.findIndex(function(x){return x.id===st.id});
+        if(si<0)return;var ph=(newSubs[si].photos||[]).slice();
+        results.forEach(function(d){ph.push({id:gid(),data:d})});
+        newSubs[si]=Object.assign({},newSubs[si],{photos:ph});fbUpdTask(t.id,{subtasks:newSubs});
+      }));
+      // Description button
+      var descExp=false;
+      var descP=h("div",{s:{display:"none",width:"100%",marginTop:"6px"}});
+      var descIn=h("textarea",{cls:"fi",placeholder:"Что сделано...",value:st.workComment||"",s:{fontSize:"12px",minHeight:"50px"}});
+      descP.appendChild(descIn);
+      var mic=makeMicBtn(descIn);if(mic)descP.appendChild(mic);
+      descP.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"none",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px"},onClick:function(){
+        var newSubs=subtasks.slice();var si=newSubs.findIndex(function(x){return x.id===st.id});
+        if(si>=0){newSubs[si]=Object.assign({},newSubs[si],{workComment:descIn.value.trim()});fbUpdTask(t.id,{subtasks:newSubs})}
+      }},"💾 Сохранить"));
+      subAct.appendChild(h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(139,92,246,.2)",background:"rgba(139,92,246,.05)",color:"#a78bfa",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){descExp=!descExp;descP.style.display=descExp?"block":"none"}},"📝 Описание"));
+      ti.appendChild(subAct);
+      ti.appendChild(descP);
+    }
+    cd.appendChild(ti);
+  });
+
+  // Action buttons
   if(!isDone){
     var wrap=h("div",{s:{marginTop:"6px",display:"flex",gap:"6px",flexWrap:"wrap"}});
     wrap.appendChild(inlineAddPhotoBtn("Фото",function(results){
@@ -1007,8 +1156,12 @@ function renderSvcTaskCard(t){
       results.forEach(function(data){photos.push({id:gid(),data:data})});
       fbUpdTask(t.id,{photos:photos})
     }));
-    if(canManage()){wrap.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer"},onClick:function(){if(confirm("Удалить?"))fbDelTask(t.id)}},"🗑"))}
-    cd.appendChild(wrap)
+    // Add subtask button
+    if(canManage()){
+      wrap.appendChild(h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){S.mod={t:"addSubTask",taskId:t.id,existingSubs:subtasks};R()}},"+ Подзадача"));
+    }
+    if(myRole()==="admin"){wrap.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer"},onClick:function(){if(confirm("Удалить?"))fbDelTask(t.id)}},"🗑"))}
+    cd.appendChild(wrap);
   }
   return cd
 }
@@ -1114,7 +1267,7 @@ function detailView(){
 // ═══ MODALS ═══
 function modalView(){
   var m=S.mod;var ov=h("div",{cls:"ov",onClick:function(){S.mod=null;R()}});var md=h("div",{cls:"md",onClick:function(e){e.stopPropagation()}});
-  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm};
+  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm,addSubTask:subTaskForm};
   var fn=map[m.t];if(fn)fn(md,m);ov.appendChild(md);return ov
 }
 
@@ -1236,19 +1389,9 @@ function rForm(md,m){
     frAI=h("input",{cls:"fi",type:"number",placeholder:"Кол-во (кг)",value:m.d?m.d.freonAmount||"":"",step:"0.1"});
   }
 
-  // Mechanic selector
-  var assignee=S.u.uid;
-  var sl=sL();
-  var aS=h("select",{cls:"fi"});
-  var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
-  sl.forEach(function(s){
-    var o=document.createElement("option");
-    o.value=s.id;
-    o.textContent=s.name+(roles[s.role]||"");
-    if(s.id===assignee)o.selected=true;
-    aS.appendChild(o);
-  });
-  aS.addEventListener("change",function(e){assignee=e.target.value});
+  // Mechanic selector (multi)
+  var selectedMechs=[S.u.uid];
+  var mechPicker=makeStaffPicker(selectedMechs);
 
   var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
   var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
@@ -1256,9 +1399,8 @@ function rForm(md,m){
   if(vs.length>1)md.appendChild(fg("Авто",vS));
   md.appendChild(fg("Дата",dI));
   md.appendChild(fg("Тип работы",tgW));
-  md.appendChild(fg("🔧 Назначить механика",aS));
+  md.appendChild(fg("🔧 Назначить (можно нескольких)",mechPicker));
   md.appendChild(fgWithMic("Описание",deI));
-  md.appendChild(fg("Стоимость €",cI));
   md.appendChild(fg("🧊 Марка фреона",frTS));
   if(isE&&frAI)md.appendChild(fg("🧊 Кол-во фреона (кг)",frAI));
   md.appendChild(fg("Фото",pG,fi));
@@ -1272,7 +1414,7 @@ function rForm(md,m){
       date:dI.value,
       serviceType:sT,
       description:deI.value.trim(),
-      cost:cI.value,
+      cost:"",
       freonType:freonType,
       freonAmount:isE&&frAI?frAI.value:"",
       photos:photos,
@@ -1281,11 +1423,13 @@ function rForm(md,m){
     if(!isE){
       rD.id=gid();
       rD.status="in_progress";
-      // Auto-create freon task assigned to selected mechanic
+      // Auto-create freon task assigned to selected mechanics
       var frLabel=freonType?freonType:"не указан";
       rD.tasks=[{
         id:gid(),
-        assignee:assignee,
+        assignees:selectedMechs.slice(),
+        assignee:selectedMechs[0],
+        doneBy:[],
         description:"🧊 Заправка фреоном "+frLabel,
         status:"in_progress",
         photos:[],
@@ -1305,17 +1449,15 @@ function rForm(md,m){
 // ═══ REPAIR TASK FORM ═══
 function repairTaskForm(md,m){
   mH(md,"Добавить задачу");
-  var sl=sL();var assignee=S.u.uid;
-  var aS=h("select",{cls:"fi"});var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
-  sl.forEach(function(s){var o=h("option",{value:s.id},s.name+(roles[s.role]||""));if(s.id===assignee)o.selected=true;aS.appendChild(o)});
-  aS.addEventListener("change",function(e){assignee=e.target.value});
+  var selectedIds=[S.u.uid];
+  var picker=makeStaffPicker(selectedIds);
   var dI=h("textarea",{cls:"fi",placeholder:"Описание задачи..."});
   var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
-  md.append(fg("Исполнитель",aS),fgWithMic("Описание",dI),fg("Фото",pG,fi),
-    h("button",{cls:"bp",onClick:function(){var desc=dI.value.trim();if(!desc)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;
+  md.append(fg("Исполнители (можно несколько)",picker),fgWithMic("Описание",dI),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){var desc=dI.value.trim();if(!desc||!selectedIds.length)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;
       var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===m.rid});if(ri<0)return;
-      var ts=(rp[ri].tasks||[]).slice();ts.push({id:gid(),assignee:assignee,description:desc,status:"in_progress",photos:photos,createdAt:new Date().toISOString()});
+      var ts=(rp[ri].tasks||[]).slice();ts.push({id:gid(),assignees:selectedIds.slice(),doneBy:[],description:desc,status:"in_progress",photos:photos,createdAt:new Date().toISOString()});
       rp[ri]=Object.assign({},rp[ri],{tasks:ts});
       fbArr(cl.id,"repairs",rp).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},
     "Добавить"))
@@ -1327,20 +1469,37 @@ function svcTaskForm(md,m){
   mH(md,taskType==="project"?"Новый проект":"Новая задача сервиса");
   var ttI=h("input",{cls:"fi",placeholder:"Название"});
   var descI=h("textarea",{cls:"fi",placeholder:"Описание..."});
-  var sl=sL();var assignee=S.u.uid;
-  var aS=h("select",{cls:"fi"});var roles={admin:" (Админ)",manager:" (Менеджер)",mechanic:" (Механик)"};
-  sl.forEach(function(s){var o=h("option",{value:s.id},s.name+(roles[s.role]||""));if(s.id===assignee)o.selected=true;aS.appendChild(o)});
-  aS.addEventListener("change",function(e){assignee=e.target.value});
+  var selectedIds=[S.u.uid];
+  var picker=makeStaffPicker(selectedIds);
   var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
-  // Type toggle
   var typeRow=h("div",{s:{display:"flex",gap:"8px",marginBottom:"14px"}});
   typeRow.append(h("button",{cls:"tb"+(taskType==="task"?" a":""),onClick:function(){taskType="task";typeRow.children[0].className="tb a";typeRow.children[1].className="tb"}},"📝 Задача"),h("button",{cls:"tb"+(taskType==="project"?" a":""),onClick:function(){taskType="project";typeRow.children[0].className="tb";typeRow.children[1].className="tb a"}},"📐 Проект"));
 
-  md.append(typeRow,fg("Название",ttI),fgWithMic("Описание",descI),fg("Исполнитель",aS),fg("Фото",pG,fi),
-    h("button",{cls:"bp",onClick:function(){var title=ttI.value.trim();if(!title)return;
-      fbAddTask({title:title,description:descI.value.trim(),assignee:assignee,taskType:taskType,status:"in_progress",photos:photos,createdBy:S.u.uid}).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},
+  md.append(typeRow,fg("Название",ttI),fgWithMic("Описание",descI),fg("Исполнители",picker),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){var title=ttI.value.trim();if(!title||!selectedIds.length)return;
+      fbAddTask({title:title,description:descI.value.trim(),assignees:selectedIds.slice(),assignee:selectedIds[0],taskType:taskType,status:"in_progress",photos:photos,createdBy:S.u.uid,subtasks:[]}).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)})}},
     "Создать"))
+}
+
+// ═══ SUBTASK FORM (for service tasks/projects) ═══
+function subTaskForm(md,m){
+  mH(md,"Добавить подзадачу");
+  var selectedIds=[S.u.uid];
+  var picker=makeStaffPicker(selectedIds);
+  var dI=h("textarea",{cls:"fi",placeholder:"Описание подзадачи..."});
+  var photos=[];
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var pG=h("div",{cls:"pg"});
+  function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
+  md.append(fg("Исполнители",picker),fgWithMic("Описание",dI),fg("Фото",pG,fi),
+    h("button",{cls:"bp",onClick:function(){
+      var desc=dI.value.trim();if(!desc)return;
+      var subs=(m.existingSubs||[]).slice();
+      subs.push({id:gid(),assignees:selectedIds.slice(),assignee:selectedIds[0],doneBy:[],description:desc,status:"in_progress",photos:photos,workComment:"",createdAt:new Date().toISOString()});
+      fbUpdTask(m.taskId,{subtasks:subs}).then(function(){S.mod=null;R()}).catch(function(e){alert("Ошибка: "+e.message)});
+    }},"Добавить подзадачу"));
 }
 
 // ═══ APPOINTMENT FORM ═══
@@ -1370,8 +1529,8 @@ function checkNotifications(){
   if(!S.u)return;
   var uid=S.u.uid;
   var count=0;
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(t.assignee===uid&&t.status!=="done")count++})})});
-  S.tasks.forEach(function(t){if(t.assignee===uid&&t.status!=="done")count++});
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")count++})})});
+  S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")count++});
   if(lastTaskCount>=0&&count>lastTaskCount){
     playNotifSound();
   }
