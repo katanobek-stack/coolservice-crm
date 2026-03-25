@@ -232,6 +232,7 @@ function renderRepairCard(cl,r,isHistory){
     }
     ti.appendChild(th);
     if(t.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:isCancelled?"#475569":"#cbd5e1",marginTop:"2px"}},t.description));
+    if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)",lineHeight:"1.4"}},h("span",{s:{fontSize:"10px",color:"#a78bfa",fontWeight:"600"}},"📝 "),t.workComment));
     // Freon kg panel inside repair card
     if(t.freonTask&&!isHistory&&!isCancelled){
       if(isDn&&t.freonKg){
@@ -484,7 +485,7 @@ function myTasksTab(ct){
     secTitle(ct,"🔧 Мои ремонты в работе ("+myRepairTasks.length+")");
     myRepairTasks.forEach(function(item){
       item.tasks.forEach(function(t){
-        ct.appendChild(buildTaskCard({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||""}));
+        ct.appendChild(buildTaskCard({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||""}));
       });
     });
   }
@@ -574,10 +575,16 @@ function buildTaskCard(t){
   }
 
   if(t.rd)cd.appendChild(h("div",{s:{fontSize:"12px",color:"#64748b",marginTop:"4px"}},fD(t.rd)));
+  // Show work comment if exists
+  if(t.workComment){
+    cd.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",marginTop:"6px",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",border:"1px solid rgba(139,92,246,.12)",lineHeight:"1.5"}},
+      h("span",{s:{fontSize:"10px",color:"#a78bfa",fontWeight:"600"}},"📝 Отчёт: "),t.workComment));
+  }
   if(t.photos&&t.photos.length)cd.appendChild(photoGrid(t.photos,false));
-  // Add photo button for active tasks
+  // Add photo and description buttons for active tasks
   if(!isDone){
-    cd.appendChild(inlineAddPhotoBtn("Добавить фото",function(results){
+    var actRow=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"4px",alignItems:"flex-start"}});
+    actRow.appendChild(inlineAddPhotoBtn("Фото",function(results){
       var newPhotos=(t.photos||[]).slice();
       results.forEach(function(data){newPhotos.push({id:gid(),data:data})});
       if(t.type==="repair"){
@@ -589,8 +596,39 @@ function buildTaskCard(t){
         fbUpdTask(t.id,{photos:newPhotos})
       }
     }));
+    // Add description/comment button
+    var descExpanded=false;
+    var descPanel=h("div",{s:{display:"none",width:"100%",marginTop:"6px"}});
+    var descInput=h("textarea",{cls:"fi",placeholder:"Что сделано: заменил компрессор, залил масло...",value:t.workComment||"",s:{fontSize:"13px",minHeight:"60px"}});
+    descPanel.appendChild(descInput);
+    var micBtn=makeMicBtn(descInput);
+    if(micBtn)descPanel.appendChild(micBtn);
+    var descBtnRow=h("div",{s:{display:"flex",gap:"6px",marginTop:"6px"}});
+    descBtnRow.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"none",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",fontSize:"12px",fontWeight:"600",cursor:"pointer",flex:"1"},onClick:function(){
+      var comment=descInput.value.trim();
+      if(t.type==="repair"){
+        var cl2=S.cl.find(function(c){return c.id===t.cid});if(!cl2)return;
+        var rp2=(cl2.repairs||[]).slice();var ri2=rp2.findIndex(function(r){return r.id===t.rid});if(ri2<0)return;
+        var ts2=(rp2[ri2].tasks||[]).slice();var ti2=ts2.findIndex(function(x){return x.id===t.id});if(ti2<0)return;
+        ts2[ti2]=Object.assign({},ts2[ti2],{workComment:comment});rp2[ri2]=Object.assign({},rp2[ri2],{tasks:ts2});fbArr(t.cid,"repairs",rp2);
+      }else{
+        fbUpdTask(t.id,{workComment:comment});
+      }
+    }},"💾 Сохранить"));
+    descBtnRow.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.03)",color:"#94a3b8",fontSize:"12px",cursor:"pointer"},onClick:function(){descExpanded=false;descPanel.style.display="none"}},"Отмена"));
+    descPanel.appendChild(descBtnRow);
+
+    var toggleDescBtn=h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(139,92,246,.2)",background:"rgba(139,92,246,.05)",color:"#a78bfa",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){
+      descExpanded=!descExpanded;
+      descPanel.style.display=descExpanded?"block":"none";
+      if(descExpanded)descInput.focus();
+    }},"📝 Описание");
+    actRow.appendChild(toggleDescBtn);
+    cd.appendChild(actRow);
+    cd.appendChild(descPanel);
+
     if(t.type==="repair"&&!t.freonTask){
-      cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:"4px"},onClick:function(){S.mod={t:"addRepairTask",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
+      cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px"},onClick:function(){S.mod={t:"addRepairTask",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
     }
   }
   // Delete task button (admin only)
@@ -912,7 +950,7 @@ function statsTab(ct){
     S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
       (r.tasks||[]).forEach(function(t){
         if(t.assignee===st.uid&&t.status==="done"){
-          doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||""});
+          doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||"",comment:t.workComment||""});
         }
       });
     })});
@@ -934,6 +972,7 @@ function statsTab(ct){
         var line=dt.cn?(dt.cn+" — "):"";
         line+=dt.desc;
         if(dt.freonKg)line+=" 🧊"+dt.freonKg+"кг";
+        if(dt.comment)line+=" — 📝"+dt.comment;
         if(dt.type==="project")line="📐 "+line;
         if(dt.date)line=fD(dt.date)+" · "+line;
         row.textContent=line;
