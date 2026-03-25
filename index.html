@@ -26,9 +26,9 @@ textarea.fi{min-height:75px;resize:vertical}
 .ti{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-top:8px}
 .pg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
 .pt{width:100%;aspect-ratio:1;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.08);cursor:pointer}
-.nb{display:flex;gap:1px;padding:0 4px;background:#0d1f38;border-bottom:1px solid rgba(56,189,248,.08);flex-shrink:0;overflow-x:auto}
-.nb button{flex:1;min-width:0;padding:11px 3px 9px;border:none;background:0;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;border-bottom:2px solid transparent;white-space:nowrap}
-.nb button.a{color:#38bdf8;font-weight:600;border-bottom-color:#38bdf8}
+.nb{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px 8px;background:#0d1f38;border-bottom:1px solid rgba(56,189,248,.08);flex-shrink:0}
+.nb button{padding:12px 4px;border:none;background:rgba(255,255,255,.03);color:#64748b;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;border-radius:10px;white-space:nowrap;border:1px solid rgba(255,255,255,.05);transition:all .15s}
+.nb button.a{color:#38bdf8;font-weight:700;background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.25)}
 .tb{padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#94a3b8;font-size:13px;font-weight:500;cursor:pointer;text-align:center}
 .tb.a{border-color:#38bdf8;background:rgba(56,189,248,.1);color:#38bdf8;font-weight:600}
 .iv{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:500;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -263,28 +263,30 @@ function renderRepairCard(cl,r,isHistory){
     cd.appendChild(ti);
   });
   // Action buttons
-  var btnRow=h("div",{s:{display:"flex",gap:"5px",marginTop:"6px",flexWrap:"wrap"}});
   if(!isHistory&&!isCancelled&&os==="in_progress"){
-    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"10px",cursor:"pointer"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача"));
-    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(148,163,184,.25)",background:"rgba(148,163,184,.08)",color:"#94a3b8",fontSize:"10px",cursor:"pointer"},onClick:function(){
+    // Task button - separate row
+    cd.appendChild(h("div",{s:{marginTop:"6px"}},h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача")));
+    // Danger buttons - right aligned, separate row
+    var dangerRow=h("div",{s:{display:"flex",gap:"5px",marginTop:"6px",justifyContent:"flex-end"}});
+    dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(148,163,184,.2)",background:"rgba(148,163,184,.05)",color:"#64748b",fontSize:"9px",cursor:"pointer"},onClick:function(){
       if(!confirm("Клиент отказался от ремонта?"))return;
       var rp=(cl.repairs||[]).slice();
       var ri=rp.findIndex(function(x){return x.id===r.id});
       if(ri>=0){rp[ri]=Object.assign({},rp[ri],{status:"cancelled"});fbArr(cl.id,"repairs",rp)}
     }},"🚫 Отказ"));
-    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer"},onClick:function(){
+    dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.12)",background:"rgba(239,68,68,.03)",color:"#94a3b8",fontSize:"9px",cursor:"pointer"},onClick:function(){
       if(!confirm("Удалить заказ-наряд?"))return;
       fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
     }},"Удалить"));
+    cd.appendChild(dangerRow);
   }
-  // For history and cancelled - just delete
+  // For history and cancelled - just delete, right aligned
   if(isHistory||isCancelled){
-    btnRow.appendChild(h("button",{s:{padding:"5px 8px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer"},onClick:function(){
+    cd.appendChild(h("div",{s:{display:"flex",justifyContent:"flex-end",marginTop:"6px"}},h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.12)",background:"rgba(239,68,68,.03)",color:"#94a3b8",fontSize:"9px",cursor:"pointer"},onClick:function(){
       if(!confirm("Удалить заказ-наряд?"))return;
       fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
-    }},"🗑 Удалить"));
+    }},"🗑 Удалить")));
   }
-  if(btnRow.children.length)cd.appendChild(btnRow);
   // Cancelled — restore button
   if(isCancelled){
     cd.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(249,115,22,.3)",background:"rgba(249,115,22,.08)",color:"#fb923c",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(){
