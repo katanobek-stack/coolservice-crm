@@ -211,8 +211,8 @@ function renderRepairCard(cl,r,isHistory){
   (r.tasks||[]).forEach(function(t){
     var ti=h("div",{cls:"ti",s:isCancelled?{opacity:"0.6"}:{}});
     var th=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginBottom:"4px"}});
-    // Delete × on the left (only for active, non-history)
-    if(!isHistory&&!isCancelled){
+    // Delete × on the left (admin only)
+    if(!isHistory&&!isCancelled&&myRole()==="admin"){
       th.appendChild(h("button",{s:{width:"18px",height:"18px",borderRadius:"50%",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"11px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0",padding:"0"},onClick:function(){
         if(!confirm("Удалить задачу?"))return;
         var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===r.id});if(ri<0)return;
@@ -267,21 +267,23 @@ function renderRepairCard(cl,r,isHistory){
     // Task button - separate row
     cd.appendChild(h("div",{s:{marginTop:"6px"}},h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){S.mod={t:"addRepairTask",cid:cl.id,rid:r.id};R()}},"+ Задача")));
     // Danger buttons - right aligned, separate row
-    var dangerRow=h("div",{s:{display:"flex",gap:"5px",marginTop:"6px",justifyContent:"flex-end"}});
-    dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(148,163,184,.2)",background:"rgba(148,163,184,.05)",color:"#64748b",fontSize:"9px",cursor:"pointer"},onClick:function(){
-      if(!confirm("Клиент отказался от ремонта?"))return;
-      var rp=(cl.repairs||[]).slice();
-      var ri=rp.findIndex(function(x){return x.id===r.id});
-      if(ri>=0){rp[ri]=Object.assign({},rp[ri],{status:"cancelled"});fbArr(cl.id,"repairs",rp)}
-    }},"🚫 Отказ"));
-    dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.12)",background:"rgba(239,68,68,.03)",color:"#94a3b8",fontSize:"9px",cursor:"pointer"},onClick:function(){
-      if(!confirm("Удалить заказ-наряд?"))return;
-      fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
-    }},"Удалить"));
-    cd.appendChild(dangerRow);
+    if(myRole()==="admin"){
+      var dangerRow=h("div",{s:{display:"flex",gap:"5px",marginTop:"6px",justifyContent:"flex-end"}});
+      dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(148,163,184,.2)",background:"rgba(148,163,184,.05)",color:"#64748b",fontSize:"9px",cursor:"pointer"},onClick:function(){
+        if(!confirm("Клиент отказался от ремонта?"))return;
+        var rp=(cl.repairs||[]).slice();
+        var ri=rp.findIndex(function(x){return x.id===r.id});
+        if(ri>=0){rp[ri]=Object.assign({},rp[ri],{status:"cancelled"});fbArr(cl.id,"repairs",rp)}
+      }},"🚫 Отказ"));
+      dangerRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.12)",background:"rgba(239,68,68,.03)",color:"#94a3b8",fontSize:"9px",cursor:"pointer"},onClick:function(){
+        if(!confirm("Удалить заказ-наряд?"))return;
+        fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
+      }},"Удалить"));
+      cd.appendChild(dangerRow);
+    }
   }
-  // For history and cancelled - just delete, right aligned
-  if(isHistory||isCancelled){
+  // For history and cancelled - just delete (admin only)
+  if((isHistory||isCancelled)&&myRole()==="admin"){
     cd.appendChild(h("div",{s:{display:"flex",justifyContent:"flex-end",marginTop:"6px"}},h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.12)",background:"rgba(239,68,68,.03)",color:"#94a3b8",fontSize:"9px",cursor:"pointer"},onClick:function(){
       if(!confirm("Удалить заказ-наряд?"))return;
       fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}));
@@ -487,24 +489,6 @@ function myTasksTab(ct){
     });
   }
 
-  // ═══ MY RECENTLY COMPLETED (last 5) ═══
-  var myDoneTasks=[];
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
-    (r.tasks||[]).forEach(function(t){
-      if(t.assignee===uid&&t.status==="done"){
-        myDoneTasks.push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||""});
-      }
-    });
-  })});
-  var myDoneSvc=S.tasks.filter(function(t){return t.assignee===uid&&t.status==="done"});
-  var allDone=myDoneTasks.concat(myDoneSvc.map(function(t){return Object.assign({},t,{type:t.taskType||"task"})}));
-  if(allDone.length){
-    hasAnything=true;
-    secTitle(ct,"✅ Недавно выполнено ("+allDone.length+")");
-    allDone.slice(0,5).forEach(function(t){ct.appendChild(buildTaskCard(t))});
-    if(allDone.length>5)ct.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",textAlign:"center",padding:"6px"}},"...и ещё "+(allDone.length-5)));
-  }
-
   if(!hasAnything){
     ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
   }
@@ -609,8 +593,8 @@ function buildTaskCard(t){
       cd.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"4px",marginLeft:"4px"},onClick:function(){S.mod={t:"addRepairTask",cid:t.cid,rid:t.rid};R()}},"+ Доп. неисправность"));
     }
   }
-  // Delete task button (for repair tasks)
-  if(t.type==="repair"){
+  // Delete task button (admin only)
+  if(t.type==="repair"&&myRole()==="admin"){
     cd.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"4px",float:"right"},onClick:function(){
       if(!confirm("Удалить задачу?"))return;
       var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
@@ -922,6 +906,43 @@ function statsTab(ct){
     }
 
     card.appendChild(rows);
+
+    // Expandable completed tasks history
+    var doneTasks=[];
+    S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+      (r.tasks||[]).forEach(function(t){
+        if(t.assignee===st.uid&&t.status==="done"){
+          doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||""});
+        }
+      });
+    })});
+    S.tasks.forEach(function(t){
+      if(t.assignee===st.uid&&t.status==="done"){
+        doneTasks.push({desc:t.title||t.description||"",date:"",cn:"",type:t.taskType});
+      }
+    });
+    if(doneTasks.length){
+      var expd=false;
+      var histContent=h("div",{s:{display:"none",marginTop:"6px"}});
+      var histBtn=h("button",{s:{width:"100%",padding:"5px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.02)",color:"#64748b",fontSize:"10px",cursor:"pointer",marginTop:"6px",textAlign:"center"},onClick:function(){
+        expd=!expd;
+        histContent.style.display=expd?"block":"none";
+        histBtn.textContent=expd?"▲ Скрыть историю":"▼ Выполненные задачи ("+doneTasks.length+")";
+      }},"▼ Выполненные задачи ("+doneTasks.length+")");
+      doneTasks.forEach(function(dt){
+        var row=h("div",{s:{padding:"4px 8px",fontSize:"11px",color:"#94a3b8",borderBottom:"1px solid rgba(255,255,255,.03)"}});
+        var line=dt.cn?(dt.cn+" — "):"";
+        line+=dt.desc;
+        if(dt.freonKg)line+=" 🧊"+dt.freonKg+"кг";
+        if(dt.type==="project")line="📐 "+line;
+        if(dt.date)line=fD(dt.date)+" · "+line;
+        row.textContent=line;
+        histContent.appendChild(row);
+      });
+      card.appendChild(histBtn);
+      card.appendChild(histContent);
+    }
+
     ct.appendChild(card);
   })
 }
@@ -1047,7 +1068,7 @@ function detailView(){
   secTitle(ct,"📅 Записи ("+(cl.appointments||[]).length+")",hasV?function(){S.mod={t:"addA",cid:cl.id,vs:cl.vehicles};R()}:null);
   (cl.appointments||[]).forEach(function(a){var s2=getS(a.serviceType);var v2=(cl.vehicles||[]).find(function(x){return x.id===a.vehicleId});var cd2=h("div",{cls:"rc"});cd2.append(h("div",{s:{display:"flex",justifyContent:"space-between"}},badge("📅 "+fDT(a.date),"251,191,36"),h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"appointments",(cl.appointments||[]).filter(function(x){return x.id!==a.id}))}}},"🗑")));if(v2)cd2.appendChild(plate(v2.plate||""));if(a.description)cd2.appendChild(h("div",{s:{fontSize:"13px",color:"#94a3b8",marginTop:"4px"}},a.description));ct.appendChild(cd2)});
 
-  ct.appendChild(h("div",{s:{marginTop:"20px",paddingTop:"16px",borderTop:"1px solid rgba(255,255,255,.06)"}},h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:"13px",fontWeight:"500",cursor:"pointer"},onClick:function(){if(confirm('Удалить "'+cl.name+'"?')){fbDel(cl.id);S.sel=null;R()}}},"🗑 Удалить")));
+  if(myRole()==="admin"){ct.appendChild(h("div",{s:{marginTop:"20px",paddingTop:"16px",borderTop:"1px solid rgba(255,255,255,.06)"}},h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:"13px",fontWeight:"500",cursor:"pointer"},onClick:function(){if(confirm('Удалить "'+cl.name+'"?')){fbDel(cl.id);S.sel=null;R()}}},"🗑 Удалить")));}
   w.appendChild(ct);return w
 }
 
