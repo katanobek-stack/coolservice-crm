@@ -453,7 +453,7 @@ function mainView(){
   setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
   // Nav
   var nav=h("div",{cls:"nb"});
-  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда"}];
+  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"stats",t:"📊 Сводка"},{id:"team",t:"👥 Команда",mgr:true}];
   var isMgr=canManage();
   var tabs=allTabs.filter(function(t){return!t.mgr||isMgr});
   // Fix tab if current tab not visible for this role
