@@ -140,11 +140,12 @@ function rSt(r){if(r.status==="cancelled")return"cancelled";var t=r.tasks||[];if
 function getAssignees(t){if(t.assignees&&t.assignees.length)return t.assignees;if(t.assignee)return[t.assignee];return[]}
 function getDoneBy(t){return t.doneBy||[]}
 function tSt(t){
-  // Task status considering multi-assignee
-  if(t.status==="done"&&!t.assignees)return"done"; // legacy
+  // Task status: if status explicitly set to done, respect it
+  if(t.status==="done")return"done";
+  // Multi-assignee: check doneBy
   var a=getAssignees(t);var d=getDoneBy(t);
-  if(!a.length)return t.status||"in_progress";
-  return a.every(function(uid){return d.indexOf(uid)>=0})?"done":"in_progress";
+  if(a.length&&d.length&&a.every(function(uid){return d.indexOf(uid)>=0}))return"done";
+  return t.status||"in_progress";
 }
 function isMyTask(t){var uid=S.u?S.u.uid:"";var a=getAssignees(t);return a.indexOf(uid)>=0}
 function assigneeNames(t){return getAssignees(t).map(function(uid){return sN(uid)}).join(", ")}
