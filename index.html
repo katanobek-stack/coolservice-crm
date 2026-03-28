@@ -374,24 +374,32 @@ function renderRepairCard(cl,r,isHistory){
 
 function toggleTask(cid,rid,tid,isDone){
   var uid=S.u.uid;
+  var isAdm=myRole()==="admin"||myRole()==="manager";
   var cl=S.cl.find(function(c){return c.id===cid});if(!cl)return;
   var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===rid});if(ri<0)return;
   var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===tid});if(ti<0)return;
   var task=ts[ti];
-  if(task.assignees&&task.assignees.length){
-    // Multi-assignee: toggle current user in doneBy
+  if(task.assignees&&task.assignees.length>1){
     var doneBy=(task.doneBy||[]).slice();
-    var idx=doneBy.indexOf(uid);
-    if(isDone){
-      // Remove from doneBy if reverting
-      if(idx>=0)doneBy.splice(idx,1);
+    var myIdx=doneBy.indexOf(uid);
+    var myDone=myIdx>=0;
+
+    if(myDone&&isAdm){
+      // Admin already done — force close for ALL
+      doneBy=task.assignees.slice();
+      ts[ti]=Object.assign({},task,{doneBy:doneBy,status:"done"});
+    }else if(myDone&&!isAdm){
+      // Regular user reverting own
+      doneBy.splice(myIdx,1);
+      ts[ti]=Object.assign({},task,{doneBy:doneBy,status:"in_progress"});
     }else{
-      if(idx<0)doneBy.push(uid);
+      // Mark self as done
+      doneBy.push(uid);
+      var allDone=task.assignees.every(function(u){return doneBy.indexOf(u)>=0});
+      ts[ti]=Object.assign({},task,{doneBy:doneBy,status:allDone?"done":"in_progress"});
     }
-    var allDone=task.assignees.every(function(u){return doneBy.indexOf(u)>=0});
-    ts[ti]=Object.assign({},task,{doneBy:doneBy,status:allDone?"done":"in_progress"});
   }else{
-    // Legacy single assignee
+    // Single assignee or legacy
     ts[ti]=Object.assign({},task,{status:isDone?"in_progress":"done"});
   }
   rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(cid,"repairs",rp);
