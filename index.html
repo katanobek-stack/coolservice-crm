@@ -572,41 +572,40 @@ function myTasksTab(ct){
 
   // ═══ ALL STAFF TASKS (admin/manager only) — grouped by person → vehicle ═══
   if(isAdmin){
-    // Collect tasks grouped by person → repair
     var otherByPerson={};
     S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
       if(rSt(r)==="cancelled")return;
       var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
       (r.tasks||[]).forEach(function(t){
-        if(!isMyTask(t)&&tSt(t)!=="done"){
-          var assignees=getAssignees(t);
-          assignees.forEach(function(auid){
-            if(auid===uid)return;
-            if(!otherByPerson[auid])otherByPerson[auid]={};
-            var rkey=c.id+"_"+r.id;
-            if(!otherByPerson[auid][rkey])otherByPerson[auid][rkey]={cid:c.id,cn:c.name,r:r,v:v,tasks:[]};
-            otherByPerson[auid][rkey].tasks.push(t);
-          });
-        }
+        var assignees=getAssignees(t);
+        var doneBy=getDoneBy(t);
+        // For each assignee who hasn't finished yet, show the task under their name
+        assignees.forEach(function(auid){
+          if(auid===uid)return; // skip self (shown in "my tasks")
+          var thisDone=doneBy.indexOf(auid)>=0;
+          if(thisDone&&tSt(t)==="done")return; // fully done
+          if(!otherByPerson[auid])otherByPerson[auid]={};
+          var rkey=c.id+"_"+r.id;
+          if(!otherByPerson[auid][rkey])otherByPerson[auid][rkey]={cid:c.id,cn:c.name,r:r,v:v,tasks:[]};
+          // Avoid duplicates
+          var exists=otherByPerson[auid][rkey].tasks.some(function(x){return x.id===t.id});
+          if(!exists)otherByPerson[auid][rkey].tasks.push(t);
+        });
       });
     })});
-    // Service tasks (no vehicle)
     var otherSvcByPerson={};
     S.tasks.forEach(function(t){
-      if(!isMyTask(t)&&tSt(t)!=="done"){
-        getAssignees(t).forEach(function(auid){
-          if(auid===uid)return;
-          if(!otherSvcByPerson[auid])otherSvcByPerson[auid]=[];
-          otherSvcByPerson[auid].push(t);
-        });
-      }
+      if(tSt(t)==="done")return;
+      getAssignees(t).forEach(function(auid){
+        if(auid===uid)return;
+        if(!otherSvcByPerson[auid])otherSvcByPerson[auid]=[];
+        otherSvcByPerson[auid].push(t);
+      });
     });
 
-    var personKeys=Object.keys(otherByPerson);
-    var svcPersonKeys=Object.keys(otherSvcByPerson);
     var allPersonKeys=[];
-    personKeys.forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
-    svcPersonKeys.forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
+    Object.keys(otherByPerson).forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
+    Object.keys(otherSvcByPerson).forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
 
     if(allPersonKeys.length){
       hasAnything=true;
@@ -616,9 +615,19 @@ function myTasksTab(ct){
         var repairs=otherByPerson[puid]?Object.values(otherByPerson[puid]):[];
         var svcTasks2=otherSvcByPerson[puid]||[];
         var totalCount=repairs.reduce(function(s,i){return s+i.tasks.length},0)+svcTasks2.length;
-        ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#a78bfa",marginTop:"10px",marginBottom:"4px",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",border:"1px solid rgba(139,92,246,.1)"}},"👤 "+name+" — "+totalCount+" задач"));
-        repairs.forEach(function(item){renderVehicleTaskGroup(ct,item)});
-        svcTasks2.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
+
+        // Collapsible person header
+        var pExp=false;
+        var pCont=h("div",{s:{display:"none"}});
+        var pArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+        var pHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:"rgba(139,92,246,.06)",borderRadius:"10px",border:"1px solid rgba(139,92,246,.12)",marginTop:"6px",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+          pExp=!pExp;pCont.style.display=pExp?"block":"none";pArrow.style.transform=pExp?"rotate(90deg)":"rotate(0deg)";
+        }});
+        pHdr.append(pArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#a78bfa"}},"👤 "+name+" — "+totalCount+" задач"));
+        ct.appendChild(pHdr);
+        repairs.forEach(function(item){renderVehicleTaskGroup(pCont,item)});
+        svcTasks2.forEach(function(t){pCont.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
+        ct.appendChild(pCont);
       });
     }
   }
@@ -992,10 +1001,17 @@ function statsTab(ct){
   }else{repCont.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"))}
   ct.appendChild(repCont);
 
-  // ═══ COMPLETED CARS REPORT ═══
+  // ═══ COMPLETED CARS REPORT (collapsible) ═══
   var doneRepairs=allR.filter(function(r){return rSt(r)==="done"});
   if(doneRepairs.length){
-    secTitle(ct,"✅ Выполненные машины ("+doneRepairs.length+")");
+    var dcExp=false;
+    var dcCont=h("div",{s:{display:"none"}});
+    var dcArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+    var dcHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(34,197,94,.05)",borderRadius:"10px",border:"1px solid rgba(34,197,94,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+      dcExp=!dcExp;dcCont.style.display=dcExp?"block":"none";dcArrow.style.transform=dcExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    dcHdr.append(dcArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#4ade80"}},"✅ Выполненные машины ("+doneRepairs.length+")"));
+    ct.appendChild(dcHdr);
     doneRepairs.sort(function(a,b){return(b.date||"").localeCompare(a.date||"")});
     doneRepairs.forEach(function(r){
       var s=getS(r.serviceType);
@@ -1017,14 +1033,12 @@ function statsTab(ct){
       info.appendChild(topLine);
       info.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},fD(r.date)+" · "+tasks.length+" задач"));
       hdr.appendChild(info);
-      if(r.cost)hdr.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},"€"+r.cost));
+      if(r.cost)hdr.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
       cd.appendChild(hdr);
 
-      // Expanded details
       if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",padding:"4px 0",lineHeight:"1.5"}},"📝 "+r.description));
       if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",padding:"2px 0"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
       if(r.photos&&r.photos.length)content.appendChild(photoGrid(r.photos,false));
-      // Tasks details
       tasks.forEach(function(t){
         var ti=h("div",{s:{padding:"6px 8px",marginTop:"4px",background:"rgba(255,255,255,.02)",borderRadius:"6px",border:"1px solid rgba(255,255,255,.04)"}});
         var dn=tSt(t)==="done";
@@ -1037,31 +1051,53 @@ function statsTab(ct){
         if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
         content.appendChild(ti);
       });
-      // Go to client button
       content.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",cursor:"pointer",marginTop:"6px"},onClick:function(){S.sel=r.cid;R()}},"→ Карточка клиента"));
       cd.appendChild(content);
-      ct.appendChild(cd);
+      dcCont.appendChild(cd);
     });
+    ct.appendChild(dcCont);
   }
 
-  // ═══ SERVICE TASKS ═══
+  // ═══ SERVICE TASKS (collapsible) ═══
   var activeTasks=svcTasks.filter(function(t){return t.status!=="done"});
   var doneTasks2=svcTasks.filter(function(t){return t.status==="done"});
-  secTitle(ct,"📝 Задачи сервиса ("+activeTasks.length+" активных)",canManage()?function(){S.mod={t:"addSvcTask",taskType:"task"};R()}:null);
-  if(activeTasks.length){activeTasks.forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})}
-  if(doneTasks2.length){
-    ct.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Выполнено: "+doneTasks2.length));
-    doneTasks2.slice(0,3).forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})
+  if(activeTasks.length||doneTasks2.length){
+    var stExp=activeTasks.length>0;
+    var stCont=h("div",{s:{display:stExp?"block":"none"}});
+    var stArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px",transform:stExp?"rotate(90deg)":"rotate(0deg)"}},"▶");
+    var stHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+      stExp=!stExp;stCont.style.display=stExp?"block":"none";stArrow.style.transform=stExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    stHdr.append(stArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Задачи сервиса ("+activeTasks.length+" активных)"));
+    if(canManage())stHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"task"};R()}},"+"));
+    ct.appendChild(stHdr);
+    if(activeTasks.length){activeTasks.forEach(function(t){stCont.appendChild(renderSvcTaskCard(t))})}
+    if(doneTasks2.length){
+      stCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Выполнено: "+doneTasks2.length));
+      doneTasks2.slice(0,3).forEach(function(t){stCont.appendChild(renderSvcTaskCard(t))})
+    }
+    ct.appendChild(stCont);
   }
 
-  // ═══ PROJECTS ═══
+  // ═══ PROJECTS (collapsible) ═══
   var activeProjects=svcProjects.filter(function(t){return t.status!=="done"});
   var doneProjects=svcProjects.filter(function(t){return t.status==="done"});
-  secTitle(ct,"📐 Проекты ("+activeProjects.length+" активных)",canManage()?function(){S.mod={t:"addSvcTask",taskType:"project"};R()}:null);
-  if(activeProjects.length){activeProjects.forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})}
-  if(doneProjects.length){
-    ct.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Завершено: "+doneProjects.length));
-    doneProjects.slice(0,3).forEach(function(t){ct.appendChild(renderSvcTaskCard(t))})
+  if(activeProjects.length||doneProjects.length){
+    var prExp=activeProjects.length>0;
+    var prCont=h("div",{s:{display:prExp?"block":"none"}});
+    var prArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px",transform:prExp?"rotate(90deg)":"rotate(0deg)"}},"▶");
+    var prHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(245,158,11,.05)",borderRadius:"10px",border:"1px solid rgba(245,158,11,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+      prExp=!prExp;prCont.style.display=prExp?"block":"none";prArrow.style.transform=prExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    prHdr.append(prArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f59e0b"}},"📐 Проекты ("+activeProjects.length+" активных)"));
+    if(canManage())prHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(245,158,11,.3)",background:"rgba(245,158,11,.1)",color:"#f59e0b",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"project"};R()}},"+"));
+    ct.appendChild(prHdr);
+    if(activeProjects.length){activeProjects.forEach(function(t){prCont.appendChild(renderSvcTaskCard(t))})}
+    if(doneProjects.length){
+      prCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Завершено: "+doneProjects.length));
+      doneProjects.slice(0,3).forEach(function(t){prCont.appendChild(renderSvcTaskCard(t))})
+    }
+    ct.appendChild(prCont);
   }
 
   // ═══ FREON REPORT ═══
