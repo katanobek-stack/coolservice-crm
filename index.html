@@ -140,13 +140,19 @@ function rSt(r){if(r.status==="cancelled")return"cancelled";var t=r.tasks||[];if
 function getAssignees(t){if(t.assignees&&t.assignees.length)return t.assignees;if(t.assignee)return[t.assignee];return[]}
 function getDoneBy(t){return t.doneBy||[]}
 function tSt(t){
-  // Task status: if status explicitly set to done, respect it
+  var a=getAssignees(t);
+  // Multi-assignee: use doneBy array
+  if(a.length>1){
+    var d=getDoneBy(t);
+    return a.every(function(uid){return d.indexOf(uid)>=0})?"done":"in_progress";
+  }
+  // Single assignee or legacy: use status
   if(t.status==="done")return"done";
-  // Multi-assignee: check doneBy
-  var a=getAssignees(t);var d=getDoneBy(t);
-  if(a.length&&d.length&&a.every(function(uid){return d.indexOf(uid)>=0}))return"done";
+  var d2=getDoneBy(t);
+  if(a.length===1&&d2.length&&d2.indexOf(a[0])>=0)return"done";
   return t.status||"in_progress";
 }
+function isMyDone(t){var uid=S.u?S.u.uid:"";var d=getDoneBy(t);return d.indexOf(uid)>=0}
 function isMyTask(t){var uid=S.u?S.u.uid:"";var a=getAssignees(t);return a.indexOf(uid)>=0}
 function assigneeNames(t){return getAssignees(t).map(function(uid){return sN(uid)}).join(", ")}
 function toggleMultiTask(t,cid,rid,tid){
@@ -548,7 +554,7 @@ function myTasksTab(ct){
     myActiveSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
   }
 
-  // ═══ MY REPAIR TASKS (active, assigned to me) ═══
+  // ═══ MY REPAIR TASKS (active, assigned to me) — grouped by vehicle ═══
   var myRepairTasks=[];
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
     if(rSt(r)==="cancelled")return;
@@ -559,49 +565,60 @@ function myTasksTab(ct){
   })});
   if(myRepairTasks.length){
     hasAnything=true;
-    secTitle(ct,"🔧 Мои ремонты в работе ("+myRepairTasks.length+")");
-    myRepairTasks.forEach(function(item){
-      item.tasks.forEach(function(t){
-        ct.appendChild(buildTaskCard({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy}));
-      });
-    });
+    var totalMyTasks=myRepairTasks.reduce(function(s,i){return s+i.tasks.length},0);
+    secTitle(ct,"🔧 Мои ремонты ("+totalMyTasks+" задач)");
+    myRepairTasks.forEach(function(item){renderVehicleTaskGroup(ct,item)});
   }
 
-  // ═══ ALL STAFF TASKS (admin/manager only) ═══
+  // ═══ ALL STAFF TASKS (admin/manager only) — grouped by person → vehicle ═══
   if(isAdmin){
+    // Collect tasks grouped by person → repair
     var otherByPerson={};
     S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
       if(rSt(r)==="cancelled")return;
+      var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
       (r.tasks||[]).forEach(function(t){
         if(!isMyTask(t)&&tSt(t)!=="done"){
           var assignees=getAssignees(t);
           assignees.forEach(function(auid){
             if(auid===uid)return;
-            if(!otherByPerson[auid])otherByPerson[auid]=[];
-            otherByPerson[auid].push({id:t.id,description:t.description,status:t.status,photos:t.photos,rid:r.id,cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId}),rd:r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy});
+            if(!otherByPerson[auid])otherByPerson[auid]={};
+            var rkey=c.id+"_"+r.id;
+            if(!otherByPerson[auid][rkey])otherByPerson[auid][rkey]={cid:c.id,cn:c.name,r:r,v:v,tasks:[]};
+            otherByPerson[auid][rkey].tasks.push(t);
           });
         }
       });
     })});
+    // Service tasks (no vehicle)
+    var otherSvcByPerson={};
     S.tasks.forEach(function(t){
       if(!isMyTask(t)&&tSt(t)!=="done"){
-        var assignees=getAssignees(t);
-        assignees.forEach(function(auid){
+        getAssignees(t).forEach(function(auid){
           if(auid===uid)return;
-          if(!otherByPerson[auid])otherByPerson[auid]=[];
-          otherByPerson[auid].push(Object.assign({},t,{type:t.taskType||"task"}));
+          if(!otherSvcByPerson[auid])otherSvcByPerson[auid]=[];
+          otherSvcByPerson[auid].push(t);
         });
       }
     });
+
     var personKeys=Object.keys(otherByPerson);
-    if(personKeys.length){
+    var svcPersonKeys=Object.keys(otherSvcByPerson);
+    var allPersonKeys=[];
+    personKeys.forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
+    svcPersonKeys.forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
+
+    if(allPersonKeys.length){
       hasAnything=true;
       secTitle(ct,"👥 Задачи сотрудников");
-      personKeys.forEach(function(puid){
-        var tasks=otherByPerson[puid];
+      allPersonKeys.forEach(function(puid){
         var name=sN(puid);
-        ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#a78bfa",marginTop:"8px",marginBottom:"4px"}},"👤 "+name+" ("+tasks.length+")"));
-        tasks.forEach(function(t){ct.appendChild(buildTaskCard(t))});
+        var repairs=otherByPerson[puid]?Object.values(otherByPerson[puid]):[];
+        var svcTasks2=otherSvcByPerson[puid]||[];
+        var totalCount=repairs.reduce(function(s,i){return s+i.tasks.length},0)+svcTasks2.length;
+        ct.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#a78bfa",marginTop:"10px",marginBottom:"4px",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",border:"1px solid rgba(139,92,246,.1)"}},"👤 "+name+" — "+totalCount+" задач"));
+        repairs.forEach(function(item){renderVehicleTaskGroup(ct,item)});
+        svcTasks2.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
       });
     }
   }
@@ -609,6 +626,101 @@ function myTasksTab(ct){
   if(!hasAnything){
     ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
   }
+}
+
+// Render vehicle header + task list grouped under it
+function renderVehicleTaskGroup(ct,item){
+  var card=h("div",{cls:"rc"});
+  // Vehicle header (once)
+  var vHdr=h("div",{s:{marginBottom:"6px",cursor:"pointer"},onClick:function(){S.sel=item.cid;R()}});
+  if(item.v&&item.v.brand)vHdr.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},item.v.brand));
+  if(item.v)vHdr.appendChild(plate(item.v.plate||""));
+  vHdr.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},item.cn+(item.r.date?" · "+fD(item.r.date):"")));
+  card.appendChild(vHdr);
+  // Task list
+  item.tasks.forEach(function(t,idx){
+    var taskData={id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid||item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy};
+    var tCard=buildTaskCardCompact(taskData,idx+1);
+    card.appendChild(tCard);
+  });
+  ct.appendChild(card);
+}
+
+// Compact task card (no vehicle header, just task content with number)
+function buildTaskCardCompact(t,num){
+  var isDone=tSt(t)==="done";
+  var assignees=getAssignees(t);
+  var doneBy=getDoneBy(t);
+  var isMulti=assignees.length>1;
+  var ti=h("div",{s:{padding:"6px 8px",marginTop:"4px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.05)"}});
+  var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"6px"}});
+  hdr.appendChild(h("span",{s:{fontSize:"11px",fontWeight:"700",color:"#475569",width:"18px",textAlign:"center"}},num+"."));
+  hdr.appendChild(h("div",{s:{flex:"1",fontSize:"12px",color:isDone?"#64748b":"#e2e8f0",fontWeight:"500"}},t.description||""));
+  // Status button
+  if(t.freonTask){
+    hdr.appendChild(h("span",{s:{padding:"3px 8px",borderRadius:"6px",fontSize:"10px",fontWeight:"600",background:isDone?"rgba(34,197,94,.15)":"rgba(6,182,212,.15)",color:isDone?"#4ade80":"#22d3ee"}},isDone?"✅":"🧊"));
+  }else{
+    hdr.appendChild(h("button",{s:{padding:"3px 8px",borderRadius:"6px",fontSize:"10px",fontWeight:"600",cursor:"pointer",border:"none",background:isDone?"rgba(34,197,94,.15)":"rgba(249,115,22,.15)",color:isDone?"#4ade80":"#fb923c"},onClick:function(){toggleTask(t.cid,t.rid,t.id,isMyDone(t))}},isDone?"✅":"🔧"));
+  }
+  ti.appendChild(hdr);
+  // Show per-person status for multi-assignee
+  if(isMulti){
+    var pRow=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"3px",marginLeft:"24px"}});
+    assignees.forEach(function(auid){
+      var dn=doneBy.indexOf(auid)>=0;
+      pRow.appendChild(h("span",{s:{fontSize:"9px",padding:"1px 5px",borderRadius:"4px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},sN(auid)+(dn?" ✅":" 🔧")));
+    });
+    ti.appendChild(pRow);
+  }
+  // Work comment
+  if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"3px",marginLeft:"24px",padding:"3px 6px",background:"rgba(139,92,246,.06)",borderRadius:"4px"}},h("span",{s:{color:"#a78bfa",fontSize:"10px"}},"📝 "),t.workComment));
+  // Freon panel for active freon tasks
+  if(t.freonTask&&!isDone){
+    var frR=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",marginTop:"4px",marginLeft:"24px"}});
+    frR.appendChild(h("span",{s:{fontSize:"11px",color:"#22d3ee"}},"🧊"));
+    var frI=h("input",{cls:"fi",type:"number",placeholder:"кг",value:t.freonKg||"",step:"0.1",s:{width:"60px",padding:"4px 6px",fontSize:"12px",fontWeight:"600",textAlign:"center"}});
+    frR.appendChild(frI);
+    frR.appendChild(h("button",{s:{padding:"3px 6px",borderRadius:"4px",border:"1px solid rgba(6,182,212,.3)",background:"rgba(6,182,212,.1)",color:"#22d3ee",fontSize:"10px",cursor:"pointer"},onClick:function(){
+      var kg=frI.value;var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+      var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+      var ts=(rp[ri].tasks||[]).slice();var tii=ts.findIndex(function(x){return x.id===t.id});if(tii<0)return;
+      ts[tii]=Object.assign({},ts[tii],{freonKg:kg});rp[ri]=Object.assign({},rp[ri],{tasks:ts,freonAmount:kg});fbArr(t.cid,"repairs",rp);
+    }},"💾"));
+    frR.appendChild(h("button",{s:{padding:"3px 6px",borderRadius:"4px",border:"none",background:"#059669",color:"#fff",fontSize:"10px",cursor:"pointer"},onClick:function(){
+      var kg=frI.value;var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+      var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+      var ts=(rp[ri].tasks||[]).slice();var tii=ts.findIndex(function(x){return x.id===t.id});if(tii<0)return;
+      ts[tii]=Object.assign({},ts[tii],{freonKg:kg,status:"done"});rp[ri]=Object.assign({},rp[ri],{tasks:ts,freonAmount:kg});fbArr(t.cid,"repairs",rp);
+    }},"✅"));
+    ti.appendChild(frR);
+  }
+  if(t.freonTask&&isDone&&t.freonKg)ti.appendChild(h("div",{s:{fontSize:"10px",color:"#22d3ee",marginLeft:"24px",marginTop:"2px"}},"🧊 "+t.freonKg+" кг"));
+  // Photos
+  if(t.photos&&t.photos.length)ti.appendChild(h("div",{s:{marginLeft:"24px",marginTop:"4px"}},photoGrid(t.photos,false)));
+  // Action buttons for active
+  if(!isDone&&!t.freonTask){
+    var actRow=h("div",{s:{display:"flex",gap:"4px",marginLeft:"24px",marginTop:"4px",flexWrap:"wrap"}});
+    actRow.appendChild(inlineAddPhotoBtn("Фото",function(results){
+      var newPhotos=(t.photos||[]).slice();results.forEach(function(d){newPhotos.push({id:gid(),data:d})});
+      var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+      var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+      var ts=(rp[ri].tasks||[]).slice();var tii=ts.findIndex(function(x){return x.id===t.id});if(tii<0)return;
+      ts[tii]=Object.assign({},ts[tii],{photos:newPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp);
+    }));
+    // Description button
+    var descExp=false;var descP=h("div",{s:{display:"none",width:"100%",marginTop:"4px"}});
+    var descIn=h("textarea",{cls:"fi",placeholder:"Что сделано...",value:t.workComment||"",s:{fontSize:"12px",minHeight:"40px"}});
+    descP.appendChild(descIn);var mic=makeMicBtn(descIn);if(mic)descP.appendChild(mic);
+    descP.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"none",background:"linear-gradient(135deg,#0ea5e9,#38bdf8)",color:"#fff",fontSize:"11px",cursor:"pointer",marginTop:"3px"},onClick:function(){
+      var cl2=S.cl.find(function(c){return c.id===t.cid});if(!cl2)return;
+      var rp2=(cl2.repairs||[]).slice();var ri2=rp2.findIndex(function(r){return r.id===t.rid});if(ri2<0)return;
+      var ts2=(rp2[ri2].tasks||[]).slice();var ti2=ts2.findIndex(function(x){return x.id===t.id});if(ti2<0)return;
+      ts2[ti2]=Object.assign({},ts2[ti2],{workComment:descIn.value.trim()});rp2[ri2]=Object.assign({},rp2[ri2],{tasks:ts2});fbArr(t.cid,"repairs",rp2);
+    }},"💾"));
+    actRow.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(139,92,246,.2)",background:"rgba(139,92,246,.05)",color:"#a78bfa",fontSize:"10px",cursor:"pointer"},onClick:function(){descExp=!descExp;descP.style.display=descExp?"block":"none"}},"📝"));
+    ti.appendChild(actRow);ti.appendChild(descP);
+  }
+  return ti;
 }
 
 function buildTaskCard(t){
