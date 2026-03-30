@@ -40,6 +40,7 @@ textarea.fi{min-height:75px;resize:vertical}
 </head>
 <body>
 <div id="app"></div>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
@@ -636,6 +637,42 @@ function myTasksTab(ct){
         ct.appendChild(pHdr);
         repairs.forEach(function(item){renderVehicleTaskGroup(pCont,item)});
         svcTasks2.forEach(function(t){pCont.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
+
+        // Done tasks history for this person — by month
+        var doneByPerson=[];
+        S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+          (r.tasks||[]).forEach(function(t){
+            if(getAssignees(t).indexOf(puid)>=0&&tSt(t)==="done"){
+              var vh=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})||{};
+              doneByPerson.push({desc:t.description||"",date:r.date||"",cn:c.name,brand:vh.brand||"",plate:vh.plate||"",comment:t.workComment||""});
+            }
+          });
+        })});
+        if(doneByPerson.length){
+          var mN2=["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+          var byM2={};doneByPerson.forEach(function(dt){
+            var mk=dt.date?dt.date.substring(0,7):"Другое";
+            if(!byM2[mk])byM2[mk]=[];byM2[mk].push(dt);
+          });
+          var hExp=false;
+          var hCont=h("div",{s:{display:"none",marginTop:"4px"}});
+          var hBtn=h("button",{s:{width:"100%",padding:"4px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.02)",color:"#64748b",fontSize:"10px",cursor:"pointer",marginTop:"6px"},onClick:function(){
+            hExp=!hExp;hCont.style.display=hExp?"block":"none";
+            hBtn.textContent=hExp?"▲ Скрыть историю":"▼ История ("+doneByPerson.length+")";
+          }},"▼ История ("+doneByPerson.length+")");
+          Object.keys(byM2).sort().reverse().forEach(function(mk){
+            var items=byM2[mk];var parts=mk.split("-");
+            var lab=parts.length===2?mN2[parseInt(parts[1])]+" "+parts[0]:mk;
+            hCont.appendChild(h("div",{s:{fontSize:"10px",fontWeight:"600",color:"#38bdf8",marginTop:"4px"}},lab+" ("+items.length+")"));
+            items.forEach(function(dt){
+              hCont.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",padding:"2px 8px",borderLeft:"2px solid rgba(56,189,248,.15)",marginLeft:"4px"}},
+                (dt.date?fD(dt.date)+" · ":"")+(dt.brand?dt.brand+" ":"")+(dt.plate?"["+dt.plate+"] ":"")+(dt.cn?dt.cn+" — ":"")+dt.desc+(dt.comment?" 📝"+dt.comment:"")));
+            });
+          });
+          pCont.appendChild(hBtn);
+          pCont.appendChild(hCont);
+        }
+
         ct.appendChild(pCont);
       });
     }
@@ -1318,38 +1355,52 @@ function statsTab(ct){
 
     card.appendChild(rows);
 
-    // Expandable completed tasks history
+    // Expandable completed tasks history — grouped by month
     var doneTasks=[];
     S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
       (r.tasks||[]).forEach(function(t){
         if(getAssignees(t).indexOf(st.uid)>=0&&tSt(t)==="done"){
-          doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||"",comment:t.workComment||""});
+          var veh=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})||{};
+          doneTasks.push({desc:t.description||"",date:r.date||"",cn:c.name,freonKg:t.freonKg||"",comment:t.workComment||"",type:"repair",brand:veh.brand||"",plate:veh.plate||""});
         }
       });
     })});
     S.tasks.forEach(function(t){
       if(getAssignees(t).indexOf(st.uid)>=0&&tSt(t)==="done"){
-        doneTasks.push({desc:t.title||t.description||"",date:"",cn:"",type:t.taskType});
+        doneTasks.push({desc:t.title||t.description||"",date:"",cn:"",type:t.taskType||"task"});
       }
     });
     if(doneTasks.length){
+      var mNm=["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+      // Group by month
+      var byM={};doneTasks.forEach(function(dt){
+        var mk=dt.date?dt.date.substring(0,7):"Другое";
+        if(!byM[mk])byM[mk]=[];byM[mk].push(dt);
+      });
+      var mks=Object.keys(byM).sort().reverse();
       var expd=false;
       var histContent=h("div",{s:{display:"none",marginTop:"6px"}});
       var histBtn=h("button",{s:{width:"100%",padding:"5px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.02)",color:"#64748b",fontSize:"10px",cursor:"pointer",marginTop:"6px",textAlign:"center"},onClick:function(){
-        expd=!expd;
-        histContent.style.display=expd?"block":"none";
-        histBtn.textContent=expd?"▲ Скрыть историю":"▼ Выполненные задачи ("+doneTasks.length+")";
-      }},"▼ Выполненные задачи ("+doneTasks.length+")");
-      doneTasks.forEach(function(dt){
-        var row=h("div",{s:{padding:"4px 8px",fontSize:"11px",color:"#94a3b8",borderBottom:"1px solid rgba(255,255,255,.03)"}});
-        var line=dt.cn?(dt.cn+" — "):"";
-        line+=dt.desc;
-        if(dt.freonKg)line+=" 🧊"+dt.freonKg+"кг";
-        if(dt.comment)line+=" — 📝"+dt.comment;
-        if(dt.type==="project")line="📐 "+line;
-        if(dt.date)line=fD(dt.date)+" · "+line;
-        row.textContent=line;
-        histContent.appendChild(row);
+        expd=!expd;histContent.style.display=expd?"block":"none";
+        histBtn.textContent=expd?"▲ Скрыть":"▼ История по месяцам ("+doneTasks.length+")";
+      }},"▼ История по месяцам ("+doneTasks.length+")");
+      mks.forEach(function(mk){
+        var items=byM[mk];
+        var parts=mk.split("-");
+        var lab=parts.length===2?mNm[parseInt(parts[1])]+" "+parts[0]:mk;
+        histContent.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"600",color:"#38bdf8",marginTop:"6px",marginBottom:"2px"}},lab+" ("+items.length+")"));
+        items.forEach(function(dt){
+          var row=h("div",{s:{padding:"3px 8px",fontSize:"10px",color:"#94a3b8",borderLeft:"2px solid rgba(56,189,248,.2)",marginLeft:"4px",marginBottom:"2px"}});
+          var line=dt.type==="project"?"📐 ":"";
+          if(dt.brand)line+=dt.brand+" ";
+          if(dt.plate)line+="["+dt.plate+"] ";
+          if(dt.cn)line+=dt.cn+" — ";
+          line+=dt.desc;
+          if(dt.freonKg)line+=" 🧊"+dt.freonKg+"кг";
+          if(dt.comment)line+=" 📝"+dt.comment;
+          row.textContent=line;
+          histContent.appendChild(row);
+        });
       });
       card.appendChild(histBtn);
       card.appendChild(histContent);
@@ -1535,32 +1586,49 @@ function doneTab(ct){
     ct.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин на проверке"));
   }
 
-  // Closed/archived
+  // Closed/archived — grouped by month
   if(closed.length){
-    var exp=false;
-    var cont=h("div",{s:{display:"none"}});
-    var arrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-    var chdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(34,197,94,.05)",borderRadius:"10px",border:"1px solid rgba(34,197,94,.12)",marginTop:"12px",marginBottom:"4px",cursor:"pointer"},onClick:function(){
-      exp=!exp;cont.style.display=exp?"block":"none";arrow.style.transform=exp?"rotate(90deg)":"rotate(0deg)";
-    }});
-    chdr.append(arrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#4ade80"}},"📋 Закрытые наряды ("+closed.length+")"));
-    ct.appendChild(chdr);
+    var mNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
     closed.sort(function(a,b){return(b.closedAt||b.date||"").localeCompare(a.closedAt||a.date||"")});
+    var byMonth={};
     closed.forEach(function(r){
-      var s=getS(r.serviceType);
-      var rcd=h("div",{cls:"rc",s:{opacity:"0.8",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
-      var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center"}});
-      var left=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
-      if(r.v&&r.v.brand)left.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},r.v.brand));
-      if(r.v)left.appendChild(plate(r.v.plate||""));
-      left.appendChild(badge(s.e,s.c));
-      top.appendChild(left);
-      if(r.cost&&myRole()==="admin")top.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
-      rcd.appendChild(top);
-      rcd.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"2px"}},r.cn+" · "+fD(r.date)));
-      cont.appendChild(rcd);
+      var d=r.closedAt||r.date||"";
+      var mk=d.substring(0,7)||"Без даты";
+      if(!byMonth[mk])byMonth[mk]=[];
+      byMonth[mk].push(r);
     });
-    ct.appendChild(cont);
+    var mKeys=Object.keys(byMonth).sort().reverse();
+    secTitle(ct,"📋 Закрытые наряды ("+closed.length+")");
+    mKeys.forEach(function(mk){
+      var items=byMonth[mk];
+      var parts=mk.split("-");
+      var label=parts.length===2?mNames[parseInt(parts[1])]+" "+parts[0]:mk;
+      var mTotal=items.reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+      var mExp=false;
+      var mCont=h("div",{s:{display:"none"}});
+      var mArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var mHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:"rgba(34,197,94,.04)",borderRadius:"8px",border:"1px solid rgba(34,197,94,.1)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+        mExp=!mExp;mCont.style.display=mExp?"block":"none";mArrow.style.transform=mExp?"rotate(90deg)":"rotate(0deg)";
+      }});
+      mHdr.append(mArrow,h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#4ade80"}},label+" ("+items.length+")"));
+      if(mTotal&&myRole()==="admin")mHdr.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"700",color:"#4ade80",marginLeft:"auto"}},mTotal+"₽"));
+      ct.appendChild(mHdr);
+      items.forEach(function(r){
+        var s=getS(r.serviceType);
+        var rcd=h("div",{cls:"rc",s:{opacity:"0.8",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
+        var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center"}});
+        var left=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
+        if(r.v&&r.v.brand)left.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},r.v.brand));
+        if(r.v)left.appendChild(plate(r.v.plate||""));
+        left.appendChild(badge(s.e,s.c));
+        top.appendChild(left);
+        if(r.cost&&myRole()==="admin")top.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
+        rcd.appendChild(top);
+        rcd.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"2px"}},r.cn+" · "+fD(r.date)));
+        mCont.appendChild(rcd);
+      });
+      ct.appendChild(mCont);
+    });
   }
 
   // Completed service tasks & projects
@@ -1576,6 +1644,72 @@ function doneTab(ct){
     ct.appendChild(shdr);
     doneSvc.forEach(function(t){cont2.appendChild(renderSvcTaskCard(t))});
     ct.appendChild(cont2);
+  }
+
+  // ═══ EXCEL MONTHLY REPORT (admin only) ═══
+  if(myRole()==="admin"){
+    var mNames3=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    var now3=new Date();
+    secTitle(ct,"📊 Отчёт за месяц");
+    // Month selector
+    var monthSel=h("select",{cls:"fi",s:{marginBottom:"8px"}});
+    for(var mi=0;mi<6;mi++){
+      var md=new Date(now3.getFullYear(),now3.getMonth()-mi,1);
+      var mk3=md.getFullYear()+"-"+String(md.getMonth()+1).padStart(2,"0");
+      var label3=mNames3[md.getMonth()+1]+" "+md.getFullYear();
+      var opt=document.createElement("option");opt.value=mk3;opt.textContent=label3;
+      monthSel.appendChild(opt);
+    }
+    ct.appendChild(monthSel);
+    ct.appendChild(h("button",{cls:"bp",s:{background:"linear-gradient(135deg,#059669,#10b981)"},onClick:function(){
+      var selMonth=monthSel.value;
+      var parts=selMonth.split("-");
+      var mLabel=mNames3[parseInt(parts[1])]+" "+parts[0];
+      // Collect data for the month
+      var repData=[];var totalRev=0;
+      var staffMap={};
+      S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+        var d=r.closedAt||r.date||"";
+        if(d.substring(0,7)!==selMonth)return;
+        if(rSt(r)!=="done"||!r.closedByManager)return;
+        var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
+        var cost=parseFloat(r.cost)||0;
+        totalRev+=cost;
+        repData.push({client:c.name,vehicle:(v?v.brand+" "+v.plate:""),date:r.date,cost:cost,freon:r.freonType||"",freonKg:r.freonAmount||"",tasks:(r.tasks||[]).length});
+        // Staff
+        (r.tasks||[]).forEach(function(t){
+          getAssignees(t).forEach(function(uid){
+            if(!staffMap[uid])staffMap[uid]={name:sN(uid),machines:0,tasks:0};
+            staffMap[uid].tasks++;
+          });
+        });
+        // Count unique machines per staff
+        (r.tasks||[]).forEach(function(t){
+          getAssignees(t).forEach(function(uid){
+            if(!staffMap[uid]._m)staffMap[uid]._m={};
+            staffMap[uid]._m[c.id+"_"+r.id]=true;
+          });
+        });
+      })});
+      Object.values(staffMap).forEach(function(s){s.machines=s._m?Object.keys(s._m).length:0;delete s._m});
+      // Build Excel
+      if(typeof XLSX==="undefined"){alert("SheetJS не загружен");return}
+      var wb=XLSX.utils.book_new();
+      // Sheet 1: Summary
+      var sum=[["Отчёт за "+mLabel],[""],["Всего выручка",""+totalRev+" ₽"],["Всего нарядов",""+repData.length],[""]];
+      sum.push(["Сотрудник","Машин","Задач"]);
+      Object.values(staffMap).forEach(function(s){sum.push([s.name,""+s.machines,""+s.tasks])});
+      var ws1=XLSX.utils.aoa_to_sheet(sum);
+      ws1["!cols"]=[{wch:25},{wch:15},{wch:12}];
+      XLSX.utils.book_append_sheet(wb,ws1,"Итоги");
+      // Sheet 2: Details
+      var det=[["Клиент","Авто","Дата","Стоимость","Фреон","Фреон кг","Задач"]];
+      repData.forEach(function(r){det.push([r.client,r.vehicle,r.date,""+r.cost,r.freon,""+r.freonKg,""+r.tasks])});
+      var ws2=XLSX.utils.aoa_to_sheet(det);
+      ws2["!cols"]=[{wch:20},{wch:25},{wch:12},{wch:12},{wch:10},{wch:10},{wch:8}];
+      XLSX.utils.book_append_sheet(wb,ws2,"Наряды");
+      XLSX.writeFile(wb,"Отчёт_"+selMonth+".xlsx");
+    }},"📥 Скачать Excel отчёт"));
   }
 }
 
