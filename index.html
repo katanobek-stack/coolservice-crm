@@ -589,15 +589,14 @@ function myTasksTab(ct){
       (r.tasks||[]).forEach(function(t){
         var assignees=getAssignees(t);
         var doneBy=getDoneBy(t);
-        // For each assignee who hasn't finished yet, show the task under their name
         assignees.forEach(function(auid){
-          if(auid===uid)return; // skip self (shown in "my tasks")
+          if(auid===uid)return;
           var thisDone=doneBy.indexOf(auid)>=0;
-          if(thisDone&&tSt(t)==="done")return; // fully done
+          if(thisDone)return; // this person already done their part
+          if(tSt(t)==="done")return; // fully done
           if(!otherByPerson[auid])otherByPerson[auid]={};
           var rkey=c.id+"_"+r.id;
           if(!otherByPerson[auid][rkey])otherByPerson[auid][rkey]={cid:c.id,cn:c.name,r:r,v:v,tasks:[]};
-          // Avoid duplicates
           var exists=otherByPerson[auid][rkey].tasks.some(function(x){return x.id===t.id});
           if(!exists)otherByPerson[auid][rkey].tasks.push(t);
         });
@@ -1012,35 +1011,30 @@ function statsTab(ct){
   if(inProgR.length){
     inProgR.forEach(function(r){
       var s=getS(r.serviceType);var tasks=r.tasks||[];
-      var doneTasks=tasks.filter(function(t){return t.status==="done"}).length;
+      var doneTasks=tasks.filter(function(t){return tSt(t)==="done"}).length;
       var totalTasks=tasks.length;
       var cd=h("div",{cls:"rc",s:{cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
-      var top2=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}});
+      var top2=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
       var left=h("div",null);
-      left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},r.cn||""));
-      var badges=h("div",{s:{display:"flex",gap:"5px",marginTop:"4px",flexWrap:"wrap",alignItems:"center"}});
-      if(r.v&&r.v.plate)badges.appendChild(plate(r.v.plate));
-      badges.appendChild(badge(s.e+" "+s.l,s.c));
-      left.appendChild(badges);top2.appendChild(left);
-      if(totalTasks){
-        var pct=Math.round(doneTasks/totalTasks*100);
-        top2.appendChild(h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"16px",fontWeight:"700",color:pct===100?"#4ade80":"#fb923c"}},pct+"%"),h("div",{s:{fontSize:"10px",color:"#64748b"}},doneTasks+"/"+totalTasks)))
-      }
+      left.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9"}},r.cn||""));
+      if(r.v&&r.v.brand)left.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"1px"}},r.v.brand));
+      top2.appendChild(left);
+      if(r.v&&r.v.plate)top2.appendChild(plate(r.v.plate));
       cd.appendChild(top2);
-      if(r.description){var desc=r.description.length>60?r.description.substring(0,60)+"...":r.description;cd.appendChild(h("div",{s:{fontSize:"12px",color:"#94a3b8",marginTop:"2px"}},desc))}
-      if(totalTasks){cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"6px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:doneTasks===totalTasks?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(doneTasks/totalTasks*100)+"%"}})))}
-      if(tasks.length){var ar=h("div",{s:{display:"flex",gap:"4px",marginTop:"6px",flexWrap:"wrap"}});tasks.forEach(function(t2){var dn=t2.status==="done";ar.appendChild(h("span",{s:{fontSize:"10px",padding:"2px 6px",borderRadius:"6px",background:dn?"rgba(34,197,94,.1)":"rgba(249,115,22,.1)",color:dn?"#4ade80":"#fb923c",border:"1px solid "+(dn?"rgba(34,197,94,.2)":"rgba(249,115,22,.2)")}},assigneeNames(t2)+(dn?" ✅":" 🔧")))});cd.appendChild(ar)}
-      // PHOTO ADD from stats
-      var photoWrap=h("div",{s:{marginTop:"6px"},onClick:function(e){e.stopPropagation()}});
-      photoWrap.appendChild(inlineAddPhotoBtn("Добавить фото",function(results){
-        var cl=S.cl.find(function(c){return c.id===r.cid});if(!cl)return;
-        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(x){return x.id===r.id});if(ri<0)return;
-        var photos=(rp[ri].photos||[]).slice();
-        results.forEach(function(data){photos.push({id:gid(),data:data})});
-        rp[ri]=Object.assign({},rp[ri],{photos:photos});
-        fbArr(r.cid,"repairs",rp)
-      }));
-      cd.appendChild(photoWrap);
+      cd.appendChild(h("div",{s:{display:"flex",gap:"5px",alignItems:"center",flexWrap:"wrap",marginBottom:"4px"}},badge(s.e+" "+s.l,s.c)));
+      if(r.description){var desc=r.description.length>50?r.description.substring(0,50)+"...":r.description;cd.appendChild(h("div",{s:{fontSize:"11px",color:"#94a3b8",marginBottom:"4px"}},desc))}
+      // Tasks list compact
+      if(tasks.length){
+        tasks.forEach(function(t2,idx){
+          var dn=tSt(t2)==="done";
+          cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"6px",padding:"3px 0",fontSize:"11px"}},
+            h("span",{s:{color:"#475569",width:"16px"}},""+(idx+1)+"."),
+            h("span",{s:{flex:"1",color:dn?"#64748b":"#e2e8f0"}},t2.description||""),
+            h("span",{s:{color:dn?"#4ade80":"#fb923c",fontSize:"10px"}},dn?"✅":"🔧")
+          ));
+        });
+        cd.appendChild(h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",marginTop:"4px",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"2px",background:doneTasks===totalTasks?"#4ade80":"linear-gradient(90deg,#fb923c,#f59e0b)",width:(totalTasks?doneTasks/totalTasks*100:0)+"%"}})));
+      }
       if(r.freonType||r.freonAmount){cd.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"4px",marginTop:"4px",fontSize:"11px",color:"#22d3ee"}},"🧊 "+(r.freonType||"")+" "+(r.freonAmount?r.freonAmount+" кг":"")))}
       repCont.appendChild(cd)
     })
