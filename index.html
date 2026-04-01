@@ -135,23 +135,25 @@ function sN(uid){var s=S.st.find(function(x){return x.id===uid});return s?s.name
 function sL(){return S.st.length?S.st:[{id:S.u?S.u.uid:"",name:S.u?S.u.email.split("@")[0]:"Я"}]}
 function myRole(){var p=S.st.find(function(x){return x.id===S.u.uid});return p?p.role:"mechanic"}
 function canManage(){var r=myRole();return r==="admin"||r==="manager"}
-function rSt(r){if(r.status==="cancelled")return"cancelled";var t=r.tasks||[];if(!t.length)return r.status||"in_progress";return t.every(function(x){return tSt(x)==="done"})?"done":"in_progress"}
+function rSt(r){
+  if(r.status==="cancelled")return"cancelled";
+  if(r.closedByManager)return"done";
+  var t=r.tasks||[];
+  if(!t.length)return r.status||"in_progress";
+  return t.every(function(x){return tSt(x)==="done"})?"done":"in_progress";
+}
 
 // Multi-assignee helpers
 function getAssignees(t){if(t.assignees&&t.assignees.length)return t.assignees;if(t.assignee)return[t.assignee];return[]}
 function getDoneBy(t){return t.doneBy||[]}
 function tSt(t){
-  var a=getAssignees(t);
-  // Multi-assignee: use doneBy array
-  if(a.length>1){
-    var d=getDoneBy(t);
-    return a.every(function(uid){return d.indexOf(uid)>=0})?"done":"in_progress";
-  }
-  // Single assignee or legacy: use status
+  // If status explicitly done — always done (legacy, force-close, freon close)
   if(t.status==="done")return"done";
-  var d2=getDoneBy(t);
-  if(a.length===1&&d2.length&&d2.indexOf(a[0])>=0)return"done";
-  return t.status||"in_progress";
+  // Multi-assignee: check doneBy
+  var a=getAssignees(t);
+  var d=getDoneBy(t);
+  if(a.length>0&&d.length>0&&a.every(function(uid){return d.indexOf(uid)>=0}))return"done";
+  return"in_progress";
 }
 function isMyDone(t){var uid=S.u?S.u.uid:"";var d=getDoneBy(t);return d.indexOf(uid)>=0}
 function isMyTask(t){var uid=S.u?S.u.uid:"";var a=getAssignees(t);return a.indexOf(uid)>=0}
