@@ -687,18 +687,20 @@ function myTasksTab(ct){
 // Render vehicle header + task list grouped under it
 function renderVehicleTaskGroup(ct,item){
   var card=h("div",{cls:"rc"});
-  // Vehicle header (once)
   var vHdr=h("div",{s:{marginBottom:"6px",cursor:"pointer"},onClick:function(){S.sel=item.cid;R()}});
   if(item.v&&item.v.brand)vHdr.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"600",color:"#f1f5f9"}},item.v.brand));
   if(item.v)vHdr.appendChild(plate(item.v.plate||""));
   vHdr.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},item.cn+(item.r.date?" · "+fD(item.r.date):"")));
   card.appendChild(vHdr);
-  // Task list
   item.tasks.forEach(function(t,idx){
     var taskData={id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid||item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy};
     var tCard=buildTaskCardCompact(taskData,idx+1);
     card.appendChild(tCard);
   });
+  // Add task button (admin/manager)
+  if(canManage()){
+    card.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addRepairTask",cid:item.cid,rid:item.r.id};R()}},"+ Задача"));
+  }
   ct.appendChild(card);
 }
 
@@ -1113,10 +1115,10 @@ function statsTab(ct){
     stHdr.append(stArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Задачи сервиса ("+activeTasks.length+" активных)"));
     if(canManage())stHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"task"};R()}},"+"));
     ct.appendChild(stHdr);
-    if(activeTasks.length){activeTasks.forEach(function(t){stCont.appendChild(renderSvcTaskCard(t))})}
+    if(activeTasks.length){activeTasks.forEach(function(t){stCont.appendChild(renderSvcTaskCard(t,true))})}
     if(doneTasks2.length){
       stCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Выполнено: "+doneTasks2.length));
-      doneTasks2.slice(0,3).forEach(function(t){stCont.appendChild(renderSvcTaskCard(t))})
+      doneTasks2.slice(0,3).forEach(function(t){stCont.appendChild(renderSvcTaskCard(t,true))})
     }
     ct.appendChild(stCont);
   }
@@ -1134,10 +1136,10 @@ function statsTab(ct){
     prHdr.append(prArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f59e0b"}},"📐 Проекты ("+activeProjects.length+" активных)"));
     if(canManage())prHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(245,158,11,.3)",background:"rgba(245,158,11,.1)",color:"#f59e0b",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"project"};R()}},"+"));
     ct.appendChild(prHdr);
-    if(activeProjects.length){activeProjects.forEach(function(t){prCont.appendChild(renderSvcTaskCard(t))})}
+    if(activeProjects.length){activeProjects.forEach(function(t){prCont.appendChild(renderSvcTaskCard(t,true))})}
     if(doneProjects.length){
       prCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Завершено: "+doneProjects.length));
-      doneProjects.slice(0,3).forEach(function(t){prCont.appendChild(renderSvcTaskCard(t))})
+      doneProjects.slice(0,3).forEach(function(t){prCont.appendChild(renderSvcTaskCard(t,true))})
     }
     ct.appendChild(prCont);
   }
@@ -1406,7 +1408,7 @@ function statsTab(ct){
   })
 }
 
-function renderSvcTaskCard(t){
+function renderSvcTaskCard(t,readOnly){
   var isDone=t.status==="done";
   var isProject=t.taskType==="project";
   var subtasks=t.subtasks||[];
@@ -1455,8 +1457,8 @@ function renderSvcTaskCard(t){
     if(st.description)ti.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",marginTop:"2px"}},st.description));
     if(st.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{fontSize:"10px",color:"#a78bfa",fontWeight:"600"}},"📝 "),st.workComment));
     if(st.photos&&st.photos.length)ti.appendChild(photoGrid(st.photos,false));
-    // Action buttons for active subtasks
-    if(!stDone&&!isDone){
+    // Action buttons for active subtasks (not in readOnly mode)
+    if(!stDone&&!isDone&&!readOnly){
       var subAct=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"4px"}});
       subAct.appendChild(inlineAddPhotoBtn("Фото",function(results){
         var newSubs=subtasks.slice();var si=newSubs.findIndex(function(x){return x.id===st.id});
@@ -1464,7 +1466,6 @@ function renderSvcTaskCard(t){
         results.forEach(function(d){ph.push({id:gid(),data:d})});
         newSubs[si]=Object.assign({},newSubs[si],{photos:ph});fbUpdTask(t.id,{subtasks:newSubs});
       }));
-      // Description button
       var descExp=false;
       var descP=h("div",{s:{display:"none",width:"100%",marginTop:"6px"}});
       var descIn=h("textarea",{cls:"fi",placeholder:"Что сделано...",value:st.workComment||"",s:{fontSize:"12px",minHeight:"50px"}});
@@ -1481,15 +1482,14 @@ function renderSvcTaskCard(t){
     cd.appendChild(ti);
   });
 
-  // Action buttons
-  if(!isDone){
+  // Action buttons (not in readOnly mode)
+  if(!isDone&&!readOnly){
     var wrap=h("div",{s:{marginTop:"6px",display:"flex",gap:"6px",flexWrap:"wrap"}});
     wrap.appendChild(inlineAddPhotoBtn("Фото",function(results){
       var photos=(t.photos||[]).slice();
       results.forEach(function(data){photos.push({id:gid(),data:data})});
       fbUpdTask(t.id,{photos:photos})
     }));
-    // Add subtask button
     if(canManage()){
       wrap.appendChild(h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.05)",color:"#94a3b8",fontSize:"11px",cursor:"pointer"},onClick:function(){S.mod={t:"addSubTask",taskId:t.id,existingSubs:subtasks};R()}},"+ Подзадача"));
     }
@@ -1638,7 +1638,7 @@ function doneTab(ct){
     }});
     shdr.append(arrow2,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Завершённые задачи/проекты ("+doneSvc.length+")"));
     ct.appendChild(shdr);
-    doneSvc.forEach(function(t){cont2.appendChild(renderSvcTaskCard(t))});
+    doneSvc.forEach(function(t){cont2.appendChild(renderSvcTaskCard(t,true))});
     ct.appendChild(cont2);
   }
 
