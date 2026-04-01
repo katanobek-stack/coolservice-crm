@@ -558,7 +558,7 @@ function myTasksTab(ct){
   var isAdmin=myRole()==="admin"||myRole()==="manager";
   var hasAnything=false;
 
-  // ═══ MY PERSONAL TASKS (service tasks + projects) ═══
+  // My service tasks/projects
   var myActiveSvc=S.tasks.filter(function(t){return isMyTask(t)&&tSt(t)!=="done"});
   if(myActiveSvc.length){
     hasAnything=true;
@@ -566,116 +566,34 @@ function myTasksTab(ct){
     myActiveSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
   }
 
-  // ═══ MY REPAIR TASKS (active, assigned to me) — grouped by vehicle ═══
-  var myRepairTasks=[];
+  // ALL active repairs - admin sees all, mechanic sees own
+  var repairGroups=[];
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
-    if(rSt(r)==="cancelled")return;
-    var myTasks=(r.tasks||[]).filter(function(t){return isMyTask(t)&&tSt(t)!=="done"});
-    if(myTasks.length){
-      myRepairTasks.push({cid:c.id,cn:c.name,r:r,tasks:myTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
+    if(rSt(r)==="cancelled"||rSt(r)==="done")return;
+    var activeTasks=(r.tasks||[]).filter(function(t){return tSt(t)!=="done"});
+    if(!activeTasks.length)return;
+    if(!isAdmin){
+      var myTasks=activeTasks.filter(function(t){return isMyTask(t)});
+      if(!myTasks.length)return;
+      activeTasks=myTasks;
     }
+    repairGroups.push({cid:c.id,cn:c.name,r:r,tasks:activeTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
   })});
-  if(myRepairTasks.length){
+
+  if(repairGroups.length){
     hasAnything=true;
-    var totalMyTasks=myRepairTasks.reduce(function(s,i){return s+i.tasks.length},0);
-    secTitle(ct,"🔧 Мои ремонты ("+totalMyTasks+" задач)");
-    myRepairTasks.forEach(function(item){renderVehicleTaskGroup(ct,item)});
+    var totalTasks=repairGroups.reduce(function(s,i){return s+i.tasks.length},0);
+    secTitle(ct,"🔧 Ремонты в работе ("+repairGroups.length+" машин, "+totalTasks+" задач)");
+    repairGroups.forEach(function(item){renderVehicleTaskGroup(ct,item)});
   }
 
-  // ═══ ALL STAFF TASKS (admin/manager only) — grouped by person → vehicle ═══
+  // Other service tasks (admin sees tasks not assigned to self)
   if(isAdmin){
-    var otherByPerson={};
-    S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
-      if(rSt(r)==="cancelled")return;
-      var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
-      (r.tasks||[]).forEach(function(t){
-        var assignees=getAssignees(t);
-        var doneBy=getDoneBy(t);
-        assignees.forEach(function(auid){
-          if(auid===uid)return;
-          var thisDone=doneBy.indexOf(auid)>=0;
-          if(thisDone)return; // this person already done their part
-          if(tSt(t)==="done")return; // fully done
-          if(!otherByPerson[auid])otherByPerson[auid]={};
-          var rkey=c.id+"_"+r.id;
-          if(!otherByPerson[auid][rkey])otherByPerson[auid][rkey]={cid:c.id,cn:c.name,r:r,v:v,tasks:[]};
-          var exists=otherByPerson[auid][rkey].tasks.some(function(x){return x.id===t.id});
-          if(!exists)otherByPerson[auid][rkey].tasks.push(t);
-        });
-      });
-    })});
-    var otherSvcByPerson={};
-    S.tasks.forEach(function(t){
-      if(tSt(t)==="done")return;
-      getAssignees(t).forEach(function(auid){
-        if(auid===uid)return;
-        if(!otherSvcByPerson[auid])otherSvcByPerson[auid]=[];
-        otherSvcByPerson[auid].push(t);
-      });
-    });
-
-    var allPersonKeys=[];
-    Object.keys(otherByPerson).forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
-    Object.keys(otherSvcByPerson).forEach(function(k){if(allPersonKeys.indexOf(k)<0)allPersonKeys.push(k)});
-
-    if(allPersonKeys.length){
+    var otherSvc=S.tasks.filter(function(t){return!isMyTask(t)&&tSt(t)!=="done"});
+    if(otherSvc.length){
       hasAnything=true;
-      secTitle(ct,"👥 Задачи сотрудников");
-      allPersonKeys.forEach(function(puid){
-        var name=sN(puid);
-        var repairs=otherByPerson[puid]?Object.values(otherByPerson[puid]):[];
-        var svcTasks2=otherSvcByPerson[puid]||[];
-        var totalCount=repairs.reduce(function(s,i){return s+i.tasks.length},0)+svcTasks2.length;
-
-        // Collapsible person header
-        var pExp=false;
-        var pCont=h("div",{s:{display:"none"}});
-        var pArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-        var pHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:"rgba(139,92,246,.06)",borderRadius:"10px",border:"1px solid rgba(139,92,246,.12)",marginTop:"6px",marginBottom:"4px",cursor:"pointer"},onClick:function(){
-          pExp=!pExp;pCont.style.display=pExp?"block":"none";pArrow.style.transform=pExp?"rotate(90deg)":"rotate(0deg)";
-        }});
-        pHdr.append(pArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#a78bfa"}},"👤 "+name+" — "+totalCount+" задач"));
-        ct.appendChild(pHdr);
-        repairs.forEach(function(item){renderVehicleTaskGroup(pCont,item)});
-        svcTasks2.forEach(function(t){pCont.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
-
-        // Done tasks history for this person — by month
-        var doneByPerson=[];
-        S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
-          (r.tasks||[]).forEach(function(t){
-            if(getAssignees(t).indexOf(puid)>=0&&tSt(t)==="done"){
-              var vh=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})||{};
-              doneByPerson.push({desc:t.description||"",date:r.date||"",cn:c.name,brand:vh.brand||"",plate:vh.plate||"",comment:t.workComment||""});
-            }
-          });
-        })});
-        if(doneByPerson.length){
-          var mN2=["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-          var byM2={};doneByPerson.forEach(function(dt){
-            var mk=dt.date?dt.date.substring(0,7):"Другое";
-            if(!byM2[mk])byM2[mk]=[];byM2[mk].push(dt);
-          });
-          var hExp=false;
-          var hCont=h("div",{s:{display:"none",marginTop:"4px"}});
-          var hBtn=h("button",{s:{width:"100%",padding:"4px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.02)",color:"#64748b",fontSize:"10px",cursor:"pointer",marginTop:"6px"},onClick:function(){
-            hExp=!hExp;hCont.style.display=hExp?"block":"none";
-            hBtn.textContent=hExp?"▲ Скрыть историю":"▼ История ("+doneByPerson.length+")";
-          }},"▼ История ("+doneByPerson.length+")");
-          Object.keys(byM2).sort().reverse().forEach(function(mk){
-            var items=byM2[mk];var parts=mk.split("-");
-            var lab=parts.length===2?mN2[parseInt(parts[1])]+" "+parts[0]:mk;
-            hCont.appendChild(h("div",{s:{fontSize:"10px",fontWeight:"600",color:"#38bdf8",marginTop:"4px"}},lab+" ("+items.length+")"));
-            items.forEach(function(dt){
-              hCont.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",padding:"2px 8px",borderLeft:"2px solid rgba(56,189,248,.15)",marginLeft:"4px"}},
-                (dt.date?fD(dt.date)+" · ":"")+(dt.brand?dt.brand+" ":"")+(dt.plate?"["+dt.plate+"] ":"")+(dt.cn?dt.cn+" — ":"")+dt.desc+(dt.comment?" 📝"+dt.comment:"")));
-            });
-          });
-          pCont.appendChild(hBtn);
-          pCont.appendChild(hCont);
-        }
-
-        ct.appendChild(pCont);
-      });
+      secTitle(ct,"📝 Задачи сервиса сотрудников ("+otherSvc.length+")");
+      otherSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
     }
   }
 
@@ -683,7 +601,6 @@ function myTasksTab(ct){
     ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
   }
 }
-
 // Render vehicle header + task list grouped under it
 function renderVehicleTaskGroup(ct,item){
   var card=h("div",{cls:"rc"});
