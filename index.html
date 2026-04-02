@@ -1477,6 +1477,73 @@ function renderHistPeriod(title,repairs,color){
   renderHistPeriod("📆 "+mNames2[prevDate2.getMonth()+1]+" "+prevDate2.getFullYear(),prevMR,"99,102,241");
   renderHistPeriod("📂 Ранее",oldMR,"148,163,184");
 
+  // ═══ ЗАВЕРШЁННЫЕ ЗАДАЧИ И ПРОЕКТЫ ПО МЕСЯЦАМ ═══
+  var allDoneSvc=S.tasks.filter(function(t){return t.status==="done"});
+  if(allDoneSvc.length){
+    secTitle(ct,"📝 Завершённые задачи и проекты ("+allDoneSvc.length+")");
+    var tasksByMonth={};
+    allDoneSvc.forEach(function(t){
+      var mk=(t.createdAt||"").substring(0,7)||"Без даты";
+      if(!tasksByMonth[mk])tasksByMonth[mk]=[];
+      tasksByMonth[mk].push(t);
+    });
+    var tmKeys=Object.keys(tasksByMonth).sort().reverse();
+    var tmNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    tmKeys.forEach(function(mk){
+      var items=tasksByMonth[mk];
+      var parts=mk.split("-");
+      var mLabel=parts.length===2?tmNames[parseInt(parts[1])]+" "+parts[0]:mk;
+      var mExp=false;var mCont=h("div",{s:{display:"none"}});
+      var mArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var mHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+        mExp=!mExp;mCont.style.display=mExp?"block":"none";mArrow.style.transform=mExp?"rotate(90deg)":"rotate(0deg)";
+      }});
+      mHdr.append(mArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},mLabel+" ("+items.length+")"));
+      ct.appendChild(mHdr);
+      items.forEach(function(t){
+        var isProject=t.taskType==="project";
+        var subtasks=t.subtasks||[];
+        var tExp=false;
+        var tCnt=h("div",{s:{display:"none",marginTop:"8px",paddingTop:"8px",borderTop:"1px solid rgba(255,255,255,.05)"}});
+        var tArr=h("span",{s:{transition:"transform .22s",display:"inline-block",fontSize:"9px"}},"▶");
+        var tcd=h("div",{cls:"rc",s:{marginBottom:"4px",cursor:"pointer"},onClick:function(){
+          tExp=!tExp;tCnt.style.display=tExp?"block":"none";tArr.style.transform=tExp?"rotate(90deg)":"rotate(0deg)";
+        }});
+        var trw=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}});
+        trw.appendChild(tArr);
+        trw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},t.title||"Без названия"));
+        trw.appendChild(badge(isProject?"📐 Проект":"📝 Задача",isProject?"245,158,11":"99,102,241"));
+        trw.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},"👤 "+assigneeNames(t)));
+        if(t.photos&&t.photos.length)trw.appendChild(h("span",{s:{fontSize:"10px",color:"#64748b"}},"🖼 "+t.photos.length));
+        trw.appendChild(h("span",{s:{fontSize:"12px",color:"#4ade80",marginLeft:"auto"}},"✅"));
+        if(myRole()==="admin")trw.appendChild(h("button",{s:{padding:"2px 7px",borderRadius:"5px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){e.stopPropagation();if(confirm("Удалить?"))fbDelTask(t.id)}},"🗑"));
+        tcd.appendChild(trw);
+        if(t.description)tCnt.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",marginBottom:"6px"}},t.description));
+        if(t.workComment)tCnt.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",marginBottom:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"10px",fontWeight:"700"}},"📝 "),t.workComment));
+        if(t.photos&&t.photos.length){tCnt.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginBottom:"4px"}},"Фото"));tCnt.appendChild(photoGrid(t.photos,false));}
+        if(subtasks.length){
+          tCnt.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"8px",marginBottom:"4px"}},"Подзадачи ("+subtasks.length+")"));
+          subtasks.forEach(function(st,idx){
+            var stDone=st.status==="done";
+            var si=h("div",{s:{padding:"7px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.04)",marginBottom:"3px"}});
+            var sr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+            var sl=h("div",{s:{flex:"1"}});
+            sl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(st.description||"")));
+            sl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(st)));
+            sr.appendChild(sl);sr.appendChild(h("span",{s:{fontSize:"12px",flexShrink:"0",marginLeft:"6px"}},stDone?"✅":"🔧"));
+            si.appendChild(sr);
+            if(st.workComment)si.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),st.workComment));
+            if(st.photos&&st.photos.length){si.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));si.appendChild(photoGrid(st.photos,false));}
+            tCnt.appendChild(si);
+          });
+        }
+        tcd.appendChild(tCnt);
+        mCont.appendChild(tcd);
+      });
+      ct.appendChild(mCont);
+    });
+  }
+
   // ═══ STAFF STATS ═══
   secTitle(ct,"👥 По сотрудникам");
   // Build stats: per person -> machines, repair tasks, service tasks, projects
