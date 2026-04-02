@@ -2075,6 +2075,20 @@ function physForm(md,m){
   var descI=h("textarea",{cls:"fi",placeholder:"Неисправность"});
   var sT="refrigerator";
   var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
+
+  // Freon type selector
+  var freonType="";
+  var frTS=h("select",{cls:"fi"});
+  FREONS.forEach(function(f){
+    var o=document.createElement("option");o.value=f;o.textContent=f||"— не выбран —";
+    frTS.appendChild(o);
+  });
+  frTS.addEventListener("change",function(e){freonType=e.target.value});
+
+  // Mechanic picker
+  var selectedMechs=[S.u.uid];
+  var mechPicker=makeStaffPicker(selectedMechs);
+
   // Repair photos
   var photos=[];
   var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
@@ -2086,6 +2100,8 @@ function physForm(md,m){
     fg("Имя",nI),fg("Телефон",phI),
     fg("Марка авто",brI),fg("Гос. номер",plI),
     fg("Тип оборудования",tgW),
+    fg("🧊 Марка фреона",frTS),
+    fg("🔧 Назначить механика",mechPicker),
     fgWithMic("Неисправность",descI),
     fg("Фото неисправности",pG,fi,cam),
     h("button",{cls:"bp",onClick:function(){
@@ -2098,8 +2114,51 @@ function physForm(md,m){
         vehicles:[{id:vid,plate:plI.value.trim().toUpperCase(),brand:brI.value.trim(),serviceType:sT,notes:"",photo:vPhoto}],
         appointments:[]
       };
-      if(descI.value.trim()){
-        clientData.repairs=[{id:gid(),vehicleId:vid,date:new Date().toISOString().slice(0,10),serviceType:sT,description:descI.value.trim(),cost:"",photos:photos,tasks:[],status:"in_progress",freonType:"",freonAmount:""}];
+      if(descI.value.trim()||true){
+        // Всегда создаём наряд с задачей заправки фреоном
+        var mechs=selectedMechs.length?selectedMechs.slice():[S.u.uid];
+        var frLabel=freonType||"не указан";
+        var freonTask={
+          id:gid(),
+          assignees:mechs,
+          assignee:mechs[0],
+          doneBy:[],
+          description:"🧊 Заправка фреоном "+frLabel,
+          status:"in_progress",
+          photos:[],
+          freonTask:true,
+          freonKg:"",
+          createdAt:new Date().toISOString()
+        };
+        var repairTasks=[freonTask];
+        // Если есть описание неисправности — добавить основную задачу
+        if(descI.value.trim()){
+          repairTasks.unshift({
+            id:gid(),
+            assignees:mechs,
+            assignee:mechs[0],
+            doneBy:[],
+            description:descI.value.trim(),
+            status:"in_progress",
+            photos:photos,
+            freonTask:false,
+            freonKg:"",
+            createdAt:new Date().toISOString()
+          });
+        }
+        clientData.repairs=[{
+          id:gid(),
+          vehicleId:vid,
+          date:new Date().toISOString().slice(0,10),
+          serviceType:sT,
+          description:descI.value.trim(),
+          cost:"",
+          photos:descI.value.trim()?[]:photos,
+          tasks:repairTasks,
+          status:"in_progress",
+          freonType:freonType,
+          freonAmount:""
+        }];
       }else{
         clientData.repairs=[];
       }
