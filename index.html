@@ -1139,7 +1139,7 @@ function statsTab(ct){
       clientRev[r.cid].rev+=parseFloat(r.cost)||0;
       clientRev[r.cid].cnt++;
     });
-    var topClients=Object.keys(clientRev).map(function(k){return clientRev[k]}).sort(function(a,b){return b.rev-a.rev}).slice(0,5);
+    var topClients=Object.values(clientRev).sort(function(a,b){return b.rev-a.rev}).slice(0,5);
     if(topClients.length){
       var topWrap=h("div",{cls:"chart-wrap"});
       topWrap.appendChild(h("div",{cls:"chart-title"},"🏆 Топ клиентов по выручке"));
@@ -1175,9 +1175,6 @@ function statsTab(ct){
     repExp=!repExp;repCont.style.display=repExp?"block":"none";repArrow.style.transform=repExp?"rotate(90deg)":"rotate(0deg)";
   }});
   repHdr.append(repArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#38bdf8"}},"🔧 Заказ-наряды в работе ("+inProgR.length+")"));
-  // Add active service tasks/projects count to header
-  var activeSvcInWork=S.tasks.filter(function(t){return t.status!=="done"});
-  if(activeSvcInWork.length)repHdr.appendChild(h("span",{s:{fontSize:"11px",color:"#818cf8",marginLeft:"4px"}},"+ "+activeSvcInWork.length+" задач/проектов"));
   ct.appendChild(repHdr);
   if(inProgR.length){
     inProgR.forEach(function(r){
@@ -1210,22 +1207,120 @@ function statsTab(ct){
       repCont.appendChild(cd)
     })
   }else{repCont.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"))}
-  // Active service tasks & projects inside the same block
-  var activeSvc2=S.tasks.filter(function(t){return t.taskType==="task"&&t.status!=="done"});
-  var activePrj2=S.tasks.filter(function(t){return t.taskType==="project"&&t.status!=="done"});
-  if(activeSvc2.length){
-    var svcHdr=h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#818cf8",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px",padding:"0 2px"}});
-    svcHdr.textContent="📝 Задачи в работе ("+activeSvc2.length+")";
-    repCont.appendChild(svcHdr);
-    activeSvc2.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});
-  }
-  if(activePrj2.length){
-    var prjHdr=h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#f59e0b",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px",padding:"0 2px"}});
-    prjHdr.textContent="📐 Проекты в работе ("+activePrj2.length+")";
-    repCont.appendChild(prjHdr);
-    activePrj2.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});
-  }
+  var aST=S.tasks.filter(function(t){return t.taskType==="task"&&t.status!=="done"});
+  var aPT=S.tasks.filter(function(t){return t.taskType==="project"&&t.status!=="done"});
+  if(aST.length){repCont.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#818cf8",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px"}},"📝 Задачи в работе ("+aST.length+")"));aST.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});}
+  if(aPT.length){repCont.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#f59e0b",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px"}},"📐 Проекты в работе ("+aPT.length+")"));aPT.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});}
   ct.appendChild(repCont);
+
+  // ═══ COMPLETED CARS REPORT (collapsible) ═══
+  var doneRepairs=allR.filter(function(r){return rSt(r)==="done"});
+  if(doneRepairs.length){
+    secTitle(ct,"✅ Выполненные машины ("+doneRepairs.length+")");
+    doneRepairs.sort(function(a,b){return(b.closedAt||b.date||"").localeCompare(a.closedAt||a.date||"")});
+    doneRepairs.forEach(function(r){
+      var s=getS(r.serviceType);
+      var tasks=r.tasks||[];
+      var expanded=false;
+      var content=h("div",{s:{display:"none",marginTop:"8px"}});
+      var arrow=h("span",{s:{transition:"transform .25s",display:"inline-block",fontSize:"10px"}},"▶");
+
+      var cd=h("div",{cls:"rc",s:{marginBottom:"6px"}});
+      // ── Строка-заголовок (всегда видна) ──
+      var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"},onClick:function(){
+        expanded=!expanded;
+        content.style.display=expanded?"block":"none";
+        arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+      }});
+      hdr.appendChild(arrow);
+      var info=h("div",{s:{flex:"1",minWidth:0}});
+      var topLine=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
+      if(r.v&&r.v.brand)topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},r.v.brand));
+      if(r.v&&r.v.plate)topLine.appendChild(plate(r.v.plate));
+      topLine.appendChild(badge(s.e+" "+s.l,s.c));
+      info.appendChild(topLine);
+      info.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},r.cn+" · "+fD(r.date)+(tasks.length?" · "+tasks.length+" задач":"")));
+      hdr.appendChild(info);
+      if(r.cost&&myRole()==="admin")hdr.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"800",color:"#4ade80"}},r.cost+"₽"));
+      cd.appendChild(hdr);
+
+      // ── Раскрывающийся блок ──
+      if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",padding:"6px 0",lineHeight:"1.5",borderBottom:"1px solid rgba(255,255,255,.05)",marginBottom:"6px"}},"📝 "+r.description));
+      if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"6px",padding:"4px 8px",background:"rgba(6,182,212,.06)",borderRadius:"6px",display:"inline-block"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
+      // Фото наряда
+      if(r.photos&&r.photos.length){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"4px"}},"Фото наряда"));
+        content.appendChild(photoGrid(r.photos,false));
+      }
+      // Задачи
+      if(tasks.length){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginTop:"8px",marginBottom:"4px"}},"Задачи"));
+        tasks.forEach(function(t,idx){
+          var dn=tSt(t)==="done";
+          var ti=h("div",{s:{padding:"8px 10px",marginBottom:"4px",background:"rgba(255,255,255,.02)",borderRadius:"10px",border:"1px solid rgba(255,255,255,.05)"}});
+          var tr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+          var tl=h("div",null);
+          tl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(t.description||"")));
+          tl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"2px"}},"👤 "+assigneeNames(t)));
+          tr.appendChild(tl);
+          tr.appendChild(h("span",{s:{fontSize:"13px"}},dn?"✅":"🔧"));
+          ti.appendChild(tr);
+          if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"3px"}},"🧊 "+t.freonKg+" кг"));
+          if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)",lineHeight:"1.4"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),t.workComment));
+          if(t.photos&&t.photos.length){
+            ti.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
+            ti.appendChild(photoGrid(t.photos,false));
+          }
+          content.appendChild(ti);
+        });
+      }
+      content.appendChild(h("button",{s:{marginTop:"8px",padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}},"→ Карточка клиента"));
+      cd.appendChild(content);
+      ct.appendChild(cd);
+    });
+  }
+
+  // ═══ SERVICE TASKS (collapsible) ═══
+  var activeTasks=svcTasks.filter(function(t){return t.status!=="done"});
+  var doneTasks2=svcTasks.filter(function(t){return t.status==="done"});
+  if(activeTasks.length||doneTasks2.length){
+    var stExp=activeTasks.length>0;
+    var stCont=h("div",{s:{display:stExp?"block":"none"}});
+    var stArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px",transform:stExp?"rotate(90deg)":"rotate(0deg)"}},"▶");
+    var stHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+      stExp=!stExp;stCont.style.display=stExp?"block":"none";stArrow.style.transform=stExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    stHdr.append(stArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Задачи сервиса ("+activeTasks.length+" активных)"));
+    if(canManage())stHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"task"};R()}},"+"));
+    ct.appendChild(stHdr);
+    if(activeTasks.length){activeTasks.forEach(function(t){stCont.appendChild(renderSvcTaskCard(t,true))})}
+    if(doneTasks2.length){
+      stCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Выполнено: "+doneTasks2.length));
+      doneTasks2.slice(0,3).forEach(function(t){stCont.appendChild(renderSvcTaskCard(t,true))})
+    }
+    ct.appendChild(stCont);
+  }
+
+  // ═══ PROJECTS (collapsible) ═══
+  var activeProjects=svcProjects.filter(function(t){return t.status!=="done"});
+  var doneProjects=svcProjects.filter(function(t){return t.status==="done"});
+  if(activeProjects.length||doneProjects.length){
+    var prExp=activeProjects.length>0;
+    var prCont=h("div",{s:{display:prExp?"block":"none"}});
+    var prArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px",transform:prExp?"rotate(90deg)":"rotate(0deg)"}},"▶");
+    var prHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(245,158,11,.05)",borderRadius:"10px",border:"1px solid rgba(245,158,11,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
+      prExp=!prExp;prCont.style.display=prExp?"block":"none";prArrow.style.transform=prExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    prHdr.append(prArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f59e0b"}},"📐 Проекты ("+activeProjects.length+" активных)"));
+    if(canManage())prHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(245,158,11,.3)",background:"rgba(245,158,11,.1)",color:"#f59e0b",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"project"};R()}},"+"));
+    ct.appendChild(prHdr);
+    if(activeProjects.length){activeProjects.forEach(function(t){prCont.appendChild(renderSvcTaskCard(t,true))})}
+    if(doneProjects.length){
+      prCont.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",marginTop:"8px",marginBottom:"6px"}},"Завершено: "+doneProjects.length));
+      doneProjects.slice(0,3).forEach(function(t){prCont.appendChild(renderSvcTaskCard(t,true))})
+    }
+    ct.appendChild(prCont);
+  }
 
   // ═══ FREON REPORT ═══
   secTitle(ct,"🧊 Расход фреона");
@@ -1285,7 +1380,7 @@ function statsTab(ct){
       var parts=mk.split("-");
       var monthLabel=monthNames[parseInt(parts[1])]+" "+parts[0];
       var monthData=freonByMonth[mk];
-      var monthTotal=Object.keys(monthData).reduce(function(s,k){return s+monthData[k]},0);
+      var monthTotal=Object.values(monthData).reduce(function(s,v){return s+v},0);
       var mCard=h("div",{s:{background:"rgba(255,255,255,.02)",borderRadius:"8px",padding:"8px 10px",marginBottom:"4px",border:"1px solid rgba(255,255,255,.04)"}});
       mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}},
         h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},monthLabel),
@@ -1732,26 +1827,18 @@ function doneTab(ct){
   var doneSvc=S.tasks.filter(function(t){return t.status==="done"});
   if(doneSvc.length){
     secTitle(ct,"📝 Завершённые задачи и проекты ("+doneSvc.length+")");
-    var doneByMonth={};
-    doneSvc.forEach(function(t){
-      var dmk=(t.createdAt||"").substring(0,7)||"Без даты";
-      if(!doneByMonth[dmk])doneByMonth[dmk]=[];
-      doneByMonth[dmk].push(t);
-    });
-    var dmKeys=Object.keys(doneByMonth).sort().reverse();
-    var dmNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-    dmKeys.forEach(function(dmk){
-      var dmItems=doneByMonth[dmk];
-      var dmParts=dmk.split("-");
-      var dmLabel=dmParts.length===2?dmNames[parseInt(dmParts[1])]+" "+dmParts[0]:dmk;
-      var dmExp=false;var dmCont=h("div",{s:{display:"none"}});
-      var dmArr=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-      var dmHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
-        dmExp=!dmExp;dmCont.style.display=dmExp?"block":"none";dmArr.style.transform=dmExp?"rotate(90deg)":"rotate(0deg)";
-      }});
-      dmHdr.append(dmArr,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},dmLabel+" ("+dmItems.length+")"));
-      ct.appendChild(dmHdr);
-      dmItems.forEach(function(t){
+    var dBM={};
+    doneSvc.forEach(function(t){var k=(t.createdAt||"").substring(0,7)||"?";if(!dBM[k])dBM[k]=[];dBM[k].push(t);});
+    var dBMN=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    Object.keys(dBM).sort().reverse().forEach(function(mk){
+      var mI=dBM[mk];var mP=mk.split("-");
+      var mL=mP.length===2?dBMN[parseInt(mP[1])]+" "+mP[0]:mk;
+      var mE=false;var mC=h("div",{s:{display:"none"}});
+      var mA=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var mH=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){mE=!mE;mC.style.display=mE?"block":"none";mA.style.transform=mE?"rotate(90deg)":"rotate(0deg)";}});
+      mH.append(mA,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},mL+" ("+mI.length+")"));
+      ct.appendChild(mH);
+      mI.forEach(function(t){
       var isProject=t.taskType==="project";
       var subtasks=t.subtasks||[];
       var expanded=false;
@@ -1812,10 +1899,10 @@ function doneTab(ct){
         });
       }
       cd.appendChild(content);
-      dmCont.appendChild(cd);
+      mC.appendChild(cd);
     });
-    ct.appendChild(dmCont);
-  });
+    ct.appendChild(mC);
+    });
   }
 
   // ═══ EXCEL MONTHLY REPORT (admin only) ═══
@@ -1863,14 +1950,14 @@ function doneTab(ct){
           });
         });
       })});
-      Object.keys(staffMap).forEach(function(k){staffMap[k].machines=staffMap[k]._m?Object.keys(staffMap[k]._m).length:0;delete staffMap[k]._m});
+      Object.values(staffMap).forEach(function(s){s.machines=s._m?Object.keys(s._m).length:0;delete s._m});
       // Build Excel
       if(typeof XLSX==="undefined"){alert("SheetJS не загружен");return}
       var wb=XLSX.utils.book_new();
       // Sheet 1: Summary
       var sum=[["Отчёт за "+mLabel],[""],["Всего выручка",""+totalRev+" ₽"],["Всего нарядов",""+repData.length],[""]];
       sum.push(["Сотрудник","Машин","Задач"]);
-      Object.keys(staffMap).forEach(function(k){var sv=staffMap[k];sum.push([sv.name,""+sv.machines,""+sv.tasks])});
+      Object.values(staffMap).forEach(function(s){sum.push([s.name,""+s.machines,""+s.tasks])});
       var ws1=XLSX.utils.aoa_to_sheet(sum);
       ws1["!cols"]=[{wch:25},{wch:15},{wch:12}];
       XLSX.utils.book_append_sheet(wb,ws1,"Итоги");
