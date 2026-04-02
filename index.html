@@ -1212,58 +1212,68 @@ function statsTab(ct){
   // ═══ COMPLETED CARS REPORT (collapsible) ═══
   var doneRepairs=allR.filter(function(r){return rSt(r)==="done"});
   if(doneRepairs.length){
-    var dcExp=false;
-    var dcCont=h("div",{s:{display:"none"}});
-    var dcArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-    var dcHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(34,197,94,.05)",borderRadius:"10px",border:"1px solid rgba(34,197,94,.12)",marginBottom:"6px",cursor:"pointer"},onClick:function(){
-      dcExp=!dcExp;dcCont.style.display=dcExp?"block":"none";dcArrow.style.transform=dcExp?"rotate(90deg)":"rotate(0deg)";
-    }});
-    dcHdr.append(dcArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#4ade80"}},"✅ Выполненные машины ("+doneRepairs.length+")"));
-    ct.appendChild(dcHdr);
-    doneRepairs.sort(function(a,b){return(b.date||"").localeCompare(a.date||"")});
+    secTitle(ct,"✅ Выполненные машины ("+doneRepairs.length+")");
+    doneRepairs.sort(function(a,b){return(b.closedAt||b.date||"").localeCompare(a.closedAt||a.date||"")});
     doneRepairs.forEach(function(r){
       var s=getS(r.serviceType);
       var tasks=r.tasks||[];
       var expanded=false;
-      var content=h("div",{s:{display:"none",marginTop:"6px"}});
-      var arrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var content=h("div",{s:{display:"none",marginTop:"8px"}});
+      var arrow=h("span",{s:{transition:"transform .25s",display:"inline-block",fontSize:"10px"}},"▶");
 
-      var cd=h("div",{cls:"rc"});
+      var cd=h("div",{cls:"rc",s:{marginBottom:"6px"}});
+      // ── Строка-заголовок (всегда видна) ──
       var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"},onClick:function(){
-        expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+        expanded=!expanded;
+        content.style.display=expanded?"block":"none";
+        arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
       }});
       hdr.appendChild(arrow);
-      var info=h("div",{s:{flex:"1"}});
+      var info=h("div",{s:{flex:"1",minWidth:0}});
       var topLine=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
-      topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9"}},r.cn||""));
+      if(r.v&&r.v.brand)topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},r.v.brand));
       if(r.v&&r.v.plate)topLine.appendChild(plate(r.v.plate));
-      topLine.appendChild(badge(s.e,s.c));
+      topLine.appendChild(badge(s.e+" "+s.l,s.c));
       info.appendChild(topLine);
-      info.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},fD(r.date)+" · "+tasks.length+" задач"));
+      info.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},r.cn+" · "+fD(r.date)+(tasks.length?" · "+tasks.length+" задач":"")));
       hdr.appendChild(info);
-      if(r.cost&&myRole()==="admin")hdr.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
+      if(r.cost&&myRole()==="admin")hdr.appendChild(h("span",{s:{fontSize:"14px",fontWeight:"800",color:"#4ade80"}},r.cost+"₽"));
       cd.appendChild(hdr);
 
-      if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",padding:"4px 0",lineHeight:"1.5"}},"📝 "+r.description));
-      if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",padding:"2px 0"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
-      if(r.photos&&r.photos.length)content.appendChild(photoGrid(r.photos,false));
-      tasks.forEach(function(t){
-        var ti=h("div",{s:{padding:"6px 8px",marginTop:"4px",background:"rgba(255,255,255,.02)",borderRadius:"6px",border:"1px solid rgba(255,255,255,.04)"}});
-        var dn=tSt(t)==="done";
-        ti.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",fontSize:"11px",marginBottom:"2px"}},
-          h("span",{s:{color:"#a78bfa"}},"👤 "+assigneeNames(t)),
-          h("span",{s:{color:dn?"#4ade80":"#fb923c"}},dn?"✅":"🔧")));
-        if(t.description)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#cbd5e1"}},t.description));
-        if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"2px",padding:"3px 6px",background:"rgba(139,92,246,.06)",borderRadius:"4px"}},h("span",{s:{color:"#a78bfa",fontSize:"10px"}},"📝 "),t.workComment));
-        if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"10px",color:"#22d3ee"}},"🧊 "+t.freonKg+" кг"));
-        if(t.photos&&t.photos.length)ti.appendChild(photoGrid(t.photos,false));
-        content.appendChild(ti);
-      });
-      content.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",cursor:"pointer",marginTop:"6px"},onClick:function(){S.sel=r.cid;R()}},"→ Карточка клиента"));
+      // ── Раскрывающийся блок ──
+      if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",padding:"6px 0",lineHeight:"1.5",borderBottom:"1px solid rgba(255,255,255,.05)",marginBottom:"6px"}},"📝 "+r.description));
+      if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"6px",padding:"4px 8px",background:"rgba(6,182,212,.06)",borderRadius:"6px",display:"inline-block"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
+      // Фото наряда
+      if(r.photos&&r.photos.length){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"4px"}},"Фото наряда"));
+        content.appendChild(photoGrid(r.photos,false));
+      }
+      // Задачи
+      if(tasks.length){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginTop:"8px",marginBottom:"4px"}},"Задачи"));
+        tasks.forEach(function(t,idx){
+          var dn=tSt(t)==="done";
+          var ti=h("div",{s:{padding:"8px 10px",marginBottom:"4px",background:"rgba(255,255,255,.02)",borderRadius:"10px",border:"1px solid rgba(255,255,255,.05)"}});
+          var tr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}});
+          var tl=h("div",null);
+          tl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(t.description||"")));
+          tl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"2px"}},"👤 "+assigneeNames(t)));
+          tr.appendChild(tl);
+          tr.appendChild(h("span",{s:{fontSize:"13px"}},dn?"✅":"🔧"));
+          ti.appendChild(tr);
+          if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"3px"}},"🧊 "+t.freonKg+" кг"));
+          if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)",lineHeight:"1.4"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),t.workComment));
+          if(t.photos&&t.photos.length){
+            ti.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
+            ti.appendChild(photoGrid(t.photos,false));
+          }
+          content.appendChild(ti);
+        });
+      }
+      content.appendChild(h("button",{s:{marginTop:"8px",padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}},"→ Карточка клиента"));
       cd.appendChild(content);
-      dcCont.appendChild(cd);
+      ct.appendChild(cd);
     });
-    ct.appendChild(dcCont);
   }
 
   // ═══ SERVICE TASKS (collapsible) ═══
@@ -1822,46 +1832,55 @@ function doneTab(ct){
       var arrow=h("span",{s:{transition:"transform .25s",display:"inline-block",fontSize:"10px"}},"▶");
 
       var cd=h("div",{cls:"rc",s:{marginBottom:"6px"}});
+      // ── Строка-заголовок ──
       var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"},onClick:function(){
         expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
       }});
       hdr.appendChild(arrow);
-      var info=h("div",{s:{flex:"1"}});
+      var info=h("div",{s:{flex:"1",minWidth:0}});
       var topLine=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
       topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},t.title||"Без названия"));
       topLine.appendChild(badge(isProject?"📐 Проект":"📝 Задача",isProject?"245,158,11":"99,102,241"));
       info.appendChild(topLine);
-      var meta=h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}});
+      var meta=h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px",display:"flex",gap:"8px",flexWrap:"wrap"}});
       meta.appendChild(h("span",null,"👤 "+assigneeNames(t)));
-      if(subtasks.length)meta.appendChild(h("span",{s:{marginLeft:"8px"}},subtasks.length+" подзадач"));
+      if(subtasks.length)meta.appendChild(h("span",null,subtasks.length+" подзадач"));
+      if(t.photos&&t.photos.length)meta.appendChild(h("span",null,"🖼 "+t.photos.length+" фото"));
       info.appendChild(meta);
       hdr.appendChild(info);
-      // Admin: delete button
+      hdr.appendChild(h("span",{s:{fontSize:"12px",color:"#4ade80",fontWeight:"700",flexShrink:"0"}},"✅"));
+      // Admin delete
       if(myRole()==="admin"){
-        hdr.appendChild(h("button",{s:{padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){
+        hdr.appendChild(h("button",{s:{padding:"3px 7px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){
           e.stopPropagation();if(confirm("Удалить задачу «"+(t.title||"")+"»?"))fbDelTask(t.id);
         }},"🗑"));
       }
       cd.appendChild(hdr);
 
-      // ── Expanded detail ──
+      // ── Раскрывающийся блок ──
       if(t.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.05)",marginBottom:"6px"}},t.description));
       if(t.workComment)content.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",marginBottom:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"10px",fontWeight:"700"}},"📝 Отчёт: "),t.workComment));
-      if(t.photos&&t.photos.length)content.appendChild(photoGrid(t.photos,false));
-
-      // Subtasks
+      if(t.photos&&t.photos.length){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginBottom:"4px"}},"Фото"));
+        content.appendChild(photoGrid(t.photos,false));
+      }
       if(subtasks.length){
-        content.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"6px",marginTop:"4px"}},"Подзадачи:"));
-        subtasks.forEach(function(st){
+        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"6px",marginTop:"8px"}},"Подзадачи ("+subtasks.length+")"));
+        subtasks.forEach(function(st,idx){
           var stDone=st.status==="done";
-          var si=h("div",{s:{padding:"7px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.05)",marginBottom:"4px"}});
-          var sr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"2px"}});
-          sr.appendChild(h("span",{s:{fontSize:"11px",color:"#a78bfa"}},"👤 "+assigneeNames(st)));
-          sr.appendChild(h("span",{s:{fontSize:"10px",color:stDone?"#4ade80":"#fb923c"}},stDone?"✅":"🔧"));
+          var si=h("div",{s:{padding:"8px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.05)",marginBottom:"4px"}});
+          var sr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:st.description?"4px":"0"}});
+          var sl=h("div",null);
+          sl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(st.description||"")));
+          sl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(st)));
+          sr.appendChild(sl);
+          sr.appendChild(h("span",{s:{fontSize:"12px"}},stDone?"✅":"🔧"));
           si.appendChild(sr);
-          if(st.description)si.appendChild(h("div",{s:{fontSize:"11px",color:"#cbd5e1",marginTop:"2px"}},st.description));
-          if(st.workComment)si.appendChild(h("div",{s:{fontSize:"10px",color:"#e2e8f0",marginTop:"3px",padding:"3px 6px",background:"rgba(139,92,246,.06)",borderRadius:"4px"}},h("span",{s:{color:"#a78bfa",fontSize:"9px"}},"📝 "),st.workComment));
-          if(st.photos&&st.photos.length)si.appendChild(photoGrid(st.photos,false));
+          if(st.workComment)si.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),st.workComment));
+          if(st.photos&&st.photos.length){
+            si.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
+            si.appendChild(photoGrid(st.photos,false));
+          }
           content.appendChild(si);
         });
       }
