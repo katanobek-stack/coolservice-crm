@@ -143,7 +143,7 @@ function subCl(){if(u1)u1();u1=onSnapshot(query(collection(db,"clients"),orderBy
 function subSt(){if(u2)u2();u2=onSnapshot(collection(db,"staff"),function(s){S.st=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
 function subTasks(){if(u3)u3();u3=onSnapshot(collection(db,"servicetasks"),function(s){S.tasks=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
 function subFreezers(){if(u4)u4();u4=onSnapshot(collection(db,"freezers"),function(s){S.freezers=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});R()})}
-function subFinance(){if(u5)u5();u5=onSnapshot(doc(db,"settings","finance"),function(d){S.finance=d.exists()?d.data():{};R()})}
+function subFinance(){if(u5)u5();u5=onSnapshot(doc(db,"settings","finance"),function(d){S.finance=(d&&d.exists&&(typeof d.exists==="function"?d.exists():d.exists))?d.data():{};R()},function(err){console.warn("finance listener err",err);S.finance={};R()})}
 
 function fbAddFreezer(d){return addDoc(collection(db,"freezers"),Object.assign({},d,{createdAt:serverTimestamp()}))}
 function fbUpdFreezer(id,d){return updateDoc(doc(db,"freezers",id),d)}
@@ -2348,74 +2348,99 @@ function freezerForm(md,m){
     rentFields.style.display=rentChecked?"block":"none";
   });
   var noI=h("textarea",{cls:"fi",placeholder:"Заметки...",value:d.notes||""});
-  md.append(fg("Тип",tS),fg("Название",nI),fg("Объём",vI),fg("Мощность (кВт)",pwI),fg("Аренда",h("div",null,rentChk,rentFields)),fg("Заметки",noI),
-    h("button",{cls:"bp",onClick:function(){
+  var errDiv2=h("div",{s:{display:"none",color:"#f87171",fontSize:"12px",padding:"8px 12px",background:"rgba(239,68,68,.06)",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",marginBottom:"8px"}});
+  var saveBtn2=h("button",{cls:"bp",onClick:function(){
       var data={type:tS.value,name:nI.value.trim(),volume:parseFloat(vI.value)||0,powerKw:parseFloat(pwI.value)||0,rented:rentChecked,rentAmount:rentChecked?parseFloat(raI.value)||0:0,tenant:rentChecked?tenI.value.trim():"",notes:noI.value.trim()};
-      if(isE)fbUpdFreezer(d.id,data).then(function(){S.mod=null;R()});
-      else fbAddFreezer(data).then(function(){S.mod=null;R()});
-    }},isE?"Сохранить":"Добавить камеру"));
+      saveBtn2.textContent="Сохранение...";saveBtn2.disabled=true;errDiv2.style.display="none";
+      var p=isE?fbUpdFreezer(d.id,data):fbAddFreezer(data);
+      p.then(function(){S.mod=null;R()}).catch(function(e){saveBtn2.textContent=isE?"Сохранить":"Добавить камеру";saveBtn2.disabled=false;errDiv2.textContent="Ошибка: "+e.message;errDiv2.style.display="block";});
+    }},isE?"Сохранить":"Добавить камеру");
+  md.append(fg("Тип",tS),fg("Название",nI),fg("Объём",vI),fg("Мощность (кВт)",pwI),fg("Аренда",h("div",null,rentChk,rentFields)),fg("Заметки",noI),errDiv2,saveBtn2);
 }
 
 // ═══ FINANCE SETTINGS FORM ═══
 function financeForm(md,m){
   var f=S.finance||{};
   mH(md,"⚙️ Настройки расходов");
-  // Boxes rent
-  var boxesBlock=h("div",{s:{marginBottom:"14px"}});
+
+  // ── Boxes ──
+  var boxesData=(f.boxes&&f.boxes.length)?JSON.parse(JSON.stringify(f.boxes)):[{id:gid(),name:"",cost:0}];
+  var boxesBlock=h("div",{s:{marginBottom:"16px"}});
   boxesBlock.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"🏭 Аренда боксов"));
-  var boxes=f.boxes||[{id:gid(),name:"",cost:0}];
   var boxList=h("div",null);
   function renderBoxes(){
     boxList.innerHTML="";
-    boxes.forEach(function(b,i){
+    boxesData.forEach(function(b,i){
       var row=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",marginBottom:"6px"}});
       var nI=h("input",{cls:"fi",placeholder:"Название бокса",value:b.name||"",s:{flex:"2"}});
-      nI.addEventListener("input",function(e){boxes[i].name=e.target.value});
-      var cI=h("input",{cls:"fi",type:"number",placeholder:"₽/мес",value:b.cost||"",s:{flex:"1",padding:"10px 8px"}});
-      cI.addEventListener("input",function(e){boxes[i].cost=parseFloat(e.target.value)||0});
-      var del=h("button",{s:{padding:"8px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"13px",cursor:"pointer",flexShrink:"0"},onClick:function(){boxes.splice(i,1);renderBoxes()}},"×");
+      nI.addEventListener("input",function(e){boxesData[i].name=e.target.value});
+      var cI=h("input",{cls:"fi",type:"number",placeholder:"₽/мес",value:b.cost>0?b.cost:"",s:{flex:"1",padding:"10px 8px"}});
+      cI.addEventListener("input",function(e){boxesData[i].cost=parseFloat(e.target.value)||0});
+      var del=h("button",{s:{padding:"8px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"13px",cursor:"pointer",flexShrink:"0"},onClick:function(){boxesData.splice(i,1);renderBoxes()}},"×");
       row.append(nI,cI,del);boxList.appendChild(row);
     });
-    var addBtn=h("button",{s:{padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){boxes.push({id:gid(),name:"",cost:0});renderBoxes()}},"+ Добавить бокс");
-    boxList.appendChild(addBtn);
+    boxList.appendChild(h("button",{s:{padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer",width:"100%",marginTop:"2px"},onClick:function(){boxesData.push({id:gid(),name:"",cost:0});renderBoxes()}},"+ Добавить бокс"));
   }
   renderBoxes();
   boxesBlock.appendChild(boxList);
 
-  // Staff salaries
-  var staffBlock=h("div",{s:{marginBottom:"14px"}});
+  // ── Salaries ──
+  var salData;
+  if(f.salaries&&f.salaries.length){
+    salData=JSON.parse(JSON.stringify(f.salaries));
+  }else{
+    salData=S.st.map(function(s){return{uid:s.id,name:s.name,salary:0}});
+    if(!salData.length)salData=[{uid:gid(),name:"",salary:0}];
+  }
+  var staffBlock=h("div",{s:{marginBottom:"16px"}});
   staffBlock.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"👷 Зарплаты сотрудников"));
-  var salaries=f.salaries||[];
-  // Pre-fill from staff list if empty
-  if(!salaries.length&&S.st.length){salaries=S.st.map(function(s){return{uid:s.id,name:s.name,salary:0}})}
   var salList=h("div",null);
   function renderSalaries(){
     salList.innerHTML="";
-    salaries.forEach(function(s,i){
+    salData.forEach(function(s,i){
       var row=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",marginBottom:"6px"}});
       var nI=h("input",{cls:"fi",placeholder:"Имя",value:s.name||"",s:{flex:"2"}});
-      nI.addEventListener("input",function(e){salaries[i].name=e.target.value});
-      var sI=h("input",{cls:"fi",type:"number",placeholder:"₽/мес",value:s.salary||"",s:{flex:"1",padding:"10px 8px"}});
-      sI.addEventListener("input",function(e){salaries[i].salary=parseFloat(e.target.value)||0});
-      var del=h("button",{s:{padding:"8px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"13px",cursor:"pointer",flexShrink:"0"},onClick:function(){salaries.splice(i,1);renderSalaries()}},"×");
+      nI.addEventListener("input",function(e){salData[i].name=e.target.value});
+      var sI=h("input",{cls:"fi",type:"number",placeholder:"₽/мес",value:s.salary>0?s.salary:"",s:{flex:"1",padding:"10px 8px"}});
+      sI.addEventListener("input",function(e){salData[i].salary=parseFloat(e.target.value)||0});
+      var del=h("button",{s:{padding:"8px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"13px",cursor:"pointer",flexShrink:"0"},onClick:function(){salData.splice(i,1);renderSalaries()}},"×");
       row.append(nI,sI,del);salList.appendChild(row);
     });
-    var addBtn=h("button",{s:{padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){salaries.push({uid:gid(),name:"",salary:0});renderSalaries()}},"+ Добавить сотрудника");
-    salList.appendChild(addBtn);
+    salList.appendChild(h("button",{s:{padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer",width:"100%",marginTop:"2px"},onClick:function(){salData.push({uid:gid(),name:"",salary:0});renderSalaries()}},"+ Добавить сотрудника"));
   }
   renderSalaries();
   staffBlock.appendChild(salList);
 
-  // kWh price
-  var kwWrap=h("div",{s:{marginBottom:"14px"}});
-  kwWrap.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"⚡ Цена электричества"));
-  var kwI=h("input",{cls:"fi",type:"number",placeholder:"₽ за кВт·ч",value:f.kwPrice||"",step:"0.01"});
+  // ── kWh price ──
+  var kwWrap=h("div",{s:{marginBottom:"16px"}});
+  kwWrap.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"⚡ Цена электричества (₽/кВт·ч)"));
+  var kwI=h("input",{cls:"fi",type:"number",placeholder:"напр. 6.5",value:f.kwPrice>0?f.kwPrice:"",step:"0.01"});
   kwWrap.appendChild(kwI);
 
-  md.append(boxesBlock,staffBlock,kwWrap,
-    h("button",{cls:"bp",onClick:function(){
-      fbSaveFinance({boxes:boxes,salaries:salaries,kwPrice:parseFloat(kwI.value)||0}).then(function(){S.mod=null;R()});
-    }},"💾 Сохранить"));
+  // ── Error display ──
+  var errDiv=h("div",{s:{display:"none",color:"#f87171",fontSize:"12px",padding:"8px 12px",background:"rgba(239,68,68,.06)",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",marginBottom:"8px"}});
+
+  // ── Save button ──
+  var saveBtn=h("button",{cls:"bp",onClick:function(){
+    var payload={
+      boxes:boxesData.map(function(b){return{id:b.id||gid(),name:b.name||"",cost:parseFloat(b.cost)||0}}),
+      salaries:salData.map(function(s){return{uid:s.uid||gid(),name:s.name||"",salary:parseFloat(s.salary)||0}}),
+      kwPrice:parseFloat(kwI.value)||0
+    };
+    saveBtn.textContent="Сохранение...";
+    saveBtn.disabled=true;
+    errDiv.style.display="none";
+    fbSaveFinance(payload).then(function(){
+      S.mod=null;R();
+    }).catch(function(e){
+      saveBtn.textContent="💾 Сохранить";
+      saveBtn.disabled=false;
+      errDiv.textContent="Ошибка: "+e.message;
+      errDiv.style.display="block";
+    });
+  }},"💾 Сохранить");
+
+  md.append(boxesBlock,staffBlock,kwWrap,errDiv,saveBtn);
 }
 
 // ═══ P&L SECTION in statsTab (called at end of statsTab) ═══
