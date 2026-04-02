@@ -2059,7 +2059,7 @@ function detailView(){
 // ═══ MODALS ═══
 function modalView(){
   var m=S.mod;var ov=h("div",{cls:"ov",onClick:function(){S.mod=null;R()}});var md=h("div",{cls:"md",onClick:function(e){e.stopPropagation()}});
-  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm,addSubTask:subTaskForm,addFreezer:freezerForm,editFreezer:freezerForm,editFinance:financeForm};
+  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm,addSubTask:subTaskForm,addFreezer:freezerForm,editFreezer:freezerForm,editFinance:financeForm,startRent:startRentForm};
   var fn=map[m.t];if(fn)fn(md,m);ov.appendChild(md);return ov
 }
 
@@ -2388,33 +2388,21 @@ function stForm(md,m){
 
 // ═══ FREEZERS TAB ═══
 var FREEZER_TYPES=["Рефрижераторный контейнер","Холодильная камера","Морозильная камера","Витрина","Другое"];
+
 function freezersTab(ct){
-  // Summary cards
   var total=S.freezers.length;
   var rented=S.freezers.filter(function(f){return f.rented&&f.rentAmount>0});
   var rentIncome=rented.reduce(function(s,f){return s+(parseFloat(f.rentAmount)||0)},0);
-  var elecCost=S.freezers.reduce(function(s,f){
-    var kw=parseFloat(f.powerKw)||0;var pr=parseFloat(S.finance.kwPrice||0);
-    return s+kw*24*30*pr;
-  },0);
 
+  // KPI
   var grid=h("div",{cls:"stat-grid",s:{marginBottom:"14px"}});
-  [{v:total,l:"🧊 Всего камер",cls:""},{v:rented.length,l:"📤 Сдаётся",cls:"green"},{v:rentIncome+"₽",l:"💰 Доход/мес",cls:"green"},{v:Math.round(elecCost)+"₽",l:"⚡ Электро/мес",cls:"orange"}].forEach(function(k){
+  [{v:total,l:"🧊 Всего камер",cls:""},{v:rented.length,l:"📤 Сдаётся",cls:"green"},{v:rentIncome+"₽",l:"💰 Доход/мес",cls:"green"},{v:(total-rented.length),l:"🏠 Свободно",cls:""}].forEach(function(k){
     var sc=h("div",{cls:"stat-card"+(k.cls?" "+k.cls:"")});
     sc.appendChild(h("div",{cls:"stat-num"},""+k.v));
     sc.appendChild(h("div",{cls:"stat-lbl"},k.l));
     grid.appendChild(sc);
   });
   ct.appendChild(grid);
-
-  // kWh price setting
-  var kwRow=h("div",{s:{display:"flex",alignItems:"center",gap:"10px",padding:"10px 14px",background:"rgba(251,146,60,.06)",borderRadius:"12px",border:"1px solid rgba(251,146,60,.15)",marginBottom:"12px"}});
-  kwRow.appendChild(h("span",{s:{fontSize:"13px",color:"#fb923c",flex:"1"}},"⚡ Цена за кВт·ч"));
-  var kwInput=h("input",{cls:"fi",type:"number",placeholder:"руб",value:S.finance.kwPrice||"",step:"0.01",s:{width:"90px",padding:"6px 10px",fontSize:"13px",fontWeight:"700",textAlign:"center"}});
-  kwRow.appendChild(kwInput);
-  kwRow.appendChild(h("span",{s:{fontSize:"12px",color:"#94a3b8"}},"₽"));
-  kwRow.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"none",background:"linear-gradient(135deg,#d97706,#f59e0b)",color:"#fff",fontSize:"12px",fontWeight:"700",cursor:"pointer"},onClick:function(){fbSaveFinance({kwPrice:parseFloat(kwInput.value)||0})}},"💾"));
-  ct.appendChild(kwRow);
 
   if(!S.freezers.length){
     ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px 20px"}},
@@ -2426,79 +2414,150 @@ function freezersTab(ct){
 
   secTitle(ct,"🧊 Камеры на балансе ("+total+")");
   S.freezers.forEach(function(f){
-    var kw=parseFloat(f.powerKw)||0;
-    var kwPr=parseFloat(S.finance.kwPrice)||0;
-    var monthlyCost=Math.round(kw*24*30*kwPr);
-    var cd=h("div",{cls:"rc"});
-    // Header row
-    var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}});
+    var cd=h("div",{cls:"rc",s:{marginBottom:"10px"}});
+
+    // ── Шапка карточки ──
+    var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}});
     var left=h("div",{s:{flex:"1"}});
-    left.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"700",color:"#f1f5f9"}},f.name||f.type||"Камера"));
+    left.appendChild(h("div",{s:{fontSize:"15px",fontWeight:"700",color:"#f1f5f9"}},f.name||f.type||"Камера"));
     left.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},(f.type||"")+(f.volume?" · "+f.volume+" м³":"")));
     top.appendChild(left);
-    // Status badge
-    var statusBadge=f.rented?badge("📤 Аренда","52,211,153"):badge("🏠 На базе","100,116,139");
-    top.appendChild(h("div",{s:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"4px"}},statusBadge,
-      h("div",{s:{display:"flex",gap:"4px"}},
-        h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editFreezer",d:f};R()}},"✏️"),
-        h("button",{s:{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить камеру?"))fbDelFreezer(f.id)}},"🗑"))));
+    var statusBadge=f.rented?badge("📤 Сдаётся","52,211,153"):badge("🏠 Свободна","100,116,139");
+    top.appendChild(h("div",{s:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}},statusBadge,
+      h("div",{s:{display:"flex",gap:"6px"}},
+        h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)",color:"#94a3b8",fontSize:"12px",cursor:"pointer"},onClick:function(){S.mod={t:"editFreezer",d:f};R()}},"✏️"),
+        h("button",{s:{padding:"5px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"12px",cursor:"pointer"},onClick:function(){if(confirm("Удалить камеру «"+(f.name||f.type)+"»?"))fbDelFreezer(f.id)}},"🗑"))));
     cd.appendChild(top);
 
-    // Info grid
-    var info=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",marginTop:"4px"}});
-    function infoCell(icon,label,val,color){
-      var cell=h("div",{s:{background:"rgba(255,255,255,.03)",borderRadius:"8px",padding:"8px 10px",border:"1px solid rgba(255,255,255,.05)"}});
-      cell.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".04em"}},icon+" "+label));
-      cell.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"700",color:color||"#f1f5f9",marginTop:"2px"}},val));
-      return cell;
+    if(f.rented){
+      // ── АРЕНДА АКТИВНА ──
+      var rentBlock=h("div",{s:{background:"rgba(52,211,153,.06)",borderRadius:"12px",padding:"12px 14px",border:"1px solid rgba(52,211,153,.15)",marginBottom:"8px"}});
+
+      // Арендатор + дата начала + сумма
+      var rInfo=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+      function infoCell2(icon,lbl,val,clr){
+        var c=h("div",{s:{background:"rgba(255,255,255,.03)",borderRadius:"8px",padding:"8px 10px"}});
+        c.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",letterSpacing:".05em"}},icon+" "+lbl));
+        c.appendChild(h("div",{s:{fontSize:"13px",fontWeight:"700",color:clr||"#f1f5f9",marginTop:"2px"}},val||"—"));
+        return c;
+      }
+      rInfo.appendChild(infoCell2("👤","Арендатор",f.tenant,"#a78bfa"));
+      rInfo.appendChild(infoCell2("💰","Оплата/мес",(f.rentAmount||0)+"₽","#34d399"));
+      rInfo.appendChild(infoCell2("📅","С",""+fD(f.rentFrom),"#38bdf8"));
+      rInfo.appendChild(infoCell2("📅","Оплачено до",f.paidUntil?fD(f.paidUntil):"—","#fbbf24"));
+      rentBlock.appendChild(rInfo);
+
+      // Счётчик
+      var mtrBlock=h("div",{s:{borderTop:"1px solid rgba(52,211,153,.12)",paddingTop:"10px"}});
+      mtrBlock.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#22d3ee",marginBottom:"8px"}},"⚡ Счётчик электроэнергии"));
+      var mtrGrid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}});
+      mtrGrid.appendChild(infoCell2("🔌","Начало (кВт·ч)",(f.meterStart!=null?f.meterStart:"—"),"#fb923c"));
+      var mtrUsed=f.meterCurrent!=null&&f.meterStart!=null?Math.max(0,parseFloat(f.meterCurrent)-parseFloat(f.meterStart)).toFixed(1):"—";
+      mtrGrid.appendChild(infoCell2("📊","Расход (кВт·ч)",mtrUsed,"#fb923c"));
+      var kwPr=parseFloat(S.finance.kwPrice)||0;
+      var elecCost2=mtrUsed!=="—"&&kwPr>0?Math.round(parseFloat(mtrUsed)*kwPr)+"₽":"—";
+      mtrGrid.appendChild(infoCell2("⚡","Тек. показания",(f.meterCurrent!=null?f.meterCurrent:"—"),"#fbbf24"));
+      mtrGrid.appendChild(infoCell2("💸","Стоим. электро",elecCost2,"#f87171"));
+      mtrBlock.appendChild(mtrGrid);
+
+      // Ввод текущих показаний
+      var mtrRow=h("div",{s:{display:"flex",gap:"8px",alignItems:"center"}});
+      var mtrInput=h("input",{cls:"fi",type:"number",placeholder:"Текущие показания кВт·ч",value:f.meterCurrent!=null?f.meterCurrent:"",step:"0.1",s:{flex:"1",padding:"8px 12px",fontSize:"13px"}});
+      mtrRow.appendChild(mtrInput);
+      mtrRow.appendChild(h("button",{s:{padding:"8px 14px",borderRadius:"10px",border:"none",background:"linear-gradient(135deg,#0284c7,#38bdf8)",color:"#fff",fontSize:"12px",fontWeight:"700",cursor:"pointer",flexShrink:"0"},onClick:function(){
+        var val=parseFloat(mtrInput.value);if(isNaN(val))return;
+        fbUpdFreezer(f.id,{meterCurrent:val});
+      }},"💾 Сохранить"));
+      mtrBlock.appendChild(mtrRow);
+      rentBlock.appendChild(mtrBlock);
+      cd.appendChild(rentBlock);
+
+      // Кнопка — завершить аренду
+      cd.appendChild(h("button",{s:{width:"100%",padding:"8px",borderRadius:"10px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.04)",color:"#f87171",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){
+        if(!confirm("Зафиксировать завершение аренды? Камера будет отмечена как свободная."))return;
+        var hist=(f.rentHistory||[]).slice();
+        hist.push({tenant:f.tenant,rentFrom:f.rentFrom,rentTo:new Date().toISOString().slice(0,10),rentAmount:f.rentAmount,meterStart:f.meterStart,meterEnd:f.meterCurrent||f.meterStart,paidUntil:f.paidUntil});
+        fbUpdFreezer(f.id,{rented:false,tenant:"",rentFrom:"",rentAmount:0,meterStart:null,meterCurrent:null,paidUntil:"",rentHistory:hist});
+      }},"🔴 Завершить аренду"));
+
+    }else{
+      // ── КАМЕРА СВОБОДНА ──
+      cd.appendChild(h("button",{s:{width:"100%",padding:"10px",borderRadius:"12px",border:"1px solid rgba(52,211,153,.25)",background:"rgba(52,211,153,.06)",color:"#34d399",fontSize:"13px",fontWeight:"700",cursor:"pointer"},onClick:function(){
+        S.mod={t:"startRent",d:f};R();
+      }},"📤 Сдать в аренду"));
     }
-    if(f.powerKw)info.appendChild(infoCell("⚡","Мощность",f.powerKw+" кВт","#fb923c"));
-    if(monthlyCost>0)info.appendChild(infoCell("💸","Электро/мес",monthlyCost+"₽","#f87171"));
-    if(f.rented&&f.rentAmount)info.appendChild(infoCell("💰","Аренда/мес",f.rentAmount+"₽","#34d399"));
-    if(f.rented&&f.rentAmount&&monthlyCost>0){
-      var profit=parseFloat(f.rentAmount)-monthlyCost;
-      info.appendChild(infoCell("📊","Прибыль/мес",(profit>=0?"+":"")+Math.round(profit)+"₽",profit>=0?"#34d399":"#f87171"));
+
+    // ── История аренды ──
+    if(f.rentHistory&&f.rentHistory.length){
+      var histExp=false;var histCont=h("div",{s:{display:"none",marginTop:"6px"}});
+      var histArr=h("span",{s:{fontSize:"10px",display:"inline-block",transition:"transform .2s"}},"▶");
+      var histHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",padding:"6px 10px",borderRadius:"8px",background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.05)",cursor:"pointer",marginTop:"8px"},onClick:function(){
+        histExp=!histExp;histCont.style.display=histExp?"block":"none";histArr.style.transform=histExp?"rotate(90deg)":"";
+      }});
+      histHdr.append(histArr,h("span",{s:{fontSize:"11px",color:"#64748b"}},"📋 История аренды ("+f.rentHistory.length+")"));
+      cd.appendChild(histHdr);
+      f.rentHistory.slice().reverse().forEach(function(hr){
+        var kwUsed=hr.meterEnd!=null&&hr.meterStart!=null?Math.max(0,parseFloat(hr.meterEnd)-parseFloat(hr.meterStart)).toFixed(1):null;
+        var hCard=h("div",{s:{padding:"8px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",marginBottom:"4px",border:"1px solid rgba(255,255,255,.04)"}});
+        hCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",marginBottom:"3px"}},h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},hr.tenant||"—"),h("span",{s:{fontSize:"11px",fontWeight:"700",color:"#34d399"}},(hr.rentAmount||0)+"₽/мес")));
+        hCard.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b"}},fD(hr.rentFrom)+" → "+fD(hr.rentTo)));
+        if(kwUsed)hCard.appendChild(h("div",{s:{fontSize:"10px",color:"#fb923c",marginTop:"2px"}},"⚡ Расход: "+kwUsed+" кВт·ч"+(kwPr>0?" = "+Math.round(parseFloat(kwUsed)*kwPr)+"₽":"")));
+        histCont.appendChild(hCard);
+      });
+      cd.appendChild(histCont);
     }
-    if(f.rented&&f.tenant)info.appendChild(infoCell("👤","Арендатор",f.tenant,"#a78bfa"));
-    if(f.notes)cd.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"6px",padding:"4px 8px",background:"rgba(255,255,255,.02)",borderRadius:"6px"}},f.notes));
-    if(Object.keys(info.children).length||info.childNodes.length)cd.appendChild(info);
+
+    if(f.notes)cd.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"8px",padding:"6px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px"}},f.notes));
     ct.appendChild(cd);
   });
 }
 
-// ═══ FREEZER FORM ═══
+// ═══ START RENT MODAL ═══
+function startRentForm(md,m){
+  var f=m.d||{};
+  mH(md,"📤 Сдать в аренду — "+(f.name||f.type||"Камера"));
+  var tenI=h("input",{cls:"fi",placeholder:"Арендатор (имя / компания)"});
+  var raI=h("input",{cls:"fi",type:"number",placeholder:"Сумма аренды ₽/мес",step:"1"});
+  var fromI=h("input",{cls:"fi",type:"date",value:new Date().toISOString().slice(0,10)});
+  var paidI=h("input",{cls:"fi",type:"date"});
+  // Auto-fill paidUntil = from + 1 month
+  fromI.addEventListener("change",function(){
+    if(fromI.value){var d=new Date(fromI.value);d.setMonth(d.getMonth()+1);paidI.value=d.toISOString().slice(0,10)}
+  });
+  var d2=new Date();d2.setMonth(d2.getMonth()+1);paidI.value=d2.toISOString().slice(0,10);
+  var mtrI=h("input",{cls:"fi",type:"number",placeholder:"Начальные показания счётчика (кВт·ч)",step:"0.1"});
+  var errD=h("div",{s:{display:"none",color:"#f87171",fontSize:"12px",padding:"8px 12px",background:"rgba(239,68,68,.06)",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",marginBottom:"8px"}});
+  var saveBtn=h("button",{cls:"bp",onClick:function(){
+    var ten=tenI.value.trim();var ra=parseFloat(raI.value)||0;
+    if(!ten){errD.textContent="Укажите арендатора";errD.style.display="block";return}
+    if(!ra){errD.textContent="Укажите сумму аренды";errD.style.display="block";return}
+    if(!fromI.value){errD.textContent="Укажите дату начала";errD.style.display="block";return}
+    saveBtn.textContent="Сохранение...";saveBtn.disabled=true;errD.style.display="none";
+    fbUpdFreezer(f.id,{rented:true,tenant:ten,rentAmount:ra,rentFrom:fromI.value,paidUntil:paidI.value,meterStart:mtrI.value!=""?parseFloat(mtrI.value):null,meterCurrent:mtrI.value!=""?parseFloat(mtrI.value):null})
+      .then(function(){S.mod=null;R()})
+      .catch(function(e){saveBtn.textContent="Сдать в аренду";saveBtn.disabled=false;errD.textContent="Ошибка: "+e.message;errD.style.display="block"});
+  }},"📤 Сдать в аренду");
+  md.append(fg("Арендатор",tenI),fg("Сумма аренды (₽/мес)",raI),fg("Дата начала аренды",fromI),fg("Оплачено до",paidI),fg("Нач. показания счётчика (кВт·ч)",mtrI),errD,saveBtn);
+}
+
+// ═══ FREEZER FORM (добавить / редактировать камеру) ═══
 function freezerForm(md,m){
   var isE=m.t==="editFreezer";var d=m.d||{};
-  mH(md,isE?"Редактировать камеру":"Добавить камеру");
-  var nI=h("input",{cls:"fi",placeholder:"Название (необязательно)",value:d.name||""});
+  mH(md,isE?"Редактировать камеру":"Добавить камеру на баланс");
   var tS=h("select",{cls:"fi"});
   FREEZER_TYPES.forEach(function(t){var o=h("option",{value:t},t);if(t===(d.type||""))o.selected=true;tS.appendChild(o)});
+  var nI=h("input",{cls:"fi",placeholder:"Название (необязательно)",value:d.name||""});
   var vI=h("input",{cls:"fi",type:"number",placeholder:"Объём, м³",value:d.volume||"",step:"0.1"});
-  var pwI=h("input",{cls:"fi",type:"number",placeholder:"Потребление, кВт",value:d.powerKw||"",step:"0.1"});
-  var rentChk=h("div",{s:{display:"flex",alignItems:"center",gap:"10px",padding:"10px",background:"rgba(52,211,153,.05)",borderRadius:"10px",border:"1px solid rgba(52,211,153,.12)",cursor:"pointer",marginBottom:"4px"}});
-  var rentChecked=d.rented||false;
-  var rentBox=h("div",{s:{width:"22px",height:"22px",borderRadius:"6px",border:"2px solid "+(rentChecked?"#34d399":"rgba(255,255,255,.15)"),background:rentChecked?"rgba(52,211,153,.2)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"13px",color:"#34d399",flexShrink:"0"}},rentChecked?"✓":"");
-  rentChk.append(rentBox,h("span",{s:{fontSize:"13px",color:"#cbd5e1",fontWeight:"500"}},"📤 Сдаётся в аренду"));
-  var rentFields=h("div",{s:{display:rentChecked?"block":"none"}});
-  var raI=h("input",{cls:"fi",type:"number",placeholder:"Сумма аренды ₽/мес",value:d.rentAmount||""});
-  var tenI=h("input",{cls:"fi",placeholder:"Арендатор (название/имя)",value:d.tenant||""});
-  rentFields.append(fg("Сумма аренды (₽/мес)",raI),fg("Арендатор",tenI));
-  rentChk.addEventListener("click",function(){
-    rentChecked=!rentChecked;
-    rentBox.style.border="2px solid "+(rentChecked?"#34d399":"rgba(255,255,255,.15)");
-    rentBox.style.background=rentChecked?"rgba(52,211,153,.2)":"transparent";
-    rentBox.textContent=rentChecked?"✓":"";
-    rentFields.style.display=rentChecked?"block":"none";
-  });
   var noI=h("textarea",{cls:"fi",placeholder:"Заметки...",value:d.notes||""});
   var errDiv2=h("div",{s:{display:"none",color:"#f87171",fontSize:"12px",padding:"8px 12px",background:"rgba(239,68,68,.06)",borderRadius:"8px",border:"1px solid rgba(239,68,68,.15)",marginBottom:"8px"}});
   var saveBtn2=h("button",{cls:"bp",onClick:function(){
-      var data={type:tS.value,name:nI.value.trim(),volume:parseFloat(vI.value)||0,powerKw:parseFloat(pwI.value)||0,rented:rentChecked,rentAmount:rentChecked?parseFloat(raI.value)||0:0,tenant:rentChecked?tenI.value.trim():"",notes:noI.value.trim()};
-      saveBtn2.textContent="Сохранение...";saveBtn2.disabled=true;errDiv2.style.display="none";
-      var p=isE?fbUpdFreezer(d.id,data):fbAddFreezer(data);
-      p.then(function(){S.mod=null;R()}).catch(function(e){saveBtn2.textContent=isE?"Сохранить":"Добавить камеру";saveBtn2.disabled=false;errDiv2.textContent="Ошибка: "+e.message;errDiv2.style.display="block";});
-    }},isE?"Сохранить":"Добавить камеру");
-  md.append(fg("Тип",tS),fg("Название",nI),fg("Объём",vI),fg("Мощность (кВт)",pwI),fg("Аренда",h("div",null,rentChk,rentFields)),fg("Заметки",noI),errDiv2,saveBtn2);
+    var data={type:tS.value,name:nI.value.trim(),volume:parseFloat(vI.value)||0,notes:noI.value.trim()};
+    if(!isE){data.rented=false;data.rentHistory=[];}
+    saveBtn2.textContent="Сохранение...";saveBtn2.disabled=true;errDiv2.style.display="none";
+    var p=isE?fbUpdFreezer(d.id,data):fbAddFreezer(data);
+    p.then(function(){S.mod=null;R()}).catch(function(e){saveBtn2.textContent=isE?"Сохранить":"Добавить";saveBtn2.disabled=false;errDiv2.textContent="Ошибка: "+e.message;errDiv2.style.display="block"});
+  }},isE?"Сохранить":"Добавить камеру");
+  md.append(fg("Тип",tS),fg("Название",nI),fg("Объём (м³)",vI),fg("Заметки",noI),errDiv2,saveBtn2);
 }
 
 // ═══ FINANCE SETTINGS FORM ═══
@@ -2568,7 +2627,8 @@ function financeForm(md,m){
     var payload={
       boxes:boxesData.map(function(b){return{id:b.id||gid(),name:b.name||"",cost:parseFloat(b.cost)||0}}),
       salaries:salData.map(function(s){return{uid:s.uid||gid(),name:s.name||"",salary:parseFloat(s.salary)||0}}),
-      kwPrice:parseFloat(kwI.value)||0
+      kwPrice:parseFloat(kwI.value)||0,
+      elecBills:f.elecBills||{}
     };
     saveBtn.textContent="Сохранение...";
     saveBtn.disabled=true;
@@ -2591,35 +2651,68 @@ function renderPnL(ct,allR){
   var f=S.finance||{};
   var now=new Date();
   var curMK=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  var prevD=new Date(now.getFullYear(),now.getMonth()-1,1);
+  var prevMK=prevD.getFullYear()+"-"+String(prevD.getMonth()+1).padStart(2,"0");
+  var mNames=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+  // ── Счёт за свет — быстрый ввод ──
+  var elecBills=f.elecBills||{};
+  var elecWidget=h("div",{s:{background:"rgba(251,146,60,.06)",borderRadius:"14px",padding:"14px 16px",marginBottom:"12px",border:"1px solid rgba(251,146,60,.18)"}});
+  elecWidget.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#fb923c",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"⚡ Счёт за электричество"));
+
+  // Последние 3 месяца для ввода
+  for(var mi=1;mi<=3;mi++){
+    var mD=new Date(now.getFullYear(),now.getMonth()-mi,1);
+    var mk=mD.getFullYear()+"-"+String(mD.getMonth()+1).padStart(2,"0");
+    var mLabel=mNames[mD.getMonth()]+" "+mD.getFullYear();
+    var existing=elecBills[mk]||"";
+    (function(monthKey,label,existVal){
+      var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}});
+      row.appendChild(h("span",{s:{fontSize:"12px",color:"#94a3b8",flex:"1",fontWeight:"500"}},label));
+      var inp=h("input",{cls:"fi",type:"number",placeholder:"₽",value:existVal>0?existVal:"",step:"1",s:{width:"110px",padding:"7px 10px",fontSize:"13px",fontWeight:"700",textAlign:"right"}});
+      var saved=h("span",{s:{fontSize:"11px",color:"#4ade80",display:existVal>0?"inline":"none"}},"✓");
+      row.appendChild(inp);row.appendChild(h("span",{s:{fontSize:"12px",color:"#64748b"}},"₽"));row.appendChild(saved);
+      row.appendChild(h("button",{s:{padding:"6px 12px",borderRadius:"8px",border:"none",background:"linear-gradient(135deg,#d97706,#f59e0b)",color:"#fff",fontSize:"11px",fontWeight:"700",cursor:"pointer",flexShrink:"0"},onClick:function(){
+        var val=parseFloat(inp.value)||0;
+        var bills=Object.assign({},S.finance.elecBills||{});
+        bills[monthKey]=val;
+        fbSaveFinance({elecBills:bills}).then(function(){saved.style.display="inline";saved.textContent="✓ "+val+"₽"});
+      }},"💾"));
+      elecWidget.appendChild(row);
+    })(mk,mLabel,existing);
+  }
+  ct.appendChild(elecWidget);
 
   // ── ДОХОДЫ ──
-  // 1. Выручка по нарядам (текущий месяц)
   var repairRev=allR.filter(function(r){return r.closedByManager&&(r.closedAt||r.date||"").substring(0,7)===curMK}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
-  // 2. Аренда камер
   var rentRev=S.freezers.filter(function(fz){return fz.rented&&fz.rentAmount>0}).reduce(function(s,fz){return s+(parseFloat(fz.rentAmount)||0)},0);
-  // 3. Абонплата юрлиц
   var subRev=S.cl.filter(function(c){return c.clientType==="legal"&&c.subscription>0}).reduce(function(s,c){return s+(parseFloat(c.subscription)||0)},0);
   var totalIncome=repairRev+rentRev+subRev;
 
   // ── РАСХОДЫ ──
-  // 1. Аренда боксов
   var boxCost=(f.boxes||[]).reduce(function(s,b){return s+(parseFloat(b.cost)||0)},0);
-  // 2. Зарплаты
   var salCost=(f.salaries||[]).reduce(function(s,sl){return s+(parseFloat(sl.salary)||0)},0);
-  // 3. Электричество камер
-  var kwPrice=parseFloat(f.kwPrice)||0;
-  var elecCost=S.freezers.reduce(function(s,fz){var kw=parseFloat(fz.powerKw)||0;return s+Math.round(kw*24*30*kwPrice)},0);
-  var totalExpense=boxCost+salCost+elecCost;
+  // Счёт за свет — берём за ПРОШЛЫЙ месяц
+  var elecBillCost=parseFloat((elecBills[prevMK])||0);
+  var totalExpense=boxCost+salCost+elecBillCost;
 
   var profit=totalIncome-totalExpense;
 
   secTitle(ct,"💰 Доходы и расходы (текущий месяц)");
 
   var pnlWrap=h("div",{cls:"chart-wrap"});
-  // Profit summary header
+
+  // Итог
   var profHdr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px",padding:"12px 14px",background:profit>=0?"rgba(52,211,153,.07)":"rgba(248,113,113,.07)",borderRadius:"12px",border:"1px solid "+(profit>=0?"rgba(52,211,153,.2)":"rgba(248,113,113,.2)")}});
-  profHdr.append(h("div",null,h("div",{s:{fontSize:"10px",color:profit>=0?"#34d399":"#f87171",fontWeight:"700",textTransform:"uppercase",letterSpacing:".06em"}},"📊 Прибыль за месяц"),h("div",{s:{fontSize:"26px",fontWeight:"800",color:profit>=0?"#6ee7b7":"#fca5a5",marginTop:"2px"}},(profit>=0?"+":"")+profit+"₽")),
-    h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"11px",color:"#64748b"}},"Доходы"),h("div",{s:{fontSize:"14px",fontWeight:"700",color:"#34d399"}},"+"+totalIncome+"₽"),h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"4px"}},"Расходы"),h("div",{s:{fontSize:"14px",fontWeight:"700",color:"#f87171"}},"-"+totalExpense+"₽")));
+  profHdr.append(
+    h("div",null,
+      h("div",{s:{fontSize:"10px",color:profit>=0?"#34d399":"#f87171",fontWeight:"700",textTransform:"uppercase",letterSpacing:".06em"}},"📊 Прибыль за месяц"),
+      h("div",{s:{fontSize:"26px",fontWeight:"800",color:profit>=0?"#6ee7b7":"#fca5a5",marginTop:"2px"}},(profit>=0?"+":"")+profit+"₽")),
+    h("div",{s:{textAlign:"right"}},
+      h("div",{s:{fontSize:"11px",color:"#64748b"}},"Доходы"),
+      h("div",{s:{fontSize:"14px",fontWeight:"700",color:"#34d399"}},"+"+totalIncome+"₽"),
+      h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"4px"}},"Расходы"),
+      h("div",{s:{fontSize:"14px",fontWeight:"700",color:"#f87171"}},"-"+totalExpense+"₽")));
   pnlWrap.appendChild(profHdr);
 
   function incomeRow(icon,label,val,sub){
@@ -2637,7 +2730,7 @@ function renderPnL(ct,allR){
     return row;
   }
 
-  // Income section
+  // Доходы
   pnlWrap.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#34d399",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"6px",marginTop:"6px"}},"📈 Доходы"));
   pnlWrap.appendChild(incomeRow("🔧","Ремонты (закрытые наряды)",repairRev,"Текущий месяц"));
   if(rentRev>0){
@@ -2649,7 +2742,7 @@ function renderPnL(ct,allR){
     pnlWrap.appendChild(incomeRow("🏢","Абонплата юрлиц",subRev,subList));
   }
 
-  // Expense section
+  // Расходы
   pnlWrap.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#f87171",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"6px",marginTop:"10px"}},"📉 Расходы"));
   if(boxCost>0){
     var boxList2=(f.boxes||[]).filter(function(b){return b.cost>0}).map(function(b){return(b.name||"Бокс")+" "+b.cost+"₽"}).join(", ");
@@ -2659,15 +2752,16 @@ function renderPnL(ct,allR){
     var salList2=(f.salaries||[]).filter(function(s){return s.salary>0}).map(function(s){return(s.name||"Сотрудник")+" "+s.salary+"₽"}).join(", ");
     pnlWrap.appendChild(expenseRow("👷","Зарплаты",salCost,salList2));
   }
-  if(elecCost>0){
-    pnlWrap.appendChild(expenseRow("⚡","Электричество (камеры)",elecCost,kwPrice+"₽/кВт·ч"));
+  if(elecBillCost>0){
+    pnlWrap.appendChild(expenseRow("⚡","Счёт за электричество",elecBillCost,mNames[prevD.getMonth()]+" "+prevD.getFullYear()));
+  }else{
+    pnlWrap.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",padding:"6px 10px",borderRadius:"8px",background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.1)",marginBottom:"4px"}},"⚡ Счёт за свет за "+mNames[prevD.getMonth()]+" не введён — добавьте выше"));
   }
-  if(boxCost===0&&salCost===0&&elecCost===0){
-    pnlWrap.appendChild(h("div",{s:{fontSize:"12px",color:"#475569",textAlign:"center",padding:"10px"}},
+  if(boxCost===0&&salCost===0&&elecBillCost===0){
+    pnlWrap.appendChild(h("div",{s:{fontSize:"12px",color:"#475569",textAlign:"center",padding:"6px"}},
       "Расходы не заданы — ",h("span",{s:{color:"#38bdf8",cursor:"pointer",textDecoration:"underline"},onClick:function(){S.mod={t:"editFinance"};R()}},"настроить")));
   }
 
-  // Settings button
   pnlWrap.appendChild(h("button",{s:{width:"100%",marginTop:"10px",padding:"8px",borderRadius:"10px",border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"#64748b",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){S.mod={t:"editFinance"};R()}},"⚙️ Настроить расходы"));
   ct.appendChild(pnlWrap);
 }
