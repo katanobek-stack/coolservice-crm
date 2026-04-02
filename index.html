@@ -999,8 +999,13 @@ function makeFreonPieChart(freonByType){
   var total=keys.reduce(function(s,k){return s+freonByType[k]},0);
   if(!total)return null;
   var colors=["#38bdf8","#34d399","#a78bfa","#fb923c","#f472b6","#22d3ee","#fbbf24","#94a3b8"];
-  var W=200,CX=80,CY=70,R=55,IR=28;
-  var svg='<svg viewBox="0 0 '+W+' '+(CY*2+20)+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  var CX=80,CY=72,R=54,IR=26;
+  var legendRowH=20;
+  var legendStartY=CY*2+14;
+  var totalH=legendStartY+keys.length*legendRowH+8;
+  var W=200;
+  var svg='<svg viewBox="0 0 '+W+' '+totalH+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  // Donut segments
   var angle=-Math.PI/2;
   keys.forEach(function(k,i){
     var frac=freonByType[k]/total;
@@ -1011,16 +1016,22 @@ function makeFreonPieChart(freonByType){
     var xi=CX+IR*Math.cos(angle),yi=CY+IR*Math.sin(angle);
     var xi2=CX+IR*Math.cos(angle+sweep),yi2=CY+IR*Math.sin(angle+sweep);
     var c=colors[i%colors.length];
-    svg+='<path d="M'+xi+','+yi+' L'+x1+','+y1+' A'+R+','+R+' 0 '+li+',1 '+x2+','+y2+' L'+xi2+','+yi2+' A'+IR+','+IR+' 0 '+li+',0 '+xi+','+yi+' Z" fill="'+c+'" opacity=".85"/>';
+    svg+='<path d="M'+xi.toFixed(1)+','+yi.toFixed(1)+' L'+x1.toFixed(1)+','+y1.toFixed(1)+' A'+R+','+R+' 0 '+li+',1 '+x2.toFixed(1)+','+y2.toFixed(1)+' L'+xi2.toFixed(1)+','+yi2.toFixed(1)+' A'+IR+','+IR+' 0 '+li+',0 '+xi.toFixed(1)+','+yi.toFixed(1)+' Z" fill="'+c+'" opacity=".85"/>';
     angle+=sweep;
   });
-  // Legend
-  var lx=CX*2+16,ly=8;
+  // Center label
+  svg+='<text x="'+CX+'" y="'+(CY+4)+'" text-anchor="middle" fill="rgba(255,255,255,.7)" font-size="12" font-weight="700" font-family="DM Sans,sans-serif">'+total.toFixed(1)+'кг</text>';
+  // Legend BELOW the donut — two columns so it stays compact
+  var col2start=W/2;
   keys.forEach(function(k,i){
     var c=colors[i%colors.length];
-    var yy=ly+i*18;
-    svg+='<rect x="'+lx+'" y="'+yy+'" width="10" height="10" rx="3" fill="'+c+'"/>';
-    svg+='<text x="'+(lx+14)+'" y="'+(yy+9)+'" fill="rgba(203,213,225,.8)" font-size="10" font-family="DM Sans,sans-serif">'+k+' '+freonByType[k].toFixed(1)+'кг</text>';
+    var col=i%2===0?4:col2start;
+    var row=Math.floor(i/2);
+    var yy=legendStartY+row*legendRowH;
+    var pct=Math.round(freonByType[k]/total*100);
+    svg+='<rect x="'+col+'" y="'+(yy+1)+'" width="10" height="10" rx="3" fill="'+c+'"/>';
+    svg+='<text x="'+(col+14)+'" y="'+(yy+10)+'" fill="rgba(203,213,225,.85)" font-size="10" font-family="DM Sans,sans-serif" font-weight="600">'+k+'</text>';
+    svg+='<text x="'+(col+14)+'" y="'+(yy+20)+'" fill="rgba(148,163,184,.6)" font-size="9" font-family="DM Sans,sans-serif">'+freonByType[k].toFixed(1)+'кг · '+pct+'%</text>';
   });
   svg+='</svg>';
   return svg;
