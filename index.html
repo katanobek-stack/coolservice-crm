@@ -1419,20 +1419,46 @@ function statsTab(ct){
     if(dn)hdr2.appendChild(badge("✅"+dn,"34,197,94"));
     if(cn)hdr2.appendChild(badge("🚫"+cn,"148,163,184"));
     ct.appendChild(hdr2);
-    // Group by client
-    var byC={};repairs.forEach(function(r){if(!byC[r.cid])byC[r.cid]={cn:r.cn,items:[]};byC[r.cid].items.push(r)});
-    Object.keys(byC).forEach(function(cid){
-      var g=byC[cid];
-      var crd=h("div",{s:{padding:"8px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",marginBottom:"4px",border:"1px solid rgba(255,255,255,.04)",cursor:"pointer"},onClick:function(){S.sel=cid;R()}});
-      crd.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},g.cn+" ("+g.items.length+")"));
-      g.items.forEach(function(r){
-        var s2=getS(r.serviceType);var os2=rSt(r);
-        var rr=h("div",{s:{display:"flex",gap:"4px",alignItems:"center",marginTop:"3px",fontSize:"11px"}});
-        rr.append(h("span",{s:{color:"#64748b"}},fD(r.date)),badge(s2.e,s2.c),h("span",{s:{color:os2==="done"?"#4ade80":os2==="cancelled"?"#64748b":"#fb923c"}},os2==="done"?"✅":os2==="cancelled"?"🚫":"🔧"));
-        if(r.cost&&myRole()==="admin")rr.appendChild(h("span",{s:{color:"#4ade80",marginLeft:"auto"}},r.cost+"₽"));
-        crd.appendChild(rr);
-      });
-      content2.appendChild(crd);
+    repairs.sort(function(a,b){return(b.date||"").localeCompare(a.date||"")});
+    repairs.forEach(function(r){
+      var s2=getS(r.serviceType);var os2=rSt(r);var tasks2=r.tasks||[];
+      var exp2=false;
+      var det=h("div",{s:{display:"none",marginTop:"6px",paddingTop:"6px",borderTop:"1px solid rgba(255,255,255,.05)"}});
+      var arr2=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"9px"}},"▶");
+      var row=h("div",{cls:"rc",s:{marginBottom:"4px",cursor:"pointer"},onClick:function(){exp2=!exp2;det.style.display=exp2?"block":"none";arr2.style.transform=exp2?"rotate(90deg)":"rotate(0deg)"}});
+      var rl=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}});
+      rl.append(arr2);
+      if(r.v&&r.v.brand)rl.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},r.v.brand));
+      if(r.v&&r.v.plate)rl.appendChild(plate(r.v.plate));
+      rl.appendChild(badge(s2.e,s2.c));
+      rl.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},r.cn));
+      var sc2=os2==="done"?"#4ade80":os2==="cancelled"?"#64748b":"#fb923c";
+      rl.appendChild(h("span",{s:{fontSize:"11px",color:sc2,marginLeft:"auto"}},os2==="done"?"✅ Выполнен":os2==="cancelled"?"🚫 Отказ":"🔧 В работе"));
+      if(r.cost&&myRole()==="admin")rl.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"800",color:"#4ade80"}},r.cost+"₽"));
+      row.appendChild(rl);
+      if(r.description)det.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",marginBottom:"6px"}},"📝 "+r.description));
+      if(r.freonType)det.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"6px",padding:"3px 8px",background:"rgba(6,182,212,.06)",borderRadius:"6px",display:"inline-block"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
+      if(r.photos&&r.photos.length){det.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginBottom:"4px"}},"Фото"));det.appendChild(photoGrid(r.photos,false));}
+      if(tasks2.length){
+        det.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"8px",marginBottom:"4px"}},"Задачи ("+tasks2.length+")"));
+        tasks2.forEach(function(t,i){
+          var dn2=tSt(t)==="done";
+          var ti=h("div",{s:{padding:"7px 10px",marginBottom:"3px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.04)"}});
+          var tr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"3px"}});
+          var tl=h("div",{s:{flex:"1"}});
+          tl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(i+1)+". "+(t.description||"")));
+          tl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(t)));
+          tr.appendChild(tl);tr.appendChild(h("span",{s:{fontSize:"12px",flexShrink:"0",marginLeft:"6px"}},dn2?"✅":"🔧"));
+          ti.appendChild(tr);
+          if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee"}},"🧊 "+t.freonKg+" кг"));
+          if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"3px",padding:"3px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),t.workComment));
+          if(t.photos&&t.photos.length){ti.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"3px",marginBottom:"2px"}},"Фото"));ti.appendChild(photoGrid(t.photos,false));}
+          det.appendChild(ti);
+        });
+      }
+      det.appendChild(h("button",{s:{marginTop:"6px",padding:"5px 10px",borderRadius:"7px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.sel=r.cid;R()}},"→ Карточка клиента"));
+      row.appendChild(det);
+      content2.appendChild(row);
     });
     ct.appendChild(content2);
   }
@@ -1819,73 +1845,78 @@ function doneTab(ct){
     });
   }
 
-  // Completed service tasks & projects — строчками с раскрытием
+  // Completed service tasks & projects — по месяцам
   var doneSvc=S.tasks.filter(function(t){return t.status==="done"});
   if(doneSvc.length){
     secTitle(ct,"📝 Завершённые задачи и проекты ("+doneSvc.length+")");
-    doneSvc.sort(function(a,b){return(b.createdAt&&a.createdAt)?(b.createdAt>a.createdAt?1:-1):0});
+    var doneByMonth={};
     doneSvc.forEach(function(t){
-      var isProject=t.taskType==="project";
-      var subtasks=t.subtasks||[];
-      var expanded=false;
-      var content=h("div",{s:{display:"none",marginTop:"8px"}});
-      var arrow=h("span",{s:{transition:"transform .25s",display:"inline-block",fontSize:"10px"}},"▶");
-
-      var cd=h("div",{cls:"rc",s:{marginBottom:"6px"}});
-      // ── Строка-заголовок ──
-      var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"},onClick:function(){
-        expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+      var mk=(t.createdAt||"").substring(0,7)||"Без даты";
+      if(!doneByMonth[mk])doneByMonth[mk]=[];
+      doneByMonth[mk].push(t);
+    });
+    var dmKeys=Object.keys(doneByMonth).sort().reverse();
+    var dmN=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    dmKeys.forEach(function(mk){
+      var dmi=doneByMonth[mk];
+      var dp=mk.split("-");
+      var dml=dp.length===2?dmN[parseInt(dp[1])]+" "+dp[0]:mk;
+      var dmExp=false;
+      var dmCont=h("div",{s:{display:"none"}});
+      var dmArr=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var dmHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+        dmExp=!dmExp;dmCont.style.display=dmExp?"block":"none";dmArr.style.transform=dmExp?"rotate(90deg)":"rotate(0deg)";
       }});
-      hdr.appendChild(arrow);
-      var info=h("div",{s:{flex:"1",minWidth:0}});
-      var topLine=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
-      topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},t.title||"Без названия"));
-      topLine.appendChild(badge(isProject?"📐 Проект":"📝 Задача",isProject?"245,158,11":"99,102,241"));
-      info.appendChild(topLine);
-      var meta=h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px",display:"flex",gap:"8px",flexWrap:"wrap"}});
-      meta.appendChild(h("span",null,"👤 "+assigneeNames(t)));
-      if(subtasks.length)meta.appendChild(h("span",null,subtasks.length+" подзадач"));
-      if(t.photos&&t.photos.length)meta.appendChild(h("span",null,"🖼 "+t.photos.length+" фото"));
-      info.appendChild(meta);
-      hdr.appendChild(info);
-      hdr.appendChild(h("span",{s:{fontSize:"12px",color:"#4ade80",fontWeight:"700",flexShrink:"0"}},"✅"));
-      // Admin delete
-      if(myRole()==="admin"){
-        hdr.appendChild(h("button",{s:{padding:"3px 7px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){
-          e.stopPropagation();if(confirm("Удалить задачу «"+(t.title||"")+"»?"))fbDelTask(t.id);
-        }},"🗑"));
-      }
-      cd.appendChild(hdr);
-
-      // ── Раскрывающийся блок ──
-      if(t.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.05)",marginBottom:"6px"}},t.description));
-      if(t.workComment)content.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",marginBottom:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"10px",fontWeight:"700"}},"📝 Отчёт: "),t.workComment));
-      if(t.photos&&t.photos.length){
-        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginBottom:"4px"}},"Фото"));
-        content.appendChild(photoGrid(t.photos,false));
-      }
-      if(subtasks.length){
-        content.appendChild(h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"6px",marginTop:"8px"}},"Подзадачи ("+subtasks.length+")"));
-        subtasks.forEach(function(st,idx){
-          var stDone=st.status==="done";
-          var si=h("div",{s:{padding:"8px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.05)",marginBottom:"4px"}});
-          var sr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:st.description?"4px":"0"}});
-          var sl=h("div",null);
-          sl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(st.description||"")));
-          sl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(st)));
-          sr.appendChild(sl);
-          sr.appendChild(h("span",{s:{fontSize:"12px"}},stDone?"✅":"🔧"));
-          si.appendChild(sr);
-          if(st.workComment)si.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),st.workComment));
-          if(st.photos&&st.photos.length){
-            si.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
-            si.appendChild(photoGrid(st.photos,false));
-          }
-          content.appendChild(si);
-        });
-      }
-      cd.appendChild(content);
-      ct.appendChild(cd);
+      dmHdr.append(dmArr,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},dml+" ("+dmi.length+")"));
+      ct.appendChild(dmHdr);
+      dmi.forEach(function(t){
+        var isP=t.taskType==="project";
+        var subs=t.subtasks||[];
+        var tExp=false;
+        var tDet=h("div",{s:{display:"none",marginTop:"8px",paddingTop:"8px",borderTop:"1px solid rgba(255,255,255,.05)"}});
+        var tArr=h("span",{s:{transition:"transform .22s",display:"inline-block",fontSize:"9px"}},"▶");
+        var tcd=h("div",{cls:"rc",s:{marginBottom:"4px",cursor:"pointer"},onClick:function(){
+          tExp=!tExp;tDet.style.display=tExp?"block":"none";tArr.style.transform=tExp?"rotate(90deg)":"rotate(0deg)";
+        }});
+        var trw=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}});
+        trw.appendChild(tArr);
+        trw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},t.title||"Без названия"));
+        trw.appendChild(badge(isP?"📐 Проект":"📝 Задача",isP?"245,158,11":"99,102,241"));
+        trw.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},"👤 "+assigneeNames(t)));
+        if(t.photos&&t.photos.length)trw.appendChild(h("span",{s:{fontSize:"10px",color:"#64748b"}},"🖼 "+t.photos.length));
+        trw.appendChild(h("span",{s:{fontSize:"12px",color:"#4ade80",marginLeft:"auto"}},"✅"));
+        if(myRole()==="admin")trw.appendChild(h("button",{s:{padding:"2px 7px",borderRadius:"5px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){e.stopPropagation();if(confirm("Удалить?"))fbDelTask(t.id)}},"🗑"));
+        tcd.appendChild(trw);
+        if(t.description)tDet.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",marginBottom:"6px"}},t.description));
+        if(t.workComment)tDet.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",marginBottom:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"10px",fontWeight:"700"}},"📝 "),t.workComment));
+        if(t.photos&&t.photos.length){
+          tDet.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginBottom:"4px"}},"Фото"));
+          tDet.appendChild(photoGrid(t.photos,false));
+        }
+        if(subs.length){
+          tDet.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"8px",marginBottom:"4px"}},"Подзадачи ("+subs.length+")"));
+          subs.forEach(function(st,si){
+            var stD=st.status==="done";
+            var sEl=h("div",{s:{padding:"7px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.04)",marginBottom:"3px"}});
+            var sRow=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+            var sLft=h("div",{s:{flex:"1"}});
+            sLft.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(si+1)+". "+(st.description||"")));
+            sLft.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(st)));
+            sRow.appendChild(sLft);
+            sRow.appendChild(h("span",{s:{fontSize:"12px",flexShrink:"0",marginLeft:"6px"}},stD?"✅":"🔧"));
+            sEl.appendChild(sRow);
+            if(st.workComment)sEl.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),st.workComment));
+            if(st.photos&&st.photos.length){
+              sEl.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
+              sEl.appendChild(photoGrid(st.photos,false));
+            }
+            tDet.appendChild(sEl);
+          });
+        }
+        tcd.appendChild(tDet);
+        dmCont.appendChild(tcd);
+      });
+      ct.appendChild(dmCont);
     });
   }
 
