@@ -1175,6 +1175,9 @@ function statsTab(ct){
     repExp=!repExp;repCont.style.display=repExp?"block":"none";repArrow.style.transform=repExp?"rotate(90deg)":"rotate(0deg)";
   }});
   repHdr.append(repArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#38bdf8"}},"🔧 Заказ-наряды в работе ("+inProgR.length+")"));
+  // Add active service tasks/projects count to header
+  var activeSvcInWork=S.tasks.filter(function(t){return t.status!=="done"});
+  if(activeSvcInWork.length)repHdr.appendChild(h("span",{s:{fontSize:"11px",color:"#818cf8",marginLeft:"4px"}},"+ "+activeSvcInWork.length+" задач/проектов"));
   ct.appendChild(repHdr);
   if(inProgR.length){
     inProgR.forEach(function(r){
@@ -1207,6 +1210,21 @@ function statsTab(ct){
       repCont.appendChild(cd)
     })
   }else{repCont.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"))}
+  // Active service tasks & projects inside the same block
+  var activeSvc2=S.tasks.filter(function(t){return t.taskType==="task"&&t.status!=="done"});
+  var activePrj2=S.tasks.filter(function(t){return t.taskType==="project"&&t.status!=="done"});
+  if(activeSvc2.length){
+    var svcHdr=h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#818cf8",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px",padding:"0 2px"}});
+    svcHdr.textContent="📝 Задачи в работе ("+activeSvc2.length+")";
+    repCont.appendChild(svcHdr);
+    activeSvc2.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});
+  }
+  if(activePrj2.length){
+    var prjHdr=h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#f59e0b",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px",padding:"0 2px"}});
+    prjHdr.textContent="📐 Проекты в работе ("+activePrj2.length+")";
+    repCont.appendChild(prjHdr);
+    activePrj2.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});
+  }
   ct.appendChild(repCont);
 
   // ═══ FREON REPORT ═══
@@ -1710,12 +1728,30 @@ function doneTab(ct){
     });
   }
 
-  // Completed service tasks & projects — строчками с раскрытием
+  // Completed service tasks & projects — по месяцам
   var doneSvc=S.tasks.filter(function(t){return t.status==="done"});
   if(doneSvc.length){
     secTitle(ct,"📝 Завершённые задачи и проекты ("+doneSvc.length+")");
-    doneSvc.sort(function(a,b){return(b.createdAt&&a.createdAt)?(b.createdAt>a.createdAt?1:-1):0});
+    var doneByMonth={};
     doneSvc.forEach(function(t){
+      var dmk=(t.createdAt||"").substring(0,7)||"Без даты";
+      if(!doneByMonth[dmk])doneByMonth[dmk]=[];
+      doneByMonth[dmk].push(t);
+    });
+    var dmKeys=Object.keys(doneByMonth).sort().reverse();
+    var dmNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    dmKeys.forEach(function(dmk){
+      var dmItems=doneByMonth[dmk];
+      var dmParts=dmk.split("-");
+      var dmLabel=dmParts.length===2?dmNames[parseInt(dmParts[1])]+" "+dmParts[0]:dmk;
+      var dmExp=false;var dmCont=h("div",{s:{display:"none"}});
+      var dmArr=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+      var dmHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+        dmExp=!dmExp;dmCont.style.display=dmExp?"block":"none";dmArr.style.transform=dmExp?"rotate(90deg)":"rotate(0deg)";
+      }});
+      dmHdr.append(dmArr,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},dmLabel+" ("+dmItems.length+")"));
+      ct.appendChild(dmHdr);
+      dmItems.forEach(function(t){
       var isProject=t.taskType==="project";
       var subtasks=t.subtasks||[];
       var expanded=false;
@@ -1776,7 +1812,9 @@ function doneTab(ct){
         });
       }
       cd.appendChild(content);
-      ct.appendChild(cd);
+        dmCont.appendChild(cd);
+      });
+      ct.appendChild(dmCont);
     });
   }
 
