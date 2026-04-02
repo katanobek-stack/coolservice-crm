@@ -974,6 +974,77 @@ function calTab(ct){
   }
 }
 
+// ═══ REPAIR ROW BUILDER (reusable) ═══
+function buildRepairRow(r){
+  var s=getS(r.serviceType);var os=rSt(r);var tasks=r.tasks||[];
+  var expanded=false;
+  var content=h("div",{s:{display:"none",marginTop:"8px",paddingTop:"8px",borderTop:"1px solid rgba(255,255,255,.05)"}});
+  var arrow=h("span",{s:{transition:"transform .22s",display:"inline-block",fontSize:"9px"}},"▶");
+  var cd=h("div",{cls:"rc",s:{marginBottom:"4px",cursor:"pointer"},onClick:function(){
+    expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+  }});
+  var rw=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}});
+  rw.appendChild(arrow);
+  if(r.v&&r.v.brand)rw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},r.v.brand));
+  if(r.v&&r.v.plate)rw.appendChild(plate(r.v.plate));
+  rw.appendChild(badge(s.e,s.c));
+  rw.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},r.cn));
+  var statusColor=os==="done"?"#4ade80":os==="cancelled"?"#64748b":"#fb923c";
+  rw.appendChild(h("span",{s:{fontSize:"11px",color:statusColor,marginLeft:"auto"}},os==="done"?"✅ Выполнен":os==="cancelled"?"🚫 Отказ":"🔧 В работе"));
+  if(r.cost&&myRole()==="admin")rw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"800",color:"#4ade80"}},r.cost+"₽"));
+  cd.appendChild(rw);
+  if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",marginBottom:"6px"}},"📝 "+r.description));
+  if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"6px",padding:"3px 8px",background:"rgba(6,182,212,.06)",borderRadius:"6px",display:"inline-block"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
+  if(r.photos&&r.photos.length){
+    content.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginBottom:"4px"}},"Фото наряда"));
+    content.appendChild(photoGrid(r.photos,false));
+  }
+  if(tasks.length){
+    content.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"8px",marginBottom:"4px"}},"Задачи ("+tasks.length+")"));
+    tasks.forEach(function(t,idx){
+      var dn=tSt(t)==="done";
+      var ti=h("div",{s:{padding:"7px 10px",marginBottom:"3px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.04)"}});
+      var tr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}});
+      var tl=h("div",{s:{flex:"1"}});
+      tl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(t.description||"")));
+      tl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(t)));
+      tr.appendChild(tl);tr.appendChild(h("span",{s:{fontSize:"12px",flexShrink:"0",marginLeft:"6px"}},dn?"✅":"🔧"));
+      ti.appendChild(tr);
+      if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginTop:"2px"}},"🧊 "+t.freonKg+" кг"));
+      if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)",lineHeight:"1.4"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),t.workComment));
+      if(t.photos&&t.photos.length){
+        ti.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
+        ti.appendChild(photoGrid(t.photos,false));
+      }
+      content.appendChild(ti);
+    });
+  }
+  content.appendChild(h("button",{s:{marginTop:"6px",padding:"5px 10px",borderRadius:"7px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.sel=r.cid;R()}},"→ Карточка клиента"));
+  cd.appendChild(content);
+  return cd;
+}
+
+function renderHistPeriod(ct,title,repairs,color){
+  if(!repairs.length)return;
+  var ip=repairs.filter(function(r){return rSt(r)==="in_progress"}).length;
+  var dn=repairs.filter(function(r){return rSt(r)==="done"}).length;
+  var cn=repairs.filter(function(r){return rSt(r)==="cancelled"}).length;
+  var expanded2=false;
+  var content2=h("div",{s:{display:"none"}});
+  var arrow2=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+  var hdr2=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba("+color+",.05)",borderRadius:"10px",border:"1px solid rgba("+color+",.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
+    expanded2=!expanded2;content2.style.display=expanded2?"block":"none";arrow2.style.transform=expanded2?"rotate(90deg)":"rotate(0deg)";
+  }});
+  hdr2.append(arrow2,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9",flex:"1"}},title+" ("+repairs.length+")"));
+  if(ip)hdr2.appendChild(badge("🔧"+ip,"249,115,22"));
+  if(dn)hdr2.appendChild(badge("✅"+dn,"34,197,94"));
+  if(cn)hdr2.appendChild(badge("🚫"+cn,"148,163,184"));
+  ct.appendChild(hdr2);
+  repairs.sort(function(a,b){return(b.date||"").localeCompare(a.date||"")});
+  repairs.forEach(function(r){content2.appendChild(buildRepairRow(r))});
+  ct.appendChild(content2);
+}
+
 // ═══ STATS TAB ═══
 function makeRevenueChart(allR){
   var now=new Date();
@@ -1337,83 +1408,10 @@ function statsTab(ct){
   var prevMR=allR.filter(function(r){return(r.date||"").substring(0,7)===prevMonth2});
   var oldMR=allR.filter(function(r){var d=(r.date||"").substring(0,7);return d&&d!==curMonth2&&d!==prevMonth2});
 
-  function buildRepairRow(r){
-    var s=getS(r.serviceType);var os=rSt(r);var tasks=r.tasks||[];
-    var expanded=false;
-    var content=h("div",{s:{display:"none",marginTop:"8px",paddingTop:"8px",borderTop:"1px solid rgba(255,255,255,.05)"}});
-    var arrow=h("span",{s:{transition:"transform .22s",display:"inline-block",fontSize:"9px"}},"▶");
-    var cd=h("div",{cls:"rc",s:{marginBottom:"4px",cursor:"pointer"},onClick:function(){
-      expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
-    }});
-    // Row header
-    var rw=h("div",{s:{display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap"}});
-    rw.appendChild(arrow);
-    if(r.v&&r.v.brand)rw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},r.v.brand));
-    if(r.v&&r.v.plate)rw.appendChild(plate(r.v.plate));
-    rw.appendChild(badge(s.e,s.c));
-    rw.appendChild(h("span",{s:{fontSize:"11px",color:"#64748b"}},r.cn));
-    var statusColor=os==="done"?"#4ade80":os==="cancelled"?"#64748b":"#fb923c";
-    rw.appendChild(h("span",{s:{fontSize:"11px",color:statusColor,marginLeft:"auto"}},os==="done"?"✅ Выполнен":os==="cancelled"?"🚫 Отказ":"🔧 В работе"));
-    if(r.cost&&myRole()==="admin")rw.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"800",color:"#4ade80"}},r.cost+"₽"));
-    cd.appendChild(rw);
-    // Expanded detail
-    if(r.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",marginBottom:"6px"}},"📝 "+r.description));
-    if(r.freonType)content.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginBottom:"6px",padding:"3px 8px",background:"rgba(6,182,212,.06)",borderRadius:"6px",display:"inline-block"}},"🧊 "+r.freonType+(r.freonAmount?" — "+r.freonAmount+" кг":"")));
-    if(r.photos&&r.photos.length){
-      content.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginBottom:"4px"}},"Фото наряда"));
-      content.appendChild(photoGrid(r.photos,false));
-    }
-    if(tasks.length){
-      content.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"8px",marginBottom:"4px"}},"Задачи ("+tasks.length+")"));
-      tasks.forEach(function(t,idx){
-        var dn=tSt(t)==="done";
-        var ti=h("div",{s:{padding:"7px 10px",marginBottom:"3px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.04)"}});
-        var tr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:t.workComment||t.freonKg||(t.photos&&t.photos.length)?"4px":"0"}});
-        var tl=h("div",{s:{flex:"1"}});
-        tl.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600"}},(idx+1)+". "+(t.description||"")));
-        tl.appendChild(h("div",{s:{fontSize:"10px",color:"#a78bfa",marginTop:"1px"}},"👤 "+assigneeNames(t)));
-        tr.appendChild(tl);
-        tr.appendChild(h("span",{s:{fontSize:"12px",flexShrink:"0",marginLeft:"6px"}},dn?"✅":"🔧"));
-        ti.appendChild(tr);
-        if(t.freonKg)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#22d3ee",marginTop:"2px"}},"🧊 "+t.freonKg+" кг"));
-        if(t.workComment)ti.appendChild(h("div",{s:{fontSize:"11px",color:"#e2e8f0",marginTop:"4px",padding:"4px 8px",background:"rgba(139,92,246,.06)",borderRadius:"6px",border:"1px solid rgba(139,92,246,.1)",lineHeight:"1.4"}},h("span",{s:{color:"#a78bfa",fontSize:"9px",fontWeight:"700"}},"📝 "),t.workComment));
-        if(t.photos&&t.photos.length){
-          ti.appendChild(h("div",{s:{fontSize:"9px",color:"#4d6680",fontWeight:"700",textTransform:"uppercase",marginTop:"4px",marginBottom:"3px"}},"Фото"));
-          ti.appendChild(photoGrid(t.photos,false));
-        }
-        content.appendChild(ti);
-      });
-    }
-    content.appendChild(h("button",{s:{marginTop:"6px",padding:"5px 10px",borderRadius:"7px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.sel=r.cid;R()}},"→ Карточка клиента"));
-    cd.appendChild(content);
-    return cd;
-  }
-
-  function renderHistPeriod(title,repairs,color){
-    if(!repairs.length)return;
-    var ip=repairs.filter(function(r){return rSt(r)==="in_progress"}).length;
-    var dn=repairs.filter(function(r){return rSt(r)==="done"}).length;
-    var cn=repairs.filter(function(r){return rSt(r)==="cancelled"}).length;
-    var expanded2=false;
-    var content2=h("div",{s:{display:"none"}});
-    var arrow2=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-    var hdr2=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba("+color+",.05)",borderRadius:"10px",border:"1px solid rgba("+color+",.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){
-      expanded2=!expanded2;content2.style.display=expanded2?"block":"none";arrow2.style.transform=expanded2?"rotate(90deg)":"rotate(0deg)";
-    }});
-    hdr2.append(arrow2,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#f1f5f9",flex:"1"}},title+" ("+repairs.length+")"));
-    if(ip)hdr2.appendChild(badge("🔧"+ip,"249,115,22"));
-    if(dn)hdr2.appendChild(badge("✅"+dn,"34,197,94"));
-    if(cn)hdr2.appendChild(badge("🚫"+cn,"148,163,184"));
-    ct.appendChild(hdr2);
-    repairs.sort(function(a,b){return(b.date||"").localeCompare(a.date||"")});
-    repairs.forEach(function(r){content2.appendChild(buildRepairRow(r))});
-    ct.appendChild(content2);
-  }
-
   secTitle(ct,"📋 История всех ремонтов");
-  renderHistPeriod("📅 "+mNames2[now2.getMonth()+1]+" "+now2.getFullYear(),curMR,"14,165,233");
-  renderHistPeriod("📆 "+mNames2[prevDate2.getMonth()+1]+" "+prevDate2.getFullYear(),prevMR,"99,102,241");
-  renderHistPeriod("📂 Ранее",oldMR,"148,163,184");
+  renderHistPeriod(ct,"📅 "+mNames2[now2.getMonth()+1]+" "+now2.getFullYear(),curMR,"14,165,233");
+  renderHistPeriod(ct,"📆 "+mNames2[prevDate2.getMonth()+1]+" "+prevDate2.getFullYear(),prevMR,"99,102,241");
+  renderHistPeriod(ct,"📂 Ранее",oldMR,"148,163,184");
 
   // ═══ ЗАВЕРШЁННЫЕ ЗАДАЧИ И ПРОЕКТЫ ПО МЕСЯЦАМ ═══
   var allDoneSvc=S.tasks.filter(function(t){return t.status==="done"});
