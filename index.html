@@ -614,30 +614,41 @@ function renderClientCard(ct,c){
 
 // ═══ MY TASKS TAB ═══
 function myTasksTab(ct){
-  var uid=S.u.uid;
-  var isAdmin=myRole()==="admin"||myRole()==="manager";
+  var isAdmin=myRole()==="admin";
+  var isMgr=canManage();
   var hasAnything=false;
 
-  // My service tasks/projects
-  var myActiveSvc=S.tasks.filter(function(t){return isMyTask(t)&&tSt(t)!=="done"});
-  if(myActiveSvc.length){
+  // ── Сервисные задачи и проекты ──
+  // Админ видит ВСЕ активные, механик — только свои
+  var activeSvc=S.tasks.filter(function(t){
+    if(tSt(t)==="done")return false;
+    return isMgr?true:isMyTask(t);
+  });
+
+  if(activeSvc.length){
     hasAnything=true;
-    secTitle(ct,"📝 Мои задачи и проекты ("+myActiveSvc.length+")");
-    myActiveSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
+    // Разбить на мои и чужие для визуального разделения
+    var mySvc=activeSvc.filter(function(t){return isMyTask(t)});
+    var otherSvc=activeSvc.filter(function(t){return!isMyTask(t)});
+    if(mySvc.length){
+      secTitle(ct,"📝 Мои задачи ("+mySvc.length+")");
+      mySvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task",_showDelete:isAdmin})))});
+    }
+    if(otherSvc.length){
+      secTitle(ct,"📋 Задачи сотрудников ("+otherSvc.length+")");
+      otherSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task",_showDelete:isAdmin})))});
+    }
   }
 
-  // ALL active repairs - admin sees all, mechanic sees own
+  // ── Ремонты в работе ──
   var repairGroups=[];
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
     if(rSt(r)==="cancelled"||rSt(r)==="done")return;
-    var activeTasks=(r.tasks||[]).filter(function(t){return tSt(t)!=="done"});
-    if(!activeTasks.length)return;
-    if(!isAdmin){
-      var myTasks=activeTasks.filter(function(t){return isMyTask(t)});
-      if(!myTasks.length)return;
-      activeTasks=myTasks;
-    }
-    repairGroups.push({cid:c.id,cn:c.name,r:r,tasks:activeTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
+    var allTasks=(r.tasks||[]).filter(function(t){return tSt(t)!=="done"});
+    if(!allTasks.length)return;
+    var visibleTasks=isMgr?allTasks:allTasks.filter(function(t){return isMyTask(t)});
+    if(!visibleTasks.length)return;
+    repairGroups.push({cid:c.id,cn:c.name,r:r,tasks:visibleTasks,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})});
   })});
 
   if(repairGroups.length){
@@ -647,18 +658,10 @@ function myTasksTab(ct){
     repairGroups.forEach(function(item){renderVehicleTaskGroup(ct,item)});
   }
 
-  // Other service tasks (admin sees tasks not assigned to self)
-  if(isAdmin){
-    var otherSvc=S.tasks.filter(function(t){return!isMyTask(t)&&tSt(t)!=="done"});
-    if(otherSvc.length){
-      hasAnything=true;
-      secTitle(ct,"📝 Задачи сервиса сотрудников ("+otherSvc.length+")");
-      otherSvc.forEach(function(t){ct.appendChild(buildTaskCard(Object.assign({},t,{type:t.taskType||"task"})))});
-    }
-  }
-
   if(!hasAnything){
-    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет задач")));
+    ct.appendChild(h("div",{s:{textAlign:"center",padding:"40px"}},
+      h("div",{s:{fontSize:"36px",marginBottom:"12px"}},"📋"),
+      h("div",{s:{fontSize:"15px",fontWeight:"600",color:"#64748b"}},"Нет активных задач")));
   }
 }
 // Render vehicle header + task list grouped under it
@@ -670,11 +673,21 @@ function renderVehicleTaskGroup(ct,item){
   vHdr.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}},item.cn+(item.r.date?" · "+fD(item.r.date):"")));
   card.appendChild(vHdr);
   item.tasks.forEach(function(t,idx){
-    var taskData={id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid||item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy};
+    var taskData={id:t.id,description:t.description,status:t.status,photos:t.photos,rid:item.r.id,cid:item.cid,cn:item.cn,v:item.v,rd:item.r.date,type:"repair",freonTask:t.freonTask||false,freonKg:t.freonKg||"",workComment:t.workComment||"",assignees:t.assignees,assignee:t.assignee,doneBy:t.doneBy};
     var tCard=buildTaskCardCompact(taskData,idx+1);
+    // Delete button for admin
+    if(myRole()==="admin"){
+      var delBtn=h("button",{s:{padding:"2px 7px",borderRadius:"5px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"4px",marginLeft:"24px"},onClick:function(){
+        if(!confirm("Удалить задачу «"+(t.description||"")+"»?"))return;
+        var cl=S.cl.find(function(c){return c.id===item.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===item.r.id});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});
+        rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(item.cid,"repairs",rp);
+      }},"🗑 Удалить задачу");
+      tCard.appendChild(delBtn);
+    }
     card.appendChild(tCard);
   });
-  // Add task button (admin/manager)
   if(canManage()){
     card.appendChild(h("button",{s:{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(){S.mod={t:"addRepairTask",cid:item.cid,rid:item.r.id};R()}},"+ Задача"));
   }
@@ -902,15 +915,21 @@ function buildTaskCard(t){
     }
   }
   // Delete task button (admin only)
-  if(t.type==="repair"&&myRole()==="admin"){
-    cd.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"4px",float:"right"},onClick:function(){
-      if(!confirm("Удалить задачу?"))return;
-      var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
-      var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
-      var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});
-      rp[ri]=Object.assign({},rp[ri],{tasks:ts});
-      fbArr(t.cid,"repairs",rp);
-    }},"🗑 Удалить"));
+  if(myRole()==="admin"){
+    if(t.type==="repair"){
+      cd.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"4px",display:"inline-block"},onClick:function(){
+        if(!confirm("Удалить задачу «"+(t.description||t.title||"")+"»?"))return;
+        var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
+        var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
+        var ts=(rp[ri].tasks||[]).filter(function(x){return x.id!==t.id});
+        rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp);
+      }},"🗑 Удалить задачу"));
+    }else if(t._showDelete||t.type==="task"||t.type==="project"){
+      cd.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.03)",color:"#f87171",fontSize:"10px",cursor:"pointer",marginTop:"4px",display:"inline-block"},onClick:function(){
+        if(!confirm("Удалить задачу «"+(t.title||t.description||"")+"»?"))return;
+        fbDelTask(t.id);
+      }},"🗑 Удалить задачу"));
+    }
   }
   return cd
 }
@@ -1790,19 +1809,65 @@ function doneTab(ct){
     });
   }
 
-  // Completed service tasks & projects
+  // Completed service tasks & projects — строчками с раскрытием
   var doneSvc=S.tasks.filter(function(t){return t.status==="done"});
   if(doneSvc.length){
-    var exp2=false;
-    var cont2=h("div",{s:{display:"none"}});
-    var arrow2=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-    var shdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginTop:"12px",marginBottom:"4px",cursor:"pointer"},onClick:function(){
-      exp2=!exp2;cont2.style.display=exp2?"block":"none";arrow2.style.transform=exp2?"rotate(90deg)":"rotate(0deg)";
-    }});
-    shdr.append(arrow2,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Завершённые задачи/проекты ("+doneSvc.length+")"));
-    ct.appendChild(shdr);
-    doneSvc.forEach(function(t){cont2.appendChild(renderSvcTaskCard(t,true))});
-    ct.appendChild(cont2);
+    secTitle(ct,"📝 Завершённые задачи и проекты ("+doneSvc.length+")");
+    doneSvc.sort(function(a,b){return(b.createdAt&&a.createdAt)?(b.createdAt>a.createdAt?1:-1):0});
+    doneSvc.forEach(function(t){
+      var isProject=t.taskType==="project";
+      var subtasks=t.subtasks||[];
+      var expanded=false;
+      var content=h("div",{s:{display:"none",marginTop:"8px"}});
+      var arrow=h("span",{s:{transition:"transform .25s",display:"inline-block",fontSize:"10px"}},"▶");
+
+      var cd=h("div",{cls:"rc",s:{marginBottom:"6px"}});
+      var hdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"},onClick:function(){
+        expanded=!expanded;content.style.display=expanded?"block":"none";arrow.style.transform=expanded?"rotate(90deg)":"rotate(0deg)";
+      }});
+      hdr.appendChild(arrow);
+      var info=h("div",{s:{flex:"1"}});
+      var topLine=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
+      topLine.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#f1f5f9"}},t.title||"Без названия"));
+      topLine.appendChild(badge(isProject?"📐 Проект":"📝 Задача",isProject?"245,158,11":"99,102,241"));
+      info.appendChild(topLine);
+      var meta=h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"2px"}});
+      meta.appendChild(h("span",null,"👤 "+assigneeNames(t)));
+      if(subtasks.length)meta.appendChild(h("span",{s:{marginLeft:"8px"}},subtasks.length+" подзадач"));
+      info.appendChild(meta);
+      hdr.appendChild(info);
+      // Admin: delete button
+      if(myRole()==="admin"){
+        hdr.appendChild(h("button",{s:{padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"10px",cursor:"pointer",flexShrink:"0"},onClick:function(e){
+          e.stopPropagation();if(confirm("Удалить задачу «"+(t.title||"")+"»?"))fbDelTask(t.id);
+        }},"🗑"));
+      }
+      cd.appendChild(hdr);
+
+      // ── Expanded detail ──
+      if(t.description)content.appendChild(h("div",{s:{fontSize:"12px",color:"#cbd5e1",lineHeight:"1.5",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.05)",marginBottom:"6px"}},t.description));
+      if(t.workComment)content.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",padding:"6px 10px",background:"rgba(139,92,246,.06)",borderRadius:"8px",marginBottom:"6px",border:"1px solid rgba(139,92,246,.1)"}},h("span",{s:{color:"#a78bfa",fontSize:"10px",fontWeight:"700"}},"📝 Отчёт: "),t.workComment));
+      if(t.photos&&t.photos.length)content.appendChild(photoGrid(t.photos,false));
+
+      // Subtasks
+      if(subtasks.length){
+        content.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"6px",marginTop:"4px"}},"Подзадачи:"));
+        subtasks.forEach(function(st){
+          var stDone=st.status==="done";
+          var si=h("div",{s:{padding:"7px 10px",background:"rgba(255,255,255,.02)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.05)",marginBottom:"4px"}});
+          var sr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"2px"}});
+          sr.appendChild(h("span",{s:{fontSize:"11px",color:"#a78bfa"}},"👤 "+assigneeNames(st)));
+          sr.appendChild(h("span",{s:{fontSize:"10px",color:stDone?"#4ade80":"#fb923c"}},stDone?"✅":"🔧"));
+          si.appendChild(sr);
+          if(st.description)si.appendChild(h("div",{s:{fontSize:"11px",color:"#cbd5e1",marginTop:"2px"}},st.description));
+          if(st.workComment)si.appendChild(h("div",{s:{fontSize:"10px",color:"#e2e8f0",marginTop:"3px",padding:"3px 6px",background:"rgba(139,92,246,.06)",borderRadius:"4px"}},h("span",{s:{color:"#a78bfa",fontSize:"9px"}},"📝 "),st.workComment));
+          if(st.photos&&st.photos.length)si.appendChild(photoGrid(st.photos,false));
+          content.appendChild(si);
+        });
+      }
+      cd.appendChild(content);
+      ct.appendChild(cd);
+    });
   }
 
   // ═══ EXCEL MONTHLY REPORT (admin only) ═══
