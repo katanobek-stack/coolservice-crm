@@ -975,16 +975,23 @@ function calTab(ct){
 }
 
 // ═══ STATS TAB ═══
-function makeRevenueChart(allR){
+function makeRevenueChart(allR,rentPerMonth,subPerMonth){
+  rentPerMonth=rentPerMonth||0;
+  subPerMonth=subPerMonth||0;
   var now=new Date();
   var months=[];var labels=[];
   for(var i=5;i>=0;i--){
     var d=new Date(now.getFullYear(),now.getMonth()-i,1);
     var mk=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
     var mN=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"][d.getMonth()];
-    var rev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===mk&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+    var repRev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===mk&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
     var cnt=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===mk&&r.closedByManager}).length;
-    months.push({mk:mk,rev:rev,cnt:cnt,label:mN});
+    // Для текущего месяца — добавляем аренду и абонплату, для прошлых — тоже (приблизительно, как постоянный доход)
+    var curMK0=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+    var isCurrentOrPast=mk<=curMK0;
+    var extra=isCurrentOrPast?(rentPerMonth+subPerMonth):0;
+    var rev=repRev+extra;
+    months.push({mk:mk,rev:rev,repRev:repRev,rent:isCurrentOrPast?rentPerMonth:0,sub:isCurrentOrPast?subPerMonth:0,cnt:cnt,label:mN});
     labels.push(mN);
   }
   var maxRev=Math.max.apply(null,months.map(function(m){return m.rev}))||1;
@@ -1075,6 +1082,10 @@ function statsTab(ct){
   var doneR=allR.filter(function(r){return rSt(r)==="done"}).length;
   var tRev=allR.reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
 
+  // Rent & subscription monthly income (recurring)
+  var statsRentPerMonth=S.freezers.filter(function(fz){return fz.rented&&fz.rentAmount>0}).reduce(function(s,fz){return s+(parseFloat(fz.rentAmount)||0)},0);
+  var statsSubPerMonth=S.cl.filter(function(c){return c.clientType==="legal"&&c.subscription>0}).reduce(function(s,c){return s+(parseFloat(c.subscription)||0)},0);
+
   // Service tasks & projects
   var svcTasks=S.tasks.filter(function(t){return t.taskType==="task"});
   var svcProjects=S.tasks.filter(function(t){return t.taskType==="project"});
@@ -1087,8 +1098,10 @@ function statsTab(ct){
   var curMK=now0.getFullYear()+"-"+String(now0.getMonth()+1).padStart(2,"0");
   var prevD=new Date(now0.getFullYear(),now0.getMonth()-1,1);
   var prevMK=prevD.getFullYear()+"-"+String(prevD.getMonth()+1).padStart(2,"0");
-  var curMRev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===curMK&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
-  var prevMRev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===prevMK&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+  var curMRepRev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===curMK&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+  var prevMRepRev=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===prevMK&&r.closedByManager}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
+  var curMRev=curMRepRev+statsRentPerMonth+statsSubPerMonth;
+  var prevMRev=prevMRepRev+statsRentPerMonth+statsSubPerMonth;
   var curMCnt=allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===curMK&&r.closedByManager}).length;
 
   // ── KPI GRID ──
@@ -1109,10 +1122,10 @@ function statsTab(ct){
 
   // ── REVENUE CHART (admin) ──
   if(myRole()==="admin"){
-    var chartData=makeRevenueChart(allR);
+    var chartData=makeRevenueChart(allR,statsRentPerMonth,statsSubPerMonth);
     var cw=h("div",{cls:"chart-wrap"});
     var chHdr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}});
-    chHdr.appendChild(h("div",{cls:"chart-title"},"📊 Выручка по месяцам (₽)"));
+    chHdr.appendChild(h("div",{cls:"chart-title"},"📊 Общая выручка по месяцам (₽)"));
     // trend arrow
     if(prevMRev>0||curMRev>0){
       var diff=curMRev-prevMRev;var pct=prevMRev>0?Math.round(diff/prevMRev*100):100;
@@ -1125,10 +1138,11 @@ function statsTab(ct){
     // Month summary row
     var mRow=h("div",{s:{display:"flex",justifyContent:"space-between",marginTop:"10px",padding:"8px 10px",background:"rgba(255,255,255,.03)",borderRadius:"10px"}});
     var mNames0=["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-    mRow.append(
-      h("div",null,h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase"}},mNames0[now0.getMonth()+1]+" "+now0.getFullYear()),h("div",{s:{fontSize:"16px",fontWeight:"800",color:"#38bdf8"}},curMRev+"₽"),h("div",{s:{fontSize:"10px",color:"#475569"}},curMCnt+" нарядов")),
-      h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase"}},mNames0[prevD.getMonth()+1]+" "+prevD.getFullYear()),h("div",{s:{fontSize:"16px",fontWeight:"700",color:"#64748b"}},prevMRev+"₽"),h("div",{s:{fontSize:"10px",color:"#475569"}},allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===prevMK&&r.closedByManager}).length+" нарядов"))
-    );
+    var curLeft=h("div",null,h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase"}},mNames0[now0.getMonth()+1]+" "+now0.getFullYear()),h("div",{s:{fontSize:"16px",fontWeight:"800",color:"#38bdf8"}},curMRev+"₽"),h("div",{s:{fontSize:"10px",color:"#475569"}},curMCnt+" нарядов"));
+    if(statsRentPerMonth>0)curLeft.appendChild(h("div",{s:{fontSize:"10px",color:"#34d399"}},"🧊 аренда +"+statsRentPerMonth+"₽"));
+    if(statsSubPerMonth>0)curLeft.appendChild(h("div",{s:{fontSize:"10px",color:"#34d399"}},"🏢 абонплата +"+statsSubPerMonth+"₽"));
+    var prevRight=h("div",{s:{textAlign:"right"}},h("div",{s:{fontSize:"10px",color:"#4d6680",fontWeight:"600",textTransform:"uppercase"}},mNames0[prevD.getMonth()+1]+" "+prevD.getFullYear()),h("div",{s:{fontSize:"16px",fontWeight:"700",color:"#64748b"}},prevMRev+"₽"),h("div",{s:{fontSize:"10px",color:"#475569"}},allR.filter(function(r){return(r.closedAt||r.date||"").substring(0,7)===prevMK&&r.closedByManager}).length+" нарядов"));
+    mRow.append(curLeft,prevRight);
     cw.appendChild(mRow);
     ct.appendChild(cw);
 
