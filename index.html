@@ -2022,6 +2022,66 @@ function doneTab(ct){
 
   // ── P&L ──
   renderPnL(ct,allR);
+
+  // ═══ MIGRATE BASE64 PHOTOS TO STORAGE ═══
+  if(myRole()==="admin"){
+    secTitle(ct,"⚙️ Обслуживание базы данных");
+
+    // Show document sizes
+    var sizeWrap=h("div",{s:{marginBottom:"10px"}});
+    var totalBase64=0;var totalBase64Count=0;
+    S.cl.forEach(function(c){
+      var cSize=JSON.stringify(c).length;
+      // Count base64 photos
+      (c.vehicles||[]).forEach(function(v){if(v.photo&&v.photo.length>500){totalBase64++;totalBase64Count++}});
+      (c.repairs||[]).forEach(function(r){
+        (r.photos||[]).forEach(function(p){if(p.data&&p.data.length>500){totalBase64+=p.data.length;totalBase64Count++}});
+        (r.tasks||[]).forEach(function(t){
+          (t.photos||[]).forEach(function(p){if(p.data&&p.data.length>500){totalBase64+=p.data.length;totalBase64Count++}});
+        });
+      });
+    });
+    S.tasks.forEach(function(t){
+      (t.photos||[]).forEach(function(p){if(p.data&&p.data.length>500){totalBase64+=p.data.length;totalBase64Count++}});
+      (t.subtasks||[]).forEach(function(st){
+        (st.photos||[]).forEach(function(p){if(p.data&&p.data.length>500){totalBase64+=p.data.length;totalBase64Count++}});
+      });
+    });
+
+    if(totalBase64Count>0){
+      var sizeMB=(totalBase64/1024/1024).toFixed(2);
+      sizeWrap.appendChild(h("div",{s:{padding:"12px 14px",background:"rgba(251,146,60,.08)",borderRadius:"12px",border:"1px solid rgba(251,146,60,.2)",marginBottom:"8px"}},
+        h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#fb923c",marginBottom:"4px"}},"⚠️ Найдено "+totalBase64Count+" старых фото (base64) в базе"),
+        h("div",{s:{fontSize:"11px",color:"#94a3b8"}},"Занимают ~"+sizeMB+" МБ в документах Firestore. Миграция перенесёт их в Storage и освободит место.")));
+
+      var statusDiv=h("div",{s:{display:"none",padding:"10px 14px",background:"rgba(14,165,233,.06)",borderRadius:"10px",border:"1px solid rgba(14,165,233,.15)",marginBottom:"8px",fontSize:"12px",color:"#38bdf8"}});
+      sizeWrap.appendChild(statusDiv);
+
+      var migrBtn=h("button",{cls:"bp",s:{background:"linear-gradient(135deg,#d97706,#f59e0b)"},onClick:function(){
+        if(!confirm("Перенести все "+totalBase64Count+" фото из базы в Storage?\n\nЭто может занять несколько минут. Не закрывайте страницу."))return;
+        migrBtn.disabled=true;
+        migrBtn.textContent="⏳ Миграция...";
+        statusDiv.style.display="block";
+        statusDiv.textContent="Начинаю миграцию...";
+
+        migrateAllPhotos(function(msg){statusDiv.textContent=msg}).then(function(stats){
+          statusDiv.style.display="block";
+          statusDiv.innerHTML="";
+          statusDiv.appendChild(h("div",{s:{color:"#4ade80",fontWeight:"700"}},"✅ Миграция завершена!"));
+          statusDiv.appendChild(h("div",{s:{color:"#94a3b8",marginTop:"4px"}},"Перенесено: "+stats.migrated+" фото. Ошибок: "+stats.errors));
+          migrBtn.textContent="✅ Готово";
+        }).catch(function(err){
+          statusDiv.textContent="❌ Ошибка: "+err.message;
+          migrBtn.disabled=false;
+          migrBtn.textContent="🔄 Повторить миграцию";
+        });
+      }},"🔄 Перенести все фото в Storage");
+      sizeWrap.appendChild(migrBtn);
+    }else{
+      sizeWrap.appendChild(h("div",{s:{padding:"12px 14px",background:"rgba(34,197,94,.06)",borderRadius:"12px",border:"1px solid rgba(34,197,94,.15)",fontSize:"12px",color:"#4ade80",fontWeight:"600"}},"✅ Все фото уже в Storage — база чистая"));
+    }
+    ct.appendChild(sizeWrap);
+  }
 }
 
 // ═══ DETAIL VIEW ═══
@@ -2829,6 +2889,188 @@ function renderPnL(ct,allR){
 
   pnlWrap.appendChild(h("button",{s:{width:"100%",marginTop:"10px",padding:"8px",borderRadius:"10px",border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"#64748b",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){S.mod={t:"editFinance"};R()}},"⚙️ Настроить расходы"));
   ct.appendChild(pnlWrap);
+}
+
+// ═══ MIGRATE BASE64 PHOTOS TO STORAGE ═══
+function base64ToBlob(b64){
+  var parts=b64.split(",");var mime=(parts[0].match(/:(.*?);/)||[])[1]||"image/jpeg";
+  var raw=atob(parts[1]);var arr=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+
+function migrateAllPhotos(onStatus){
+  var migrated=0,errors=0,total=0;
+
+  // Collect all migration tasks
+  var clientJobs=[];
+  var taskJobs=[];
+
+  // ── Scan clients ──
+  S.cl.forEach(function(c){
+    var needsUpdate=false;
+    var repairs=(c.repairs||[]).slice();
+    var vehicles=(c.vehicles||[]).slice();
+
+    // Vehicle photos
+    vehicles.forEach(function(v,vi){
+      if(v.photo&&v.photo.indexOf("data:")===0&&v.photo.length>500){
+        total++;
+        var vidx=vi;
+        clientJobs.push({cid:c.id,type:"vehicle",vidx:vidx,data:v.photo});
+      }
+    });
+
+    // Repair photos & task photos
+    repairs.forEach(function(r,ri){
+      (r.photos||[]).forEach(function(p,pi){
+        if(p.data&&p.data.indexOf("data:")===0&&p.data.length>500){
+          total++;
+          clientJobs.push({cid:c.id,type:"repairPhoto",ri:ri,pi:pi,data:p.data,pid:p.id});
+        }
+      });
+      (r.tasks||[]).forEach(function(t,ti){
+        (t.photos||[]).forEach(function(p,tpi){
+          if(p.data&&p.data.indexOf("data:")===0&&p.data.length>500){
+            total++;
+            clientJobs.push({cid:c.id,type:"taskPhoto",ri:ri,ti:ti,tpi:tpi,data:p.data,pid:p.id});
+          }
+        });
+      });
+    });
+  });
+
+  // ── Scan service tasks ──
+  S.tasks.forEach(function(t){
+    (t.photos||[]).forEach(function(p,pi){
+      if(p.data&&p.data.indexOf("data:")===0&&p.data.length>500){
+        total++;
+        taskJobs.push({tid:t.id,type:"svcPhoto",pi:pi,data:p.data,pid:p.id});
+      }
+    });
+    (t.subtasks||[]).forEach(function(st,si){
+      (st.photos||[]).forEach(function(p,spi){
+        if(p.data&&p.data.indexOf("data:")===0&&p.data.length>500){
+          total++;
+          taskJobs.push({tid:t.id,type:"subPhoto",si:si,spi:spi,data:p.data,pid:p.id});
+        }
+      });
+    });
+  });
+
+  onStatus("Найдено "+total+" фото для миграции...");
+
+  // Process client jobs grouped by client
+  var byCid={};
+  clientJobs.forEach(function(j){if(!byCid[j.cid])byCid[j.cid]=[];byCid[j.cid].push(j)});
+
+  var cidKeys=Object.keys(byCid);
+  var cidIdx=0;
+
+  function processNextClient(){
+    if(cidIdx>=cidKeys.length)return processServiceTasks();
+    var cid=cidKeys[cidIdx];
+    var jobs=byCid[cid];
+    var cl=S.cl.find(function(c){return c.id===cid});
+    if(!cl){cidIdx++;return processNextClient()}
+
+    onStatus("Клиент: "+(cl.name||cid)+" ("+jobs.length+" фото)... ["+migrated+"/"+total+"]");
+
+    var repairs=(cl.repairs||[]).map(function(r){return Object.assign({},r,{photos:(r.photos||[]).slice(),tasks:(r.tasks||[]).map(function(t){return Object.assign({},t,{photos:(t.photos||[]).slice()})})})});
+    var vehicles=(cl.vehicles||[]).map(function(v){return Object.assign({},v)});
+
+    var chain=Promise.resolve();
+    jobs.forEach(function(j){
+      chain=chain.then(function(){
+        var blob=base64ToBlob(j.data);
+        var photoId=j.pid||gid();
+        var path="photos/"+S.u.uid+"/"+photoId+".jpg";
+        var sRef=ref(storage,path);
+        return uploadBytes(sRef,blob).then(function(snap){
+          return getDownloadURL(snap.ref);
+        }).then(function(url){
+          if(j.type==="vehicle"){
+            vehicles[j.vidx].photo=url;
+          }else if(j.type==="repairPhoto"){
+            var ph=repairs[j.ri].photos;
+            var idx=ph.findIndex(function(p){return p.id===j.pid});
+            if(idx>=0)ph[idx]={id:j.pid,url:url,path:path};
+          }else if(j.type==="taskPhoto"){
+            var ph2=repairs[j.ri].tasks[j.ti].photos;
+            var idx2=ph2.findIndex(function(p){return p.id===j.pid});
+            if(idx2>=0)ph2[idx2]={id:j.pid,url:url,path:path};
+          }
+          migrated++;
+          onStatus("Загружено "+migrated+"/"+total+"...");
+        }).catch(function(err){
+          console.error("Migration error:",err);errors++;
+        });
+      });
+    });
+
+    return chain.then(function(){
+      // Save updated client doc
+      var upd={vehicles:vehicles,repairs:repairs};
+      return fbUpd(cid,upd);
+    }).then(function(){
+      cidIdx++;
+      return processNextClient();
+    });
+  }
+
+  // Process service tasks
+  var byTid={};
+  taskJobs.forEach(function(j){if(!byTid[j.tid])byTid[j.tid]=[];byTid[j.tid].push(j)});
+
+  function processServiceTasks(){
+    var tidKeys=Object.keys(byTid);
+    var chain=Promise.resolve();
+    tidKeys.forEach(function(tid){
+      chain=chain.then(function(){
+        var jobs2=byTid[tid];
+        var t=S.tasks.find(function(x){return x.id===tid});
+        if(!t)return;
+        var photos=(t.photos||[]).slice();
+        var subtasks=(t.subtasks||[]).map(function(st){return Object.assign({},st,{photos:(st.photos||[]).slice()})});
+
+        onStatus("Задача: "+(t.title||tid)+" ("+jobs2.length+" фото)... ["+migrated+"/"+total+"]");
+
+        var inner=Promise.resolve();
+        jobs2.forEach(function(j){
+          inner=inner.then(function(){
+            var blob=base64ToBlob(j.data);
+            var photoId=j.pid||gid();
+            var path="photos/"+S.u.uid+"/"+photoId+".jpg";
+            var sRef=ref(storage,path);
+            return uploadBytes(sRef,blob).then(function(snap){
+              return getDownloadURL(snap.ref);
+            }).then(function(url){
+              if(j.type==="svcPhoto"){
+                var idx=photos.findIndex(function(p){return p.id===j.pid});
+                if(idx>=0)photos[idx]={id:j.pid,url:url,path:path};
+              }else if(j.type==="subPhoto"){
+                var ph=subtasks[j.si].photos;
+                var idx2=ph.findIndex(function(p){return p.id===j.pid});
+                if(idx2>=0)ph[idx2]={id:j.pid,url:url,path:path};
+              }
+              migrated++;
+              onStatus("Загружено "+migrated+"/"+total+"...");
+            }).catch(function(err){console.error("Migration error:",err);errors++});
+          });
+        });
+
+        return inner.then(function(){
+          return fbUpdTask(tid,{photos:photos,subtasks:subtasks});
+        });
+      });
+    });
+
+    return chain.then(function(){
+      return{migrated:migrated,errors:errors};
+    });
+  }
+
+  return processNextClient();
 }
 
 // ═══ NOTIFICATION SOUND ═══
