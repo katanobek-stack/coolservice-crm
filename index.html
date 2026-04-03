@@ -66,9 +66,10 @@ textarea.fi{min-height:75px;resize:vertical}
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
 
 var fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
-var auth=getAuth(fbApp),db=getFirestore(fbApp);
+var auth=getAuth(fbApp),db=getFirestore(fbApp),storage=getStorage(fbApp);
 
 var SVC=[{id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},{id:"ac",l:"Кондиционер",e:"❄️",c:"99,102,241"},{id:"freezer",l:"Морозильная",e:"🥶",c:"6,182,212"},{id:"other",l:"Другое",e:"🔧",c:"148,163,184"}];
 var FREONS=["","R134a","R404a","R407c","R410a","R422d","R449a","R452a","R507a","Другой"];
@@ -77,8 +78,27 @@ var fD=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric
 var fDT=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):""};
 var gid=function(){return"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5)};
 
-function compress(file,mw,q){mw=mw||400;q=q||0.3;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);var result=c.toDataURL("image/jpeg",q);// If still too large (>200KB), compress more
-if(result.length>200000){result=c.toDataURL("image/jpeg",0.15)}resolve(result)};img.src=e.target.result};fr.readAsDataURL(file)})}
+function compressToBlob(file,mw,q){mw=mw||800;q=q||0.5;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);c.toBlob(function(blob){resolve(blob)},"image/jpeg",q)};img.src=e.target.result};fr.readAsDataURL(file)})}
+
+function uploadPhoto(file){
+  var photoId=gid();
+  var path="photos/"+S.u.uid+"/"+photoId+".jpg";
+  return compressToBlob(file).then(function(blob){
+    var sRef=ref(storage,path);
+    return uploadBytes(sRef,blob);
+  }).then(function(snap){
+    return getDownloadURL(snap.ref);
+  }).then(function(url){
+    return{id:photoId,url:url,path:path};
+  });
+}
+
+function uploadPhotos(files){
+  return Promise.all(files.map(function(f){return uploadPhoto(f)}));
+}
+
+// Legacy compress for vehicle photo (single small thumbnail stored in doc)
+function compress(file,mw,q){mw=mw||300;q=q||0.3;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);var result=c.toDataURL("image/jpeg",q);if(result.length>100000){result=c.toDataURL("image/jpeg",0.15)}resolve(result)};img.src=e.target.result};fr.readAsDataURL(file)})}
 
 // ═══ VOICE TO TEXT ═══
 function makeMicBtn(textarea){
@@ -258,7 +278,7 @@ function plate(text){return h("span",{s:{display:"inline-flex",background:"rgba(
 function secTitle(ct,text,addFn){var st=h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#4d6680",textTransform:"uppercase",letterSpacing:".08em",marginBottom:"10px",marginTop:"18px",display:"flex",alignItems:"center",gap:"6px",padding:"0 2px"}},text);if(addFn)st.appendChild(h("button",{s:{marginLeft:"auto",color:"#38bdf8",cursor:"pointer",fontSize:"12px",fontWeight:"700",background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.2)",borderRadius:"6px",padding:"2px 8px"},onClick:addFn},"+ Добавить"));ct.appendChild(st)}
 function typeGrid(sel,onSel){var tg=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});SVC.forEach(function(t){tg.appendChild(h("button",{cls:"tb"+(sel===t.id?" a":""),onClick:function(){onSel(t.id)}},t.e+" "+t.l))});return tg}
 
-function photoGrid(photos,editable,onRemove){var pg=h("div",{cls:"pg"});photos.forEach(function(p){var pw=h("div",{s:{position:"relative"}});pw.appendChild(h("img",{cls:"pt",src:p.data||p,onClick:function(){S.iv=p.data||p;R()}}));if(editable){pw.appendChild(h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){onRemove(p.id)}},"×"))}pg.appendChild(pw)});return pg}
+function photoGrid(photos,editable,onRemove){var pg=h("div",{cls:"pg"});photos.forEach(function(p){var pw=h("div",{s:{position:"relative"}});var src=p.url||p.data||p;pw.appendChild(h("img",{cls:"pt",src:src,onClick:function(){S.iv=src;R()}}));if(editable){pw.appendChild(h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){onRemove(p.id)}},"×"))}pg.appendChild(pw)});return pg}
 function addPhotoBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:onClick},"🖼 Галерея")}
 function addCameraBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(34,197,94,.3)",background:"rgba(34,197,94,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#4ade80",fontSize:"11px",fontWeight:"500"},onClick:onClick},"📸 Камера")}
 
@@ -266,9 +286,9 @@ function makePhotoUploader(onPhotosAdded){
   var fi=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
   fi.addEventListener("change",function(e){
     var files=Array.from(e.target.files);if(!files.length)return;
-    Promise.all(files.map(function(f){return compress(f)})).then(function(results){
+    uploadPhotos(files).then(function(results){
       onPhotosAdded(results);e.target.value=""
-    })
+    }).catch(function(err){alert("Ошибка загрузки фото: "+err.message);e.target.value=""})
   });
   return fi;
 }
@@ -277,9 +297,9 @@ function makeCameraInput(onPhotosAdded){
   var fi=h("input",{type:"file",accept:"image/*",capture:"environment",s:{display:"none"}});
   fi.addEventListener("change",function(e){
     var files=Array.from(e.target.files);if(!files.length)return;
-    Promise.all(files.map(function(f){return compress(f)})).then(function(results){
+    uploadPhotos(files).then(function(results){
       onPhotosAdded(results);e.target.value=""
-    })
+    }).catch(function(err){alert("Ошибка загрузки фото: "+err.message);e.target.value=""})
   });
   return fi;
 }
@@ -769,7 +789,7 @@ function buildTaskCardCompact(t,num){
       var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
       var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
       var ts=(rp[ri].tasks||[]).slice();var tii=ts.findIndex(function(x){return x.id===t.id});if(tii<0)return;
-      var freshPhotos=(ts[tii].photos||[]).slice();results.forEach(function(d){freshPhotos.push({id:gid(),data:d})});
+      var freshPhotos=(ts[tii].photos||[]).slice();results.forEach(function(d){freshPhotos.push(d)});
       ts[tii]=Object.assign({},ts[tii],{photos:freshPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp);
     }));
     // Description button
@@ -890,12 +910,12 @@ function buildTaskCard(t){
         var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
         var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
         var freshPhotos=(ts[ti].photos||[]).slice();
-        results.forEach(function(data){freshPhotos.push({id:gid(),data:data})});
+        results.forEach(function(data){freshPhotos.push(data)});
         ts[ti]=Object.assign({},ts[ti],{photos:freshPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp)
       }else{
         var freshTask=S.tasks.find(function(x){return x.id===t.id});
         var freshPhotos2=(freshTask?freshTask.photos||[]:t.photos||[]).slice();
-        results.forEach(function(data){freshPhotos2.push({id:gid(),data:data})});
+        results.forEach(function(data){freshPhotos2.push(data)});
         fbUpdTask(t.id,{photos:freshPhotos2})
       }
     }));
@@ -1699,7 +1719,7 @@ function renderSvcTaskCard(t,readOnly){
         var freshSubs=(freshTask?freshTask.subtasks||[]:subtasks).slice();
         var si=freshSubs.findIndex(function(x){return x.id===st.id});
         if(si<0)return;var ph=(freshSubs[si].photos||[]).slice();
-        results.forEach(function(d){ph.push({id:gid(),data:d})});
+        results.forEach(function(d){ph.push(d)});
         freshSubs[si]=Object.assign({},freshSubs[si],{photos:ph});fbUpdTask(t.id,{subtasks:freshSubs});
       }));
       var descExp=false;
@@ -1724,7 +1744,7 @@ function renderSvcTaskCard(t,readOnly){
     wrap.appendChild(inlineAddPhotoBtn("Фото",function(results){
       var freshTask=S.tasks.find(function(x){return x.id===t.id});
       var photos=(freshTask?freshTask.photos||[]:t.photos||[]).slice();
-      results.forEach(function(data){photos.push({id:gid(),data:data})});
+      results.forEach(function(data){photos.push(data)});
       fbUpdTask(t.id,{photos:photos})
     }));
     if(canManage()){
@@ -1772,7 +1792,7 @@ function doneTab(ct){
       hdr.appendChild(left);
       // Vehicle photo avatar on the right
       var vPhoto=r.v&&r.v.photo?r.v.photo:null;
-      if(!vPhoto&&r.photos&&r.photos.length)vPhoto=r.photos[0].data||null;
+      if(!vPhoto&&r.photos&&r.photos.length)vPhoto=r.photos[0].url||r.photos[0].data||null;
       if(vPhoto){
         hdr.appendChild(h("div",{s:{width:"56px",height:"56px",borderRadius:"10px",overflow:"hidden",flexShrink:"0",border:"2px solid rgba(56,189,248,.2)"}},
           h("img",{src:vPhoto,s:{width:"100%",height:"100%",objectFit:"cover"}})));
@@ -2155,7 +2175,7 @@ function physForm(md,m){
 
   // Repair photos
   var photos=[];
-  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push(d)});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push(d)});rPh()});
   var pG=h("div",{cls:"pg"});
   function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
 
@@ -2302,7 +2322,7 @@ function rForm(md,m){
   var mechPicker=makeStaffPicker(selectedMechs);
 
   var tgW=h("div",null);function rTG(){tgW.innerHTML="";tgW.appendChild(typeGrid(sT,function(id){sT=id;rTG()}))}rTG();
-  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push(d)});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push(d)});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   if(vs.length>1)md.appendChild(fg("Авто",vS));
   md.appendChild(fg("Дата",dI));
@@ -2360,7 +2380,7 @@ function repairTaskForm(md,m){
   var selectedIds=[S.u.uid];
   var picker=makeStaffPicker(selectedIds);
   var dI=h("textarea",{cls:"fi",placeholder:"Описание задачи..."});
-  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push(d)});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push(d)});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   md.append(fg("Исполнители (можно несколько)",picker),fgWithMic("Описание",dI),fg("Фото",pG,fi),
     h("button",{cls:"bp",onClick:function(){var desc=dI.value.trim();if(!desc||!selectedIds.length)return;var cl=S.cl.find(function(c){return c.id===m.cid});if(!cl)return;
@@ -2379,7 +2399,7 @@ function svcTaskForm(md,m){
   var descI=h("textarea",{cls:"fi",placeholder:"Описание..."});
   var selectedIds=[S.u.uid];
   var picker=makeStaffPicker(selectedIds);
-  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var photos=[];var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push(d)});rPh()});var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push(d)});rPh()});
   var pG=h("div",{cls:"pg"});function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   var typeRow=h("div",{s:{display:"flex",gap:"8px",marginBottom:"14px"}});
   typeRow.append(h("button",{cls:"tb"+(taskType==="task"?" a":""),onClick:function(){taskType="task";typeRow.children[0].className="tb a";typeRow.children[1].className="tb"}},"📝 Задача"),h("button",{cls:"tb"+(taskType==="project"?" a":""),onClick:function(){taskType="project";typeRow.children[0].className="tb";typeRow.children[1].className="tb a"}},"📐 Проект"));
@@ -2397,8 +2417,8 @@ function subTaskForm(md,m){
   var picker=makeStaffPicker(selectedIds);
   var dI=h("textarea",{cls:"fi",placeholder:"Описание подзадачи..."});
   var photos=[];
-  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
-  var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push({id:gid(),data:d})});rPh()});
+  var fi=makePhotoUploader(function(results){results.forEach(function(d){photos.push(d)});rPh()});
+  var cam=makeCameraInput(function(results){results.forEach(function(d){photos.push(d)});rPh()});
   var pG=h("div",{cls:"pg"});
   function rPh(){pG.innerHTML="";var g=photoGrid(photos,true,function(id){photos=photos.filter(function(x){return x.id!==id});rPh()});while(g.firstChild)pG.appendChild(g.firstChild);pG.appendChild(addCameraBtn(function(){cam.click()}));pG.appendChild(addPhotoBtn(function(){fi.click()}))}rPh();
   md.append(fg("Исполнители",picker),fgWithMic("Описание",dI),fg("Фото",pG,fi),
