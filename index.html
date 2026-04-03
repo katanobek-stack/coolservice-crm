@@ -510,7 +510,7 @@ function mainView(){
   setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
   // Nav
   var nav=h("div",{cls:"nb"});
-  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"✅ Выполненные",adm:true}];
+  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"📑 Отчёты",adm:true}];
   var isMgr=canManage();
   var isAdmRole=myRole()==="admin";
   var tabs=allTabs.filter(function(t){return(!t.mgr||isMgr)&&(!t.adm||isAdmRole)});
@@ -1212,7 +1212,14 @@ function statsTab(ct){
   // ═══ COMPLETED CARS REPORT (collapsible) ═══
   var doneRepairs=allR.filter(function(r){return rSt(r)==="done"});
   if(doneRepairs.length){
-    secTitle(ct,"✅ Выполненные машины ("+doneRepairs.length+")");
+    var doneExp=false;
+    var doneCont=h("div",{s:{display:"none"}});
+    var doneArrow=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
+    var doneHdr=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"10px 14px",background:"rgba(34,197,94,.06)",borderRadius:"12px",border:"1px solid rgba(34,197,94,.15)",marginBottom:"6px",marginTop:"18px",cursor:"pointer"},onClick:function(){
+      doneExp=!doneExp;doneCont.style.display=doneExp?"block":"none";doneArrow.style.transform=doneExp?"rotate(90deg)":"rotate(0deg)";
+    }});
+    doneHdr.append(doneArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#4ade80"}},"✅ Выполненные машины ("+doneRepairs.length+")"));
+    ct.appendChild(doneHdr);
     doneRepairs.sort(function(a,b){return(b.closedAt||b.date||"").localeCompare(a.closedAt||a.date||"")});
     doneRepairs.forEach(function(r){
       var s=getS(r.serviceType);
@@ -1272,8 +1279,9 @@ function statsTab(ct){
       }
       content.appendChild(h("button",{s:{marginTop:"8px",padding:"6px 12px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}},"→ Карточка клиента"));
       cd.appendChild(content);
-      ct.appendChild(cd);
+      doneCont.appendChild(cd);
     });
+    ct.appendChild(doneCont);
   }
 
   // ═══ SERVICE TASKS (collapsible) ═══
