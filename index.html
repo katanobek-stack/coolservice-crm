@@ -77,7 +77,8 @@ var fD=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric
 var fDT=function(d){return d?new Date(d).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+", "+new Date(d).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}):""};
 var gid=function(){return"x"+Date.now().toString(36)+Math.random().toString(36).substr(2,5)};
 
-function compress(file,mw,q){mw=mw||500;q=q||0.4;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);resolve(c.toDataURL("image/jpeg",q))};img.src=e.target.result};fr.readAsDataURL(file)})}
+function compress(file,mw,q){mw=mw||400;q=q||0.3;return new Promise(function(resolve){var fr=new FileReader;fr.onload=function(e){var img=new Image;img.onload=function(){var c=document.createElement("canvas");var w=img.width,ht=img.height;if(w>mw){ht=ht*(mw/w);w=mw}c.width=w;c.height=ht;c.getContext("2d").drawImage(img,0,0,w,ht);var result=c.toDataURL("image/jpeg",q);// If still too large (>200KB), compress more
+if(result.length>200000){result=c.toDataURL("image/jpeg",0.15)}resolve(result)};img.src=e.target.result};fr.readAsDataURL(file)})}
 
 // ═══ VOICE TO TEXT ═══
 function makeMicBtn(textarea){
@@ -153,10 +154,26 @@ function fbSaveFinance(d){return setDoc(doc(db,"settings","finance"),d,{merge:tr
 function fbAdd(d){var obj=Object.assign({vehicles:[],repairs:[],appointments:[],createdAt:serverTimestamp()},d);return addDoc(collection(db,"clients"),obj)}
 function fbUpd(i,d){return updateDoc(doc(db,"clients",i),d)}
 function fbDel(i){return deleteDoc(doc(db,"clients",i))}
-function fbArr(cid,f,a){var o={};o[f]=a;return updateDoc(doc(db,"clients",cid),o)}
+function fbArr(cid,f,a){var o={};o[f]=a;return updateDoc(doc(db,"clients",cid),o).catch(function(err){
+  var msg=err.message||"";
+  if(msg.indexOf("longer than")>=0||msg.indexOf("exceeds")>=0||msg.indexOf("too large")>=0||msg.indexOf("INVALID_ARGUMENT")>=0||msg.indexOf("10485760")>=0){
+    alert("⚠️ Документ слишком большой для сохранения!\n\nСлишком много фото в карточке клиента. Удалите старые фото из завершённых ремонтов и попробуйте снова.");
+  }else{
+    alert("Ошибка сохранения: "+msg);
+  }
+  throw err;
+})}
 function fbStaff(uid,d){return setDoc(doc(db,"staff",uid),d,{merge:true})}
 function fbAddTask(d){console.log("Creating task:",d);return addDoc(collection(db,"servicetasks"),Object.assign({},d,{createdAt:serverTimestamp()}))}
-function fbUpdTask(id,d){return updateDoc(doc(db,"servicetasks",id),d)}
+function fbUpdTask(id,d){return updateDoc(doc(db,"servicetasks",id),d).catch(function(err){
+  var msg=err.message||"";
+  if(msg.indexOf("longer than")>=0||msg.indexOf("exceeds")>=0||msg.indexOf("too large")>=0||msg.indexOf("INVALID_ARGUMENT")>=0){
+    alert("⚠️ Задача слишком большая!\n\nСлишком много фото. Удалите часть фото и попробуйте снова.");
+  }else{
+    alert("Ошибка сохранения: "+msg);
+  }
+  throw err;
+})}
 function fbDelTask(id){return deleteDoc(doc(db,"servicetasks",id))}
 
 function sN(uid){var s=S.st.find(function(x){return x.id===uid});return s?s.name:(uid?uid.split("@")[0]:"?")}
