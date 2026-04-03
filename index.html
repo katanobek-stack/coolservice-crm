@@ -766,11 +766,11 @@ function buildTaskCardCompact(t,num){
   if(!isDone&&!t.freonTask){
     var actRow=h("div",{s:{display:"flex",gap:"4px",marginLeft:"24px",marginTop:"4px",flexWrap:"wrap"}});
     actRow.appendChild(inlineAddPhotoBtn("Фото",function(results){
-      var newPhotos=(t.photos||[]).slice();results.forEach(function(d){newPhotos.push({id:gid(),data:d})});
       var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
       var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
       var ts=(rp[ri].tasks||[]).slice();var tii=ts.findIndex(function(x){return x.id===t.id});if(tii<0)return;
-      ts[tii]=Object.assign({},ts[tii],{photos:newPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp);
+      var freshPhotos=(ts[tii].photos||[]).slice();results.forEach(function(d){freshPhotos.push({id:gid(),data:d})});
+      ts[tii]=Object.assign({},ts[tii],{photos:freshPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp);
     }));
     // Description button
     var descExp=false;var descP=h("div",{s:{display:"none",width:"100%",marginTop:"4px"}});
@@ -885,15 +885,18 @@ function buildTaskCard(t){
   if(!isDone){
     var actRow=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"4px",alignItems:"flex-start"}});
     actRow.appendChild(inlineAddPhotoBtn("Фото",function(results){
-      var newPhotos=(t.photos||[]).slice();
-      results.forEach(function(data){newPhotos.push({id:gid(),data:data})});
       if(t.type==="repair"){
         var cl=S.cl.find(function(c){return c.id===t.cid});if(!cl)return;
         var rp=(cl.repairs||[]).slice();var ri=rp.findIndex(function(r){return r.id===t.rid});if(ri<0)return;
         var ts=(rp[ri].tasks||[]).slice();var ti=ts.findIndex(function(x){return x.id===t.id});if(ti<0)return;
-        ts[ti]=Object.assign({},ts[ti],{photos:newPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp)
+        var freshPhotos=(ts[ti].photos||[]).slice();
+        results.forEach(function(data){freshPhotos.push({id:gid(),data:data})});
+        ts[ti]=Object.assign({},ts[ti],{photos:freshPhotos});rp[ri]=Object.assign({},rp[ri],{tasks:ts});fbArr(t.cid,"repairs",rp)
       }else{
-        fbUpdTask(t.id,{photos:newPhotos})
+        var freshTask=S.tasks.find(function(x){return x.id===t.id});
+        var freshPhotos2=(freshTask?freshTask.photos||[]:t.photos||[]).slice();
+        results.forEach(function(data){freshPhotos2.push({id:gid(),data:data})});
+        fbUpdTask(t.id,{photos:freshPhotos2})
       }
     }));
     // Add description/comment button
@@ -1692,10 +1695,12 @@ function renderSvcTaskCard(t,readOnly){
     if(!stDone&&!isDone&&!readOnly){
       var subAct=h("div",{s:{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"4px"}});
       subAct.appendChild(inlineAddPhotoBtn("Фото",function(results){
-        var newSubs=subtasks.slice();var si=newSubs.findIndex(function(x){return x.id===st.id});
-        if(si<0)return;var ph=(newSubs[si].photos||[]).slice();
+        var freshTask=S.tasks.find(function(x){return x.id===t.id});
+        var freshSubs=(freshTask?freshTask.subtasks||[]:subtasks).slice();
+        var si=freshSubs.findIndex(function(x){return x.id===st.id});
+        if(si<0)return;var ph=(freshSubs[si].photos||[]).slice();
         results.forEach(function(d){ph.push({id:gid(),data:d})});
-        newSubs[si]=Object.assign({},newSubs[si],{photos:ph});fbUpdTask(t.id,{subtasks:newSubs});
+        freshSubs[si]=Object.assign({},freshSubs[si],{photos:ph});fbUpdTask(t.id,{subtasks:freshSubs});
       }));
       var descExp=false;
       var descP=h("div",{s:{display:"none",width:"100%",marginTop:"6px"}});
@@ -1717,7 +1722,8 @@ function renderSvcTaskCard(t,readOnly){
   if(!isDone&&!readOnly){
     var wrap=h("div",{s:{marginTop:"6px",display:"flex",gap:"6px",flexWrap:"wrap"}});
     wrap.appendChild(inlineAddPhotoBtn("Фото",function(results){
-      var photos=(t.photos||[]).slice();
+      var freshTask=S.tasks.find(function(x){return x.id===t.id});
+      var photos=(freshTask?freshTask.photos||[]:t.photos||[]).slice();
       results.forEach(function(data){photos.push({id:gid(),data:data})});
       fbUpdTask(t.id,{photos:photos})
     }));
