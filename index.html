@@ -510,7 +510,7 @@ function mainView(){
   setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
   // Nav
   var nav=h("div",{cls:"nb"});
-  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"📋 Отчёты и расходы",adm:true}];
+  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"✅ Выполненные",adm:true}];
   var isMgr=canManage();
   var isAdmRole=myRole()==="admin";
   var tabs=allTabs.filter(function(t){return(!t.mgr||isMgr)&&(!t.adm||isAdmRole)});
@@ -1207,10 +1207,6 @@ function statsTab(ct){
       repCont.appendChild(cd)
     })
   }else{repCont.appendChild(h("div",{s:{fontSize:"13px",color:"#475569",padding:"12px",textAlign:"center"}},"Нет машин в ремонте"))}
-  var aST=S.tasks.filter(function(t){return t.taskType==="task"&&t.status!=="done"});
-  var aPT=S.tasks.filter(function(t){return t.taskType==="project"&&t.status!=="done"});
-  if(aST.length){repCont.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#818cf8",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px"}},"📝 Задачи в работе ("+aST.length+")"));aST.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});}
-  if(aPT.length){repCont.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#f59e0b",textTransform:"uppercase",letterSpacing:".05em",margin:"10px 0 6px"}},"📐 Проекты в работе ("+aPT.length+")"));aPT.forEach(function(t){repCont.appendChild(renderSvcTaskCard(t,true))});}
   ct.appendChild(repCont);
 
   // ═══ COMPLETED CARS REPORT (collapsible) ═══
@@ -1823,22 +1819,12 @@ function doneTab(ct){
     });
   }
 
-  // Completed service tasks & projects — по месяцам
+  // Completed service tasks & projects — строчками с раскрытием
   var doneSvc=S.tasks.filter(function(t){return t.status==="done"});
   if(doneSvc.length){
     secTitle(ct,"📝 Завершённые задачи и проекты ("+doneSvc.length+")");
-    var dBM={};
-    doneSvc.forEach(function(t){var k=(t.createdAt||"").substring(0,7)||"?";if(!dBM[k])dBM[k]=[];dBM[k].push(t);});
-    var dBMN=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-    Object.keys(dBM).sort().reverse().forEach(function(mk){
-      var mI=dBM[mk];var mP=mk.split("-");
-      var mL=mP.length===2?dBMN[parseInt(mP[1])]+" "+mP[0]:mk;
-      var mE=false;var mC=h("div",{s:{display:"none"}});
-      var mA=h("span",{s:{transition:"transform .2s",display:"inline-block",fontSize:"10px"}},"▶");
-      var mH=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"9px 12px",background:"rgba(99,102,241,.05)",borderRadius:"10px",border:"1px solid rgba(99,102,241,.12)",marginBottom:"4px",cursor:"pointer"},onClick:function(){mE=!mE;mC.style.display=mE?"block":"none";mA.style.transform=mE?"rotate(90deg)":"rotate(0deg)";}});
-      mH.append(mA,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8",flex:"1"}},mL+" ("+mI.length+")"));
-      ct.appendChild(mH);
-      mI.forEach(function(t){
+    doneSvc.sort(function(a,b){return(b.createdAt&&a.createdAt)?(b.createdAt>a.createdAt?1:-1):0});
+    doneSvc.forEach(function(t){
       var isProject=t.taskType==="project";
       var subtasks=t.subtasks||[];
       var expanded=false;
@@ -1899,9 +1885,7 @@ function doneTab(ct){
         });
       }
       cd.appendChild(content);
-      mC.appendChild(cd);
-    });
-    ct.appendChild(mC);
+      ct.appendChild(cd);
     });
   }
 
