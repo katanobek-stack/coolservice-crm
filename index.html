@@ -2169,7 +2169,7 @@ function doneTab(ct){
       var boxCost=(f.boxes||[]).reduce(function(s,b){return s+(parseFloat(b.cost)||0)},0);
       var salCost=(f.salaries||[]).reduce(function(s,sl){return s+(parseFloat(sl.salary)||0)},0);
       var elecBills=f.elecBills||{};
-      var elecBillCost=parseFloat(elecBills[prevMK3]||0);
+      var elecBillCost=parseFloat(elecBills[selMonth]||0);
       var totalExpense=boxCost+salCost+elecBillCost;
       var totalIncome=totalRepRev+totalRentRev+totalSubRev;
       var profit=totalIncome-totalExpense;
@@ -2191,7 +2191,7 @@ function doneTab(ct){
       sum.push(["═══ РАСХОДЫ ═══"]);
       (f.boxes||[]).forEach(function(b){if(b.cost>0)sum.push(["Аренда: "+(b.name||"Бокс"),parseFloat(b.cost)||0,"₽"])});
       (f.salaries||[]).forEach(function(sl){if(sl.salary>0)sum.push(["Зарплата: "+(sl.name||"Сотрудник"),parseFloat(sl.salary)||0,"₽"])});
-      if(elecBillCost>0)sum.push(["Электричество ("+mNames3[prevD3.getMonth()+1]+")",elecBillCost,"₽"]);
+      if(elecBillCost>0)sum.push(["Электричество ("+mLabel+")",elecBillCost,"₽"]);
       sum.push(["ИТОГО РАСХОДЫ",totalExpense,"₽"]);
       sum.push([""]);
       sum.push(["═══ ПРИБЫЛЬ ═══"]);
@@ -2239,7 +2239,7 @@ function doneTab(ct){
       var exp=[["Статья расхода","Сумма ₽"]];
       (f.boxes||[]).forEach(function(b){if(b.cost>0)exp.push(["Аренда бокса: "+(b.name||""),parseFloat(b.cost)||0])});
       (f.salaries||[]).forEach(function(sl){if(sl.salary>0)exp.push(["Зарплата: "+(sl.name||""),parseFloat(sl.salary)||0])});
-      if(elecBillCost>0)exp.push(["Электричество ("+mNames3[prevD3.getMonth()+1]+")",elecBillCost]);
+      if(elecBillCost>0)exp.push(["Электричество ("+mLabel+")",elecBillCost]);
       exp.push(["",""]); exp.push(["ИТОГО РАСХОДЫ",totalExpense]);
       var ws5=XLSX.utils.aoa_to_sheet(exp);
       ws5["!cols"]=[{wch:30},{wch:15}];
@@ -2430,22 +2430,27 @@ function physForm(md,m){
   mH(md,"Новый клиент (физ. лицо)");
   // Vehicle photo
   var vPhoto=null;
-  var vPhotoInput=h("input",{type:"file",accept:"image/*",capture:"environment",s:{display:"none"}});
-  vPhotoInput.addEventListener("change",function(e){var f=e.target.files[0];if(!f)return;compress(f,400,0.5).then(function(data){vPhoto=data;e.target.value="";renderVPh()})});
+  var vPhotoCamInput=h("input",{type:"file",accept:"image/*",capture:"environment",s:{display:"none"}});
+  var vPhotoGalInput=h("input",{type:"file",accept:"image/*",s:{display:"none"}});
+  function handleVPh(e){var f=e.target.files[0];if(!f)return;compress(f,400,0.5).then(function(data){vPhoto=data;e.target.value="";renderVPh()})}
+  vPhotoCamInput.addEventListener("change",handleVPh);
+  vPhotoGalInput.addEventListener("change",handleVPh);
   var vPhW=h("div",null);
   function renderVPh(){
     vPhW.innerHTML="";
     if(vPhoto){
-      var wrap=h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",overflow:"hidden",position:"relative",cursor:"pointer"},onClick:function(){vPhotoInput.click()}});
+      var wrap=h("div",{s:{width:"100%",height:"120px",borderRadius:"12px",overflow:"hidden",position:"relative"}});
       wrap.appendChild(h("img",{src:vPhoto,s:{width:"100%",height:"100%",objectFit:"cover"}}));
-      wrap.appendChild(h("button",{s:{position:"absolute",top:"6px",right:"6px",width:"24px",height:"24px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(e){e.stopPropagation();vPhoto=null;renderVPh()}},"×"));
+      wrap.appendChild(h("button",{s:{position:"absolute",top:"6px",right:"6px",width:"24px",height:"24px",borderRadius:"50%",background:"rgba(0,0,0,.7)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"14px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){vPhoto=null;renderVPh()}},"×"));
       vPhW.appendChild(wrap);
     }else{
       var btns=h("div",{s:{display:"flex",gap:"8px"}});
-      btns.appendChild(h("div",{s:{flex:"1",height:"80px",borderRadius:"10px",border:"2px dashed rgba(34,197,94,.3)",background:"rgba(34,197,94,.05)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#4ade80",fontSize:"12px",fontWeight:"500"},onClick:function(){vPhotoInput.click()}},"📸 Фото авто"));
+      btns.appendChild(h("div",{s:{flex:"1",height:"80px",borderRadius:"10px",border:"2px dashed rgba(34,197,94,.3)",background:"rgba(34,197,94,.05)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#4ade80",fontSize:"12px",fontWeight:"500"},onClick:function(){vPhotoCamInput.click()}},"📸 Камера"));
+      btns.appendChild(h("div",{s:{flex:"1",height:"80px",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#38bdf8",fontSize:"12px",fontWeight:"500"},onClick:function(){vPhotoGalInput.click()}},"🖼 Галерея"));
       vPhW.appendChild(btns);
     }
-    vPhW.appendChild(vPhotoInput);
+    vPhW.appendChild(vPhotoCamInput);
+    vPhW.appendChild(vPhotoGalInput);
   }
   renderVPh();
 
@@ -3059,20 +3064,27 @@ function financeForm(md,m){
     if(!salData.length)salData=[{uid:gid(),name:"",salary:0}];
   }
   var staffBlock=h("div",{s:{marginBottom:"16px"}});
-  staffBlock.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"👷 Зарплаты сотрудников"));
+  staffBlock.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"8px"}},"👷 Зарплаты и услуги"));
+  staffBlock.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginBottom:"8px"}},"Сотрудники, уборщица, бухгалтер и др."));
   var salList=h("div",null);
   function renderSalaries(){
     salList.innerHTML="";
     salData.forEach(function(s,i){
       var row=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",marginBottom:"6px"}});
-      var nI=h("input",{cls:"fi",placeholder:"Имя",value:s.name||"",s:{flex:"2"}});
+      var nI=h("input",{cls:"fi",placeholder:"Имя или должность",value:s.name||"",s:{flex:"2"}});
       nI.addEventListener("input",function(e){salData[i].name=e.target.value});
       var sI=h("input",{cls:"fi",type:"number",placeholder:"₽/мес",value:s.salary>0?s.salary:"",s:{flex:"1",padding:"10px 8px"}});
       sI.addEventListener("input",function(e){salData[i].salary=parseFloat(e.target.value)||0});
       var del=h("button",{s:{padding:"8px 10px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"13px",cursor:"pointer",flexShrink:"0"},onClick:function(){salData.splice(i,1);renderSalaries()}},"×");
       row.append(nI,sI,del);salList.appendChild(row);
     });
-    salList.appendChild(h("button",{s:{padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer",width:"100%",marginTop:"2px"},onClick:function(){salData.push({uid:gid(),name:"",salary:0});renderSalaries()}},"+ Добавить сотрудника"));
+    var addRow=h("div",{s:{display:"flex",gap:"6px",marginTop:"2px"}});
+    addRow.appendChild(h("button",{s:{flex:"2",padding:"7px 14px",borderRadius:"8px",border:"1px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.04)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){salData.push({uid:gid(),name:"",salary:0});renderSalaries()}},"+ Добавить"));
+    var hasCleaner=salData.some(function(s){return(s.name||"").toLowerCase().indexOf("уборщ")>=0});
+    if(!hasCleaner){
+      addRow.appendChild(h("button",{s:{flex:"1",padding:"7px 10px",borderRadius:"8px",border:"1px dashed rgba(167,139,250,.3)",background:"rgba(167,139,250,.04)",color:"#a78bfa",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){salData.push({uid:gid(),name:"Уборщица",salary:0});renderSalaries()}},"🧹 Уборщица"));
+    }
+    salList.appendChild(addRow);
   }
   renderSalaries();
   staffBlock.appendChild(salList);
@@ -3124,15 +3136,24 @@ function renderPnL(ct,allR){
   var elecWidget=h("div",{s:{background:"rgba(251,146,60,.06)",borderRadius:"14px",padding:"14px 16px",marginBottom:"12px",border:"1px solid rgba(251,146,60,.18)"}});
   elecWidget.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#fb923c",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"⚡ Счёт за электричество"));
 
-  // Последние 3 месяца для ввода
-  for(var mi=1;mi<=3;mi++){
-    var mD=new Date(now.getFullYear(),now.getMonth()-mi,1);
+  // Месяцы для ввода: 2 прошлых, и текущий — только если до конца месяца ≤5 дней
+  var elecMonths=[];
+  var lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  var daysLeft=lastDay-now.getDate();
+  if(daysLeft<=5){
+    elecMonths.push({d:new Date(now.getFullYear(),now.getMonth(),1),isCurrent:true});
+  }
+  for(var mi=1;mi<=2;mi++){
+    elecMonths.push({d:new Date(now.getFullYear(),now.getMonth()-mi,1),isCurrent:false});
+  }
+  elecMonths.forEach(function(em){
+    var mD=em.d;
     var mk=mD.getFullYear()+"-"+String(mD.getMonth()+1).padStart(2,"0");
-    var mLabel=mNames[mD.getMonth()]+" "+mD.getFullYear();
+    var mLabel=mNames[mD.getMonth()]+" "+mD.getFullYear()+(em.isCurrent?" (текущий)":"");
     var existing=elecBills[mk]||"";
-    (function(monthKey,label,existVal){
+    (function(monthKey,label,existVal,isCur){
       var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}});
-      row.appendChild(h("span",{s:{fontSize:"12px",color:"#94a3b8",flex:"1",fontWeight:"500"}},label));
+      row.appendChild(h("span",{s:{fontSize:"12px",color:isCur?"#fb923c":"#94a3b8",flex:"1",fontWeight:isCur?"700":"500"}},label));
       var inp=h("input",{cls:"fi",type:"number",placeholder:"₽",value:existVal>0?existVal:"",step:"1",s:{width:"110px",padding:"7px 10px",fontSize:"13px",fontWeight:"700",textAlign:"right"}});
       var saved=h("span",{s:{fontSize:"11px",color:"#4ade80",display:existVal>0?"inline":"none"}},"✓");
       row.appendChild(inp);row.appendChild(h("span",{s:{fontSize:"12px",color:"#64748b"}},"₽"));row.appendChild(saved);
@@ -3143,8 +3164,8 @@ function renderPnL(ct,allR){
         fbSaveFinance({elecBills:bills}).then(function(){saved.style.display="inline";saved.textContent="✓ "+val+"₽"});
       }},"💾"));
       elecWidget.appendChild(row);
-    })(mk,mLabel,existing);
-  }
+    })(mk,mLabel,existing,em.isCurrent);
+  });
   ct.appendChild(elecWidget);
 
   // ── ДОХОДЫ ──
@@ -3157,7 +3178,8 @@ function renderPnL(ct,allR){
   var boxCost=(f.boxes||[]).reduce(function(s,b){return s+(parseFloat(b.cost)||0)},0);
   var salCost=(f.salaries||[]).reduce(function(s,sl){return s+(parseFloat(sl.salary)||0)},0);
   // Счёт за свет — берём за ПРОШЛЫЙ месяц
-  var elecBillCost=parseFloat((elecBills[prevMK])||0);
+  // Счёт за свет — берём за ТЕКУЩИЙ месяц
+  var elecBillCost=parseFloat((elecBills[curMK])||0);
   var totalExpense=boxCost+salCost+elecBillCost;
 
   var profit=totalIncome-totalExpense;
@@ -3217,9 +3239,9 @@ function renderPnL(ct,allR){
     pnlWrap.appendChild(expenseRow("👷","Зарплаты",salCost,salList2));
   }
   if(elecBillCost>0){
-    pnlWrap.appendChild(expenseRow("⚡","Счёт за электричество",elecBillCost,mNames[prevD.getMonth()]+" "+prevD.getFullYear()));
+    pnlWrap.appendChild(expenseRow("⚡","Счёт за электричество",elecBillCost,mNames[now.getMonth()]+" "+now.getFullYear()));
   }else{
-    pnlWrap.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",padding:"6px 10px",borderRadius:"8px",background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.1)",marginBottom:"4px"}},"⚡ Счёт за свет за "+mNames[prevD.getMonth()]+" не введён — добавьте выше"));
+    pnlWrap.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",padding:"6px 10px",borderRadius:"8px",background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.1)",marginBottom:"4px"}},"⚡ Счёт за свет за "+mNames[now.getMonth()]+" не введён — добавьте выше"));
   }
   if(boxCost===0&&salCost===0&&elecBillCost===0){
     pnlWrap.appendChild(h("div",{s:{fontSize:"12px",color:"#475569",textAlign:"center",padding:"6px"}},
