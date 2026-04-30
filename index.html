@@ -364,6 +364,10 @@ function renderRepairCard(cl,r,isHistory){
     tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},
       h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️"),
       h("button",{s:{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:"13px"},onClick:function(){if(confirm("Удалить?")){fbArr(cl.id,"repairs",(cl.repairs||[]).filter(function(x){return x.id!==r.id}))}}},"🗑")));
+  }else if(myRole()==="admin"){
+    // Админ может редактировать закрытые/отменённые наряды
+    tp.appendChild(h("div",{s:{display:"flex",gap:"4px"}},
+      h("button",{s:{background:"rgba(56,189,248,.08)",border:"1px solid rgba(56,189,248,.2)",borderRadius:"6px",color:"#38bdf8",cursor:"pointer",fontSize:"11px",padding:"3px 8px",fontWeight:"600"},onClick:function(){S.mod={t:"editR",cid:cl.id,vs:cl.vehicles,d:r};R()}},"✏️ Изменить")));
   }
   cd.appendChild(tp);
   if(v)cd.appendChild(plate(v.plate||""));
@@ -1979,16 +1983,28 @@ function doneTab(ct){
       ct.appendChild(mHdr);
       items.forEach(function(r){
         var s=getS(r.serviceType);
-        var rcd=h("div",{cls:"rc",s:{opacity:"0.8",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
-        var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center"}});
+        var rcd=h("div",{cls:"rc",s:{opacity:"0.8"}});
+        var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:function(){S.sel=r.cid;R()}});
         var left=h("div",{s:{display:"flex",gap:"6px",alignItems:"center",flexWrap:"wrap"}});
         if(r.v&&r.v.brand)left.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#cbd5e1"}},r.v.brand));
         if(r.v)left.appendChild(plate(r.v.plate||""));
         left.appendChild(badge(s.e,s.c));
         top.appendChild(left);
-        if(r.cost&&myRole()==="admin")top.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
+        var rightTop=h("div",{s:{display:"flex",alignItems:"center",gap:"6px"}});
+        if(r.cost&&myRole()==="admin")rightTop.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#4ade80"}},r.cost+"₽"));
+        top.appendChild(rightTop);
         rcd.appendChild(top);
         rcd.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"2px"}},r.cn+" · "+fD(r.date)));
+        // Кнопка редактирования для админа
+        if(myRole()==="admin"){
+          (function(repair){
+            rcd.appendChild(h("button",{s:{padding:"4px 10px",borderRadius:"6px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"10px",fontWeight:"600",cursor:"pointer",marginTop:"6px"},onClick:function(e){
+              e.stopPropagation();
+              var cl=S.cl.find(function(c){return c.id===repair.cid});if(!cl)return;
+              S.mod={t:"editR",cid:repair.cid,vs:cl.vehicles||[],d:repair};R();
+            }},"✏️ Изменить"));
+          })(r);
+        }
         mCont.appendChild(rcd);
       });
       ct.appendChild(mCont);
@@ -2594,12 +2610,19 @@ function vForm(md,m){
 // ═══ REPAIR FORM ═══
 function rForm(md,m){
   var isE=m.t==="editR";mH(md,isE?"Редактировать наряд":"Новый заказ-наряд");
+  // Плашка-подсказка для редактирования закрытого/завершённого наряда
+  if(isE&&m.d&&(m.d.closedByManager||rSt(m.d)==="done"||rSt(m.d)==="cancelled")){
+    md.appendChild(h("div",{s:{padding:"10px 12px",borderRadius:"10px",background:"rgba(56,189,248,.07)",border:"1px solid rgba(56,189,248,.2)",fontSize:"11px",color:"#7dd3fc",lineHeight:"1.4",marginBottom:"14px"}},
+      h("div",{s:{fontWeight:"700",marginBottom:"3px"}},"ℹ️ Редактирование "+(rSt(m.d)==="cancelled"?"отменённого":"закрытого")+" наряда"),
+      "Изменения сохранятся в базу и пересчитают статистику. Будьте внимательны с суммой и количеством фреона."
+    ));
+  }
   var vs=m.vs||[];var sV=m.d?m.d.vehicleId||"":"";if(!sV&&vs.length)sV=vs[0].id;
   var sT=m.d?m.d.serviceType||"refrigerator":"refrigerator";var photos=m.d?(m.d.photos||[]).slice():[];
   var vS=h("select",{cls:"fi"});vs.forEach(function(v){var o=h("option",{value:v.id},v.plate+" "+(v.brand||""));if(v.id===sV)o.selected=true;vS.appendChild(o)});vS.addEventListener("change",function(e){sV=e.target.value});
   var dI=h("input",{cls:"fi",type:"date",value:m.d?m.d.date||new Date().toISOString().slice(0,10):new Date().toISOString().slice(0,10)});
   var deI=h("textarea",{cls:"fi",placeholder:"Описание...",value:m.d?m.d.description||"":""});
-  var cI=h("input",{cls:"fi",type:"number",placeholder:"Стоимость €",value:m.d?m.d.cost||"":""});
+  var cI=h("input",{cls:"fi",type:"number",placeholder:"Стоимость ₽",value:m.d?m.d.cost||"":""});
 
   // Freon type select
   var freonType=m.d?m.d.freonType||"":"";
@@ -2629,10 +2652,12 @@ function rForm(md,m){
   if(vs.length>1)md.appendChild(fg("Авто",vS));
   md.appendChild(fg("Дата",dI));
   md.appendChild(fg("Тип работы",tgW));
-  md.appendChild(fg("🔧 Назначить (можно нескольких)",mechPicker));
+  if(!isE)md.appendChild(fg("🔧 Назначить (можно нескольких)",mechPicker));
   md.appendChild(fgWithMic("Описание",deI));
   md.appendChild(fg("🧊 Марка фреона",frTS));
   if(isE&&frAI)md.appendChild(fg("🧊 Кол-во фреона (кг)",frAI));
+  // Сумма — только при редактировании и только для админа
+  if(isE&&myRole()==="admin")md.appendChild(fg("💰 Стоимость (₽)",cI));
   md.appendChild(fg("Фото",pG,fi));
 
   md.appendChild(h("button",{cls:"bp",onClick:function(){
@@ -2644,12 +2669,17 @@ function rForm(md,m){
       date:dI.value,
       serviceType:sT,
       description:deI.value.trim(),
-      cost:"",
       freonType:freonType,
       freonAmount:isE&&frAI?frAI.value:"",
       photos:photos,
       tasks:m.d?(m.d.tasks||[]):[]
     };
+    // Сумму обновляем только при редактировании; при создании — пустая
+    if(isE&&myRole()==="admin"){
+      rD.cost=cI.value;
+    }else if(!isE){
+      rD.cost="";
+    }
     if(!isE){
       rD.id=gid();
       rD.status="in_progress";
@@ -3136,7 +3166,6 @@ function renderPnL(ct,allR){
   var elecWidget=h("div",{s:{background:"rgba(251,146,60,.06)",borderRadius:"14px",padding:"14px 16px",marginBottom:"12px",border:"1px solid rgba(251,146,60,.18)"}});
   elecWidget.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#fb923c",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}},"⚡ Счёт за электричество"));
 
-  // Месяцы для ввода: 2 прошлых, и текущий — только если до конца месяца ≤5 дней
   var elecMonths=[];
   var lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   var daysLeft=lastDay-now.getDate();
