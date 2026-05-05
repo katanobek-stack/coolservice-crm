@@ -7,6 +7,10 @@
 <meta name="theme-color" content="#0a1628">
 <title>CoolService CRM</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogItCg0LXRhNCh0LXRgNCy0LjRgdCU0JIgQ1JNIiwgInNob3J0X25hbWUiOiAiQ29vbFNlcnZpY2UiLCAiZGVzY3JpcHRpb24iOiAi0KPRh9GR0YIg0YDQtdC80L7QvdGC0L7QsiDQuCDQsNGA0LXQvdC00Ysg0YXQvtC70L7QtNC40LvRjNC90L7Qs9C+INC+0LHQvtGA0YPQtNC+0LLQsNC90LjRjyIsICJzdGFydF91cmwiOiAiLi8iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgIm9yaWVudGF0aW9uIjogInBvcnRyYWl0IiwgImJhY2tncm91bmRfY29sb3IiOiAiIzA2MGUxZiIsICJ0aGVtZV9jb2xvciI6ICIjMGExNjI4IiwgImxhbmciOiAicnUiLCAiaWNvbnMiOiBbeyJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBuYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNuSUhacFpYZENiM2c5SnpBZ01DQXhPVElnTVRreUp6NDhjbVZqZENCM2FXUjBhRDBuTVRreUp5Qm9aV2xuYUhROUp6RTVNaWNnY25nOUp6UXdKeUJtYVd4c1BTY2pNREk0TkdNM0p5OCtQSFJsZUhRZ2VEMG5OVEFsSnlCNVBTYzFNaVVuSUdSdmJXbHVZVzUwTFdKaGMyVnNhVzVsUFNkdGFXUmtiR1VuSUhSbGVIUXRZVzVqYUc5eVBTZHRhV1JrYkdVbklHWnZiblF0YzJsNlpUMG5NVEl3Sno3aW5ZVHZ1STg4TDNSbGVIUStQQzl6ZG1jKyIsICJzaXplcyI6ICIxOTJ4MTkyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSJ9LCB7InNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MG5hSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY25JSFpwWlhkQ2IzZzlKekFnTUNBMU1USWdOVEV5Sno0OGNtVmpkQ0IzYVdSMGFEMG5OVEV5SnlCb1pXbG5hSFE5SnpVeE1pY2djbmc5SnpFeE1DY2dabWxzYkQwbkl6QXlPRFJqTnljdlBqeDBaWGgwSUhnOUp6VXdKU2NnZVQwbk5USWxKeUJrYjIxcGJtRnVkQzFpWVhObGJHbHVaVDBuYldsa1pHeGxKeUIwWlhoMExXRnVZMmh2Y2owbmJXbGtaR3hsSnlCbWIyNTBMWE5wZW1VOUp6TXlNQ2MrNHAyRTc3aVBQQzkwWlhoMFBqd3ZjM1puUGc9PSIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSJ9XX0=">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CoolService">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMCIgZmlsbD0iIzAyODRjNyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTIlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjMyMCI+4p2E77iPPC90ZXh0Pjwvc3ZnPg==">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -67,7 +71,7 @@ textarea.fi{min-height:75px;resize:vertical}
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp,writeBatch,getDocs}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
 
 var fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
@@ -280,6 +284,19 @@ function badge(text,rgb,extra){var st={fontSize:"11px",fontWeight:"700",padding:
 function fg(label){var els=Array.prototype.slice.call(arguments,1);var g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#94a3b8",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label));els.forEach(function(e){if(e)g.appendChild(e)});return g}
 function mH(md,title){md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#f1f5f9",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},h("span",null,title),h("button",{s:{background:"none",border:"none",color:"#64748b",fontSize:"24px",cursor:"pointer"},onClick:function(){S.mod=null;R()}},"×")))}
 function plate(text){return h("span",{s:{display:"inline-flex",background:"rgba(255,255,255,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#cbd5e1",fontFamily:"'JetBrains Mono',monospace"}},text)}
+// Cached count of "мои активные задачи" — пересчёт только когда массивы реально менялись (по ссылке)
+var _myActiveCache={cl:null,tasks:null,uid:null,count:0};
+function getMyActiveCount(){
+  var uid=S.u?S.u.uid:"";
+  if(_myActiveCache.cl===S.cl&&_myActiveCache.tasks===S.tasks&&_myActiveCache.uid===uid){
+    return _myActiveCache.count;
+  }
+  var c=0;
+  S.cl.forEach(function(cl){(cl.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")c++})})});
+  S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")c++});
+  _myActiveCache={cl:S.cl,tasks:S.tasks,uid:uid,count:c};
+  return c;
+}
 function secTitle(ct,text,addFn){var st=h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#4d6680",textTransform:"uppercase",letterSpacing:".08em",marginBottom:"10px",marginTop:"18px",display:"flex",alignItems:"center",gap:"6px",padding:"0 2px"}},text);if(addFn)st.appendChild(h("button",{s:{marginLeft:"auto",color:"#38bdf8",cursor:"pointer",fontSize:"12px",fontWeight:"700",background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.2)",borderRadius:"6px",padding:"2px 8px"},onClick:addFn},"+ Добавить"));ct.appendChild(st)}
 function typeGrid(sel,onSel){var tg=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});SVC.forEach(function(t){tg.appendChild(h("button",{cls:"tb"+(sel===t.id?" a":""),onClick:function(){onSel(t.id)}},t.e+" "+t.l))});return tg}
 
@@ -512,12 +529,26 @@ function toggleTask(cid,rid,tid,isDone){
 }
 
 // ═══ RENDER ═══
+// Скролл-позиции для каждой вкладки сохраняются между переключениями.
+var tabScrolls={};
+// Дебаунс ререндера: если состояние меняется несколько раз за один кадр
+// (типичный случай — 2-3 onSnapshot подряд), R() вызывается один раз.
+var renderScheduled=false;
 function R(){
+  if(renderScheduled)return;
+  renderScheduled=true;
+  // requestAnimationFrame коалесцирует все вызовы R() в один на кадр (~16ms)
+  (window.requestAnimationFrame||function(cb){return setTimeout(cb,16)})(function(){
+    renderScheduled=false;
+    _doRender();
+  });
+}
+function _doRender(){
   var root=document.getElementById("app");
-  // Save scroll position
+  // Save scroll position для текущего таба
   var scrollEl=root.querySelector(".ct");
-  var savedScroll=scrollEl?scrollEl.scrollTop:0;
   var savedTab=S.tab;
+  if(scrollEl&&savedTab)tabScrolls[savedTab]=scrollEl.scrollTop;
   root.innerHTML="";
   if(S.u&&!S.ld)checkNotifications();
   if(S.ld){root.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%"><div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.08);border-top-color:#38bdf8;border-radius:50%;animation:sp .8s linear infinite"></div></div><style>@keyframes sp{to{transform:rotate(360deg)}}</style>';return}
@@ -528,10 +559,11 @@ function R(){
   else root.appendChild(mainView());
   if(S.mod)root.appendChild(modalView());
   if(S.iv)root.appendChild(h("div",{cls:"iv",onClick:function(){S.iv=null;R()}},h("img",{src:S.iv})));
-  // Restore scroll position
-  if(savedTab===S.tab&&!S.mod&&!S.iv){
+  // Восстанавливаем скролл для текущего таба (после смены вкладки тоже)
+  if(!S.mod&&!S.iv&&!S.sel){
     var newScrollEl=root.querySelector(".ct");
-    if(newScrollEl&&savedScroll>0)newScrollEl.scrollTop=savedScroll;
+    var restoreTo=tabScrolls[S.tab]||0;
+    if(newScrollEl&&restoreTo>0)newScrollEl.scrollTop=restoreTo;
   }
 }
 
@@ -601,11 +633,8 @@ function mainView(){
   var tabs=allTabs.filter(function(t){return(!t.mgr||isMgr)&&(!t.adm||isAdmRole)});
   // Fix tab if current tab not visible for this role
   if(!tabs.find(function(t){return t.id===S.tab}))S.tab="mytasks";
-  // Count active tasks for current user
-  var myActiveCount=0;
-  var uid=S.u?S.u.uid:"";
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")myActiveCount++})})});
-  S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")myActiveCount++});
+  // Count active tasks for current user (мемоизировано)
+  var myActiveCount=getMyActiveCount();
 
   tabs.forEach(function(n){
     var label=n.t;
@@ -1291,6 +1320,167 @@ function statsTab(ct){
       h("div",{s:{fontSize:"28px",fontWeight:"800",background:"linear-gradient(90deg,#38bdf8,#67e8f9)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},tRev+"₽")
     );
     ct.appendChild(revCard);
+
+    // ═══ NEW ANALYTICS ═══
+
+    // ── Helper: маленький горизонтальный bar-chart ──
+    function renderBarReport(title,items,formatVal,colorFn){
+      if(!items.length)return null;
+      var w=h("div",{cls:"chart-wrap"});
+      w.appendChild(h("div",{cls:"chart-title"},title));
+      var maxV=items[0].v||1;
+      items.slice(0,8).forEach(function(it,i){
+        var row=h("div",{s:{marginBottom:"8px"}});
+        var top=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"3px"}});
+        top.appendChild(h("span",{s:{fontSize:"12px",color:"#cbd5e1",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:"1",paddingRight:"8px"}},it.label));
+        top.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"700",color:colorFn?colorFn(i):"#38bdf8",whiteSpace:"nowrap"}},formatVal?formatVal(it):it.v));
+        row.appendChild(top);
+        if(it.sub)row.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginBottom:"3px"}},it.sub));
+        var pbar=h("div",{s:{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,.06)",overflow:"hidden"}});
+        var barColor=colorFn?colorFn(i):(i===0?"linear-gradient(90deg,#38bdf8,#67e8f9)":"rgba(56,189,248,.3)");
+        pbar.appendChild(h("div",{s:{height:"100%",borderRadius:"2px",background:barColor,width:(it.v/maxV*100)+"%"}}));
+        row.appendChild(pbar);
+        w.appendChild(row);
+      });
+      return w;
+    }
+
+    // ── 1. Выручка по типам услуг ──
+    var byService={};
+    SVC.forEach(function(s){byService[s.id]={label:s.e+" "+s.l,v:0,cnt:0,c:s.c}});
+    allR.filter(function(r){return r.closedByManager&&r.cost}).forEach(function(r){
+      var st=r.serviceType||"other";
+      if(!byService[st])byService[st]={label:getS(st).l,v:0,cnt:0,c:"148,163,184"};
+      byService[st].v+=parseFloat(r.cost)||0;
+      byService[st].cnt++;
+    });
+    var svcArr=Object.keys(byService).map(function(k){var x=byService[k];return{label:x.label,v:x.v,sub:x.cnt+" нарядов · ср. чек "+(x.cnt?Math.round(x.v/x.cnt):0)+"₽",c:x.c}}).filter(function(x){return x.v>0}).sort(function(a,b){return b.v-a.v});
+    var svcEl=renderBarReport("🛠 Выручка по типам услуг",svcArr,function(it){return it.v.toLocaleString("ru-RU")+"₽"},function(i){return i===0?"linear-gradient(90deg,#38bdf8,#67e8f9)":"rgba(56,189,248,.35)"});
+    if(svcEl)ct.appendChild(svcEl);
+
+    // ── 2. Производительность механиков ──
+    // Считаем закрытые задачи (по doneBy/assignee) и фиксируем выручку через ремонты, где этот человек был исполнителем
+    var staffStats={};
+    sL().forEach(function(s){staffStats[s.id]={label:s.name,role:s.role,closedTasks:0,activeTasks:0,rev:0,repairsCount:0,seenRepairs:{}}});
+    // Закрытые/активные задачи в ремонтах + выручка с ремонтов, где человек участвовал
+    S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){
+      var rDone=rSt(r)==="done"&&r.closedByManager;
+      var rCost=parseFloat(r.cost)||0;
+      var participants={};
+      (r.tasks||[]).forEach(function(t){
+        var assignees=getAssignees(t);
+        var doneBy=getDoneBy(t);
+        assignees.forEach(function(uid){
+          if(!staffStats[uid])return;
+          participants[uid]=true;
+          if(tSt(t)==="done"||doneBy.indexOf(uid)>=0)staffStats[uid].closedTasks++;
+          else staffStats[uid].activeTasks++;
+        });
+      });
+      if(rDone){
+        Object.keys(participants).forEach(function(uid){
+          if(staffStats[uid]&&!staffStats[uid].seenRepairs[r.id]){
+            staffStats[uid].seenRepairs[r.id]=true;
+            staffStats[uid].rev+=rCost;
+            staffStats[uid].repairsCount++;
+          }
+        });
+      }
+    })});
+    // Также сервисные задачи
+    S.tasks.forEach(function(t){
+      var assignees=getAssignees(t);
+      var doneBy=getDoneBy(t);
+      assignees.forEach(function(uid){
+        if(!staffStats[uid])return;
+        if(tSt(t)==="done"||doneBy.indexOf(uid)>=0)staffStats[uid].closedTasks++;
+        else staffStats[uid].activeTasks++;
+      });
+    });
+    var staffArr=Object.keys(staffStats).map(function(k){var x=staffStats[k];
+      var roleE={admin:"👑",manager:"📋",mechanic:"🔧"}[x.role]||"";
+      return{label:roleE+" "+x.label,v:x.closedTasks,sub:"Активных: "+x.activeTasks+(x.repairsCount?" · ремонтов: "+x.repairsCount+" · выручка: "+Math.round(x.rev).toLocaleString("ru-RU")+"₽":"")};
+    }).filter(function(x){return x.v>0||x.sub.indexOf("Активных: 0")<0}).sort(function(a,b){return b.v-a.v});
+    var staffEl=renderBarReport("👥 Производительность сотрудников",staffArr,function(it){return it.v+" задач"},function(i){return i===0?"linear-gradient(90deg,#a78bfa,#c4b5fd)":"rgba(167,139,250,.35)"});
+    if(staffEl)ct.appendChild(staffEl);
+
+    // ── 3. Расход фреона по типам ──
+    var freonByType={};
+    allR.filter(function(r){return r.freonType&&r.freonAmount}).forEach(function(r){
+      var ft=r.freonType;
+      if(!freonByType[ft])freonByType[ft]={kg:0,cnt:0,rev:0};
+      freonByType[ft].kg+=parseFloat(r.freonAmount)||0;
+      freonByType[ft].cnt++;
+      if(r.closedByManager)freonByType[ft].rev+=parseFloat(r.cost)||0;
+    });
+    var freonArr=Object.keys(freonByType).map(function(k){var x=freonByType[k];
+      return{label:"🧊 "+k,v:x.kg,sub:x.cnt+" заправок"+(x.rev>0?" · "+Math.round(x.rev).toLocaleString("ru-RU")+"₽":"")};
+    }).sort(function(a,b){return b.v-a.v});
+    var freonEl=renderBarReport("🧊 Расход фреона по типам",freonArr,function(it){return it.v.toFixed(1)+" кг"},function(i){return i===0?"linear-gradient(90deg,#06b6d4,#67e8f9)":"rgba(6,182,212,.35)"});
+    if(freonEl)ct.appendChild(freonEl);
+
+    // ── 4. Возврат клиентов (повторные визиты) ──
+    var clRepeats={};
+    allR.filter(function(r){return r.closedByManager}).forEach(function(r){
+      if(!clRepeats[r.cid])clRepeats[r.cid]={name:r.cn,visits:[],rev:0};
+      clRepeats[r.cid].visits.push(r.date||"");
+      clRepeats[r.cid].rev+=parseFloat(r.cost)||0;
+    });
+    var totalC=Object.keys(clRepeats).length;
+    var repeatC=Object.values(clRepeats).filter(function(x){return x.visits.length>1}).length;
+    var newOnceC=totalC-repeatC;
+    if(totalC>0){
+      var lWrap=h("div",{cls:"chart-wrap"});
+      lWrap.appendChild(h("div",{cls:"chart-title"},"🔁 Лояльность клиентов"));
+      var lGrid=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px",marginBottom:"10px"}});
+      [
+        {n:totalC,l:"Всего клиентов",c:"#38bdf8"},
+        {n:repeatC,l:"Повторно",c:"#4ade80"},
+        {n:totalC?Math.round(repeatC/totalC*100):0,l:"% возврата",c:"#a78bfa",suffix:"%"}
+      ].forEach(function(x){
+        var card=h("div",{s:{padding:"10px",background:"rgba(255,255,255,.03)",borderRadius:"10px",textAlign:"center"}});
+        card.appendChild(h("div",{s:{fontSize:"22px",fontWeight:"800",color:x.c}},x.n+(x.suffix||"")));
+        card.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"2px",textTransform:"uppercase",fontWeight:"600",letterSpacing:".05em"}},x.l));
+        lGrid.appendChild(card);
+      });
+      lWrap.appendChild(lGrid);
+      // Прогресс-бар возврата
+      var loyalBar=h("div",{s:{height:"6px",borderRadius:"3px",background:"rgba(255,255,255,.06)",overflow:"hidden"}});
+      loyalBar.appendChild(h("div",{s:{height:"100%",background:"linear-gradient(90deg,#4ade80,#22c55e)",width:(totalC?repeatC/totalC*100:0)+"%"}}));
+      lWrap.appendChild(loyalBar);
+      lWrap.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"4px"}},"Чем выше % — тем сильнее ваша клиентская база"));
+      ct.appendChild(lWrap);
+    }
+
+    // ── 5. Средний чек: динамика по месяцам ──
+    var avgByMonth={};
+    allR.filter(function(r){return r.closedByManager&&r.cost}).forEach(function(r){
+      var mk=(r.closedAt||r.date||"").substring(0,7);if(!mk)return;
+      if(!avgByMonth[mk])avgByMonth[mk]={sum:0,cnt:0};
+      avgByMonth[mk].sum+=parseFloat(r.cost)||0;
+      avgByMonth[mk].cnt++;
+    });
+    var avgMonths=Object.keys(avgByMonth).sort().slice(-6);
+    if(avgMonths.length>=2){
+      var avgWrap=h("div",{cls:"chart-wrap"});
+      avgWrap.appendChild(h("div",{cls:"chart-title"},"💵 Средний чек по месяцам"));
+      var avgRow=h("div",{s:{display:"flex",alignItems:"flex-end",gap:"8px",height:"80px",padding:"0 4px"}});
+      var maxAvg=Math.max.apply(Math,avgMonths.map(function(m){return Math.round(avgByMonth[m].sum/avgByMonth[m].cnt)}));
+      var mNamesAvg=["","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+      avgMonths.forEach(function(mk){
+        var avg=Math.round(avgByMonth[mk].sum/avgByMonth[mk].cnt);
+        var hpct=maxAvg?(avg/maxAvg*100):0;
+        var col=h("div",{s:{flex:"1",display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}});
+        col.appendChild(h("div",{s:{fontSize:"10px",color:"#94a3b8",fontWeight:"700"}},avg.toLocaleString("ru-RU")));
+        col.appendChild(h("div",{s:{width:"100%",background:"linear-gradient(180deg,#38bdf8,#0284c7)",borderRadius:"4px 4px 0 0",height:hpct+"%",minHeight:"4px",transition:"height .3s"}}));
+        var mn=mk.split("-");
+        col.appendChild(h("div",{s:{fontSize:"9px",color:"#475569",fontWeight:"600"}},mNamesAvg[parseInt(mn[1])]+" "+mn[0].slice(2)));
+        avgRow.appendChild(col);
+      });
+      avgWrap.appendChild(avgRow);
+      ct.appendChild(avgWrap);
+    }
+
   }
 
   // ═══ ACTIVE REPAIRS with photo add (collapsible) ═══
@@ -2334,6 +2524,86 @@ function doneTab(ct){
       sizeWrap.appendChild(h("div",{s:{padding:"12px 14px",background:"rgba(34,197,94,.06)",borderRadius:"12px",border:"1px solid rgba(34,197,94,.15)",fontSize:"12px",color:"#4ade80",fontWeight:"600"}},"✅ Все фото уже в Storage — база чистая"));
     }
     ct.appendChild(sizeWrap);
+
+    // ── Резервное копирование ──
+    secTitle(ct,"💾 Резервное копирование");
+
+    var bkWrap=h("div",{s:{marginBottom:"10px"}});
+    bkWrap.appendChild(h("div",{s:{padding:"10px 14px",background:"rgba(56,189,248,.05)",borderRadius:"10px",border:"1px solid rgba(56,189,248,.12)",marginBottom:"10px",fontSize:"11px",color:"#94a3b8",lineHeight:"1.5"}},
+      "JSON-бэкап содержит ВСЕ данные базы (клиенты, ремонты, задачи, камеры, финансы). Фото остаются в Storage, в бэкапе только ссылки. Делайте бэкап раз в неделю и храните на компьютере."));
+
+    var bkStats=h("div",{s:{display:"none",padding:"10px 14px",background:"rgba(14,165,233,.06)",borderRadius:"10px",border:"1px solid rgba(14,165,233,.15)",marginBottom:"8px",fontSize:"12px",color:"#38bdf8"}});
+    bkWrap.appendChild(bkStats);
+
+    // Кнопки экспорта
+    var exRow=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+    exRow.appendChild(h("button",{cls:"bp",s:{background:"linear-gradient(135deg,#0284c7,#38bdf8)",fontSize:"13px",padding:"11px"},onClick:function(){
+      try{
+        var data=exportBackupJSON();
+        bkStats.style.display="block";
+        bkStats.innerHTML="";
+        bkStats.appendChild(h("div",{s:{color:"#4ade80",fontWeight:"700"}},"✅ Бэкап скачан"));
+        bkStats.appendChild(h("div",{s:{color:"#94a3b8",marginTop:"4px",fontSize:"11px"}},
+          "Клиентов: "+(data.clients||[]).length+", задач: "+(data.servicetasks||[]).length+", камер: "+(data.freezers||[]).length));
+      }catch(e){alert("Ошибка экспорта: "+e.message)}
+    }},"📥 JSON-бэкап"));
+
+    exRow.appendChild(h("button",{cls:"bp",s:{background:"linear-gradient(135deg,#15803d,#22c55e)",fontSize:"13px",padding:"11px"},onClick:function(){
+      try{exportBackupExcel()}catch(e){alert("Ошибка: "+e.message)}
+    }},"📊 Excel-выгрузка"));
+    bkWrap.appendChild(exRow);
+
+    // Импорт
+    var imLabel=h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#fb923c",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"6px",marginTop:"6px"}},"⚠ Восстановление из JSON");
+    bkWrap.appendChild(imLabel);
+
+    var imStatus=h("div",{s:{display:"none",padding:"10px 14px",background:"rgba(251,146,60,.08)",borderRadius:"10px",border:"1px solid rgba(251,146,60,.2)",marginBottom:"8px",fontSize:"12px",color:"#fb923c"}});
+    bkWrap.appendChild(imStatus);
+
+    var fi=h("input",{type:"file",accept:".json,application/json",s:{display:"none"}});
+    var pendingFile=null;
+    var pickedInfo=h("div",{s:{display:"none",padding:"8px 12px",background:"rgba(255,255,255,.03)",borderRadius:"8px",border:"1px solid rgba(255,255,255,.06)",marginBottom:"8px",fontSize:"12px",color:"#cbd5e1"}});
+    bkWrap.appendChild(pickedInfo);
+
+    fi.addEventListener("change",function(e){
+      var f=e.target.files[0];
+      if(!f){pendingFile=null;pickedInfo.style.display="none";return}
+      pendingFile=f;
+      pickedInfo.style.display="block";
+      pickedInfo.textContent="📂 Выбран: "+f.name+" ("+(f.size/1024).toFixed(1)+" КБ)";
+    });
+    bkWrap.appendChild(fi);
+
+    function runImport(mode){
+      if(!pendingFile){alert("Сначала выберите файл бэкапа");return}
+      var warnTxt=mode==="replace"
+        ? "ПОЛНАЯ ЗАМЕНА базы!\n\nВСЕ текущие клиенты, задачи и камеры будут УДАЛЕНЫ и заменены данными из бэкапа.\n\nПродолжить?"
+        : "Восстановить данные из бэкапа?\n\nРежим: ДОБАВИТЬ/ОБНОВИТЬ. Существующие записи с теми же id будут обновлены, остальные останутся.";
+      if(!confirm(warnTxt))return;
+      if(mode==="replace"&&!confirm("Точно стереть всё и заменить? Это необратимо."))return;
+      imStatus.style.display="block";
+      imStatus.textContent="Начинаю импорт...";
+      importBackupJSON(pendingFile,mode,function(msg){imStatus.textContent=msg}).then(function(stats){
+        imStatus.innerHTML="";
+        imStatus.appendChild(h("div",{s:{color:"#4ade80",fontWeight:"700"}},"✅ Импорт завершён"));
+        imStatus.appendChild(h("div",{s:{color:"#94a3b8",marginTop:"4px",fontSize:"11px"}},
+          "Клиентов: "+stats.clients+", задач: "+stats.tasks+", камер: "+stats.freezers+(stats.errors?", ошибок: "+stats.errors:"")));
+        pendingFile=null;fi.value="";pickedInfo.style.display="none";
+      }).catch(function(err){
+        imStatus.style.background="rgba(239,68,68,.08)";
+        imStatus.style.borderColor="rgba(239,68,68,.2)";
+        imStatus.style.color="#f87171";
+        imStatus.textContent="❌ Ошибка: "+err.message;
+      });
+    }
+
+    var imRow=h("div",{s:{display:"grid",gridTemplateColumns:"1fr",gap:"6px"}});
+    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(56,189,248,.25)",background:"rgba(56,189,248,.06)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){fi.click()}},"📂 Выбрать файл бэкапа"));
+    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(34,197,94,.25)",background:"rgba(34,197,94,.06)",color:"#4ade80",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){runImport("merge")}},"➕ Восстановить (добавить/обновить)"));
+    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(239,68,68,.25)",background:"rgba(239,68,68,.04)",color:"#f87171",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){runImport("replace")}},"🗑 Стереть всё и заменить (опасно)"));
+    bkWrap.appendChild(imRow);
+
+    ct.appendChild(bkWrap);
   }
 }
 
@@ -3463,18 +3733,342 @@ function migrateAllPhotos(onStatus){
   return processNextClient();
 }
 
-// ═══ NOTIFICATION SOUND ═══
+// ═══ BACKUP / RESTORE ═══
+// JSON-бэкап всей базы (без файлов фото — только их URLs).
+// Это защита от случайного удаления данных, не от потери Storage.
+function exportBackupJSON(){
+  var stamp=new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  var data={
+    version:1,
+    exportedAt:new Date().toISOString(),
+    exportedBy:S.u?S.u.email:"",
+    clients:S.cl,
+    staff:S.st,
+    servicetasks:S.tasks,
+    freezers:S.freezers,
+    settings:{finance:S.finance}
+  };
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url;a.download="РефСервисДВ_бэкап_"+stamp+".json";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  return data;
+}
+
+// Excel-экспорт: клиенты, машины, ремонты, задачи, камеры — отдельными листами.
+// Для бухгалтера, отчётов, переноса в другие системы.
+function exportBackupExcel(){
+  var wb=XLSX.utils.book_new();
+  var stamp=new Date().toISOString().slice(0,10);
+
+  // Лист 1: Клиенты
+  var clRows=[["ID","Тип","Имя/Название","Телефон","ИНН","Адрес","Подписка ₽/мес","Машин","Ремонтов","Создан"]];
+  S.cl.forEach(function(c){
+    clRows.push([
+      c.id||"",
+      c.clientType==="legal"?"Юр.лицо":"Физ.лицо",
+      c.name||"",
+      c.phone||"",
+      c.inn||"",
+      c.address||"",
+      c.subscription||0,
+      (c.vehicles||[]).length,
+      (c.repairs||[]).length,
+      c.createdAt&&c.createdAt.toDate?fD(c.createdAt.toDate()):""
+    ]);
+  });
+  var ws1=XLSX.utils.aoa_to_sheet(clRows);
+  ws1["!cols"]=[{wch:14},{wch:10},{wch:30},{wch:16},{wch:14},{wch:30},{wch:14},{wch:8},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws1,"Клиенты");
+
+  // Лист 2: Машины
+  var vhRows=[["Клиент","Тип","Гос.номер","Марка","Модель","Год","VIN"]];
+  S.cl.forEach(function(c){
+    (c.vehicles||[]).forEach(function(v){
+      vhRows.push([c.name||"",getS(v.serviceType||"other").l,v.plate||"",v.brand||"",v.model||"",v.year||"",v.vin||""]);
+    });
+  });
+  var ws2=XLSX.utils.aoa_to_sheet(vhRows);
+  ws2["!cols"]=[{wch:30},{wch:14},{wch:12},{wch:14},{wch:14},{wch:8},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws2,"Машины");
+
+  // Лист 3: Ремонты
+  var rpRows=[["Клиент","Гос.номер","Тип услуги","Дата","Описание","Статус","Стоимость ₽","Фреон","Кг","Задач","Готово задач"]];
+  S.cl.forEach(function(c){
+    (c.repairs||[]).forEach(function(r){
+      var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
+      var st=rSt(r);
+      var stTxt=st==="done"?"Готов":st==="cancelled"?"Отказ":"В работе";
+      var ts=r.tasks||[];
+      var doneTs=ts.filter(function(t){return tSt(t)==="done"}).length;
+      rpRows.push([
+        c.name||"",v?(v.plate||""):"",
+        getS(r.serviceType).l,
+        r.date||"",r.description||"",stTxt,
+        r.cost||0,r.freonType||"",r.freonAmount||"",
+        ts.length,doneTs
+      ]);
+    });
+  });
+  var ws3=XLSX.utils.aoa_to_sheet(rpRows);
+  ws3["!cols"]=[{wch:30},{wch:12},{wch:14},{wch:12},{wch:40},{wch:10},{wch:12},{wch:10},{wch:8},{wch:8},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws3,"Ремонты");
+
+  // Лист 4: Задачи в ремонтах
+  var tkRows=[["Клиент","Гос.номер","Дата ремонта","Исполнители","Описание задачи","Статус","Комментарий","Фреон кг"]];
+  S.cl.forEach(function(c){
+    (c.repairs||[]).forEach(function(r){
+      var v=(c.vehicles||[]).find(function(x){return x.id===r.vehicleId});
+      (r.tasks||[]).forEach(function(t){
+        tkRows.push([
+          c.name||"",v?(v.plate||""):"",
+          r.date||"",assigneeNames(t),t.description||"",
+          tSt(t)==="done"?"Готова":"В работе",
+          t.workComment||"",t.freonKg||""
+        ]);
+      });
+    });
+  });
+  var ws4=XLSX.utils.aoa_to_sheet(tkRows);
+  ws4["!cols"]=[{wch:30},{wch:12},{wch:12},{wch:24},{wch:40},{wch:10},{wch:30},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws4,"Задачи");
+
+  // Лист 5: Сервисные задачи / проекты
+  var stRows=[["Тип","Заголовок","Описание","Исполнители","Статус","Создана"]];
+  S.tasks.forEach(function(t){
+    stRows.push([
+      t.taskType||"task",
+      t.title||"",
+      t.description||"",
+      assigneeNames(t),
+      tSt(t)==="done"?"Готова":"В работе",
+      t.createdAt&&t.createdAt.toDate?fD(t.createdAt.toDate()):""
+    ]);
+  });
+  var ws5=XLSX.utils.aoa_to_sheet(stRows);
+  ws5["!cols"]=[{wch:10},{wch:30},{wch:40},{wch:24},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws5,"Сервисные задачи");
+
+  // Лист 6: Морозильные камеры
+  var fzRows=[["Номер","Модель","Статус","Арендатор","Старт","Сумма ₽","Дней"]];
+  S.freezers.forEach(function(f){
+    var days=f.startDate?daysAgo(f.startDate):0;
+    fzRows.push([
+      f.number||"",f.model||"",
+      f.status==="rented"?"В аренде":"Свободна",
+      f.renterName||"",f.startDate||"",f.amount||0,days
+    ]);
+  });
+  var ws6=XLSX.utils.aoa_to_sheet(fzRows);
+  ws6["!cols"]=[{wch:10},{wch:20},{wch:12},{wch:30},{wch:12},{wch:12},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws6,"Камеры");
+
+  XLSX.writeFile(wb,"РефСервисДВ_данные_"+stamp+".xlsx");
+}
+
+// Импорт из JSON-бэкапа.
+// ВАЖНО: режим "merge" — добавляет/обновляет по id, не удаляет существующее.
+// Полная замена доступна отдельной кнопкой с двойным подтверждением.
+function importBackupJSON(file,mode,onStatus){
+  return new Promise(function(resolve,reject){
+    var fr=new FileReader();
+    fr.onload=function(e){
+      var data;
+      try{data=JSON.parse(e.target.result)}
+      catch(err){reject(new Error("Файл повреждён или это не JSON"));return}
+      if(!data||!data.version){reject(new Error("Это не бэкап РефСервисДВ"));return}
+      doImportBackup(data,mode,onStatus).then(resolve).catch(reject);
+    };
+    fr.onerror=function(){reject(new Error("Не удалось прочитать файл"))};
+    fr.readAsText(file);
+  });
+}
+
+function doImportBackup(data,mode,onStatus){
+  // mode: "merge" — добавить/обновить по id; "replace" — стереть всё и записать заново
+  var stats={clients:0,tasks:0,freezers:0,errors:0};
+
+  function chunk(arr,size){var out=[];for(var i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
+
+  function eraseCollection(name){
+    onStatus("Очищаю коллекцию "+name+"...");
+    return getDocs(collection(db,name)).then(function(snap){
+      var ids=snap.docs.map(function(d){return d.id});
+      var groups=chunk(ids,400);
+      var p=Promise.resolve();
+      groups.forEach(function(g){
+        p=p.then(function(){
+          var b=writeBatch(db);
+          g.forEach(function(id){b.delete(doc(db,name,id))});
+          return b.commit();
+        });
+      });
+      return p;
+    });
+  }
+
+  function writeCollection(name,items,counterKey){
+    if(!items||!items.length)return Promise.resolve();
+    onStatus("Записываю "+name+" ("+items.length+")...");
+    var groups=chunk(items,400);
+    var p=Promise.resolve();
+    groups.forEach(function(g){
+      p=p.then(function(){
+        var b=writeBatch(db);
+        g.forEach(function(item){
+          var id=item.id;if(!id)return;
+          var clean=Object.assign({},item);delete clean.id;
+          // Удаляем поля createdAt с Timestamp-объектами (после JSON они не Timestamp), Firebase это нормально проглотит как обычные поля
+          b.set(doc(db,name,id),clean,{merge:mode==="merge"});
+          stats[counterKey]++;
+        });
+        return b.commit();
+      }).catch(function(err){stats.errors++;console.warn(name+" batch err",err)});
+    });
+    return p;
+  }
+
+  var chain=Promise.resolve();
+  if(mode==="replace"){
+    chain=chain
+      .then(function(){return eraseCollection("clients")})
+      .then(function(){return eraseCollection("servicetasks")})
+      .then(function(){return eraseCollection("freezers")});
+  }
+  chain=chain
+    .then(function(){return writeCollection("clients",data.clients||[],"clients")})
+    .then(function(){return writeCollection("servicetasks",data.servicetasks||[],"tasks")})
+    .then(function(){return writeCollection("freezers",data.freezers||[],"freezers")})
+    .then(function(){
+      if(data.settings&&data.settings.finance){
+        onStatus("Записываю настройки финансов...");
+        return setDoc(doc(db,"settings","finance"),data.settings.finance,{merge:mode==="merge"});
+      }
+    })
+    .then(function(){return stats});
+  return chain;
+}
+
+// ═══ NOTIFICATION SOUND + BROWSER NOTIFICATIONS + PWA ═══
 var lastTaskCount=-1;
+var notifPermAsked=false;
+
+function ensureNotifPermission(){
+  if(!("Notification" in window))return;
+  if(notifPermAsked)return;
+  if(Notification.permission==="default"){
+    notifPermAsked=true;
+    // Спрашиваем разрешение мягко — после того как пользователь зашёл и видит интерфейс
+    setTimeout(function(){
+      try{Notification.requestPermission().catch(function(){})}catch(e){}
+    },3000);
+  }
+}
+
+function showBrowserNotif(title,body){
+  if(!("Notification" in window))return;
+  if(Notification.permission!=="granted")return;
+  // Показываем браузерное уведомление только если вкладка не активна.
+  // Когда вкладка активна — звук уже есть, дублировать не нужно.
+  if(document.visibilityState==="visible")return;
+  try{
+    var n=new Notification(title,{
+      body:body,
+      icon:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230284c7'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='62'>❄️</text></svg>",
+      tag:"refservicedv-task",
+      requireInteraction:false
+    });
+    n.onclick=function(){window.focus();n.close()};
+    setTimeout(function(){try{n.close()}catch(e){}},8000);
+  }catch(e){console.warn("notif failed",e)}
+}
+
 function checkNotifications(){
   if(!S.u)return;
-  var uid=S.u.uid;
-  var count=0;
-  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")count++})})});
-  S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")count++});
+  ensureNotifPermission();
+  var count=getMyActiveCount();
   if(lastTaskCount>=0&&count>lastTaskCount){
+    var diff=count-lastTaskCount;
     playNotifSound();
+    // Соберём заголовки новых задач только когда они реально появились — это редкая ветка
+    var newTasksTitles=[];
+    S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){(r.tasks||[]).forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")newTasksTitles.push((t.description||"задача").substring(0,60))})})});
+    S.tasks.forEach(function(t){if(isMyTask(t)&&tSt(t)!=="done")newTasksTitles.push((t.title||t.description||"задача").substring(0,60))});
+    var title=diff===1?"🔧 Новая задача":"🔧 Новых задач: "+diff;
+    var body=newTasksTitles.slice(-diff).join(", ")||"Откройте CRM, чтобы посмотреть";
+    showBrowserNotif(title,body);
   }
   lastTaskCount=count;
+}
+
+// ── PWA: регистрация service worker через Blob (без отдельного файла) ──
+// Этот воркер обеспечивает только базовый офлайн-кеш интерфейса и ускоряет повторные запуски.
+// Полноценные push-уведомления при закрытом приложении требуют отдельного firebase-messaging-sw.js
+// (см. документацию Firebase Cloud Messaging).
+(function registerInlineSW(){
+  if(!("serviceWorker" in navigator))return;
+  try{
+    var swCode=`
+      var CACHE='refservicedv-v1';
+      self.addEventListener('install',function(e){self.skipWaiting()});
+      self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim())});
+      self.addEventListener('fetch',function(e){
+        if(e.request.method!=='GET')return;
+        var url=e.request.url;
+        // Не кэшируем Firebase API/Storage/Firestore запросы — они должны идти онлайн
+        if(url.indexOf('firebaseio')>=0||url.indexOf('googleapis')>=0||url.indexOf('firebasestorage')>=0||url.indexOf('gstatic')>=0)return;
+        e.respondWith(
+          caches.open(CACHE).then(function(c){
+            return c.match(e.request).then(function(hit){
+              var net=fetch(e.request).then(function(resp){
+                if(resp&&resp.status===200&&resp.type==='basic')c.put(e.request,resp.clone());
+                return resp;
+              }).catch(function(){return hit});
+              return hit||net;
+            });
+          })
+        );
+      });
+    `;
+    var blob=new Blob([swCode],{type:"application/javascript"});
+    var swUrl=URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl,{scope:"./"}).catch(function(err){
+      console.warn("SW register failed",err);
+    });
+  }catch(e){console.warn("SW init err",e)}
+})();
+
+// ── Кнопка "Установить приложение" появляется автоматически в Chrome/Edge ──
+var deferredInstallPrompt=null;
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  // Показываем подсказку через 5 секунд после загрузки, если ещё не установлено
+  setTimeout(function(){
+    if(!deferredInstallPrompt)return;
+    if(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)return;
+    showInstallHint();
+  },5000);
+});
+
+function showInstallHint(){
+  if(!deferredInstallPrompt)return;
+  if(document.getElementById("pwaInstallHint"))return;
+  var hint=document.createElement("div");
+  hint.id="pwaInstallHint";
+  hint.style.cssText="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;padding:10px 16px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 8px 30px rgba(14,165,233,.5);z-index:1000;display:flex;align-items:center;gap:8px;animation:fadeUp .3s ease;cursor:pointer;max-width:90%;";
+  hint.innerHTML="📲 Установить приложение <span style=\"opacity:.8;font-size:18px;margin-left:4px\">×</span>";
+  hint.onclick=function(ev){
+    if(ev.target.tagName==="SPAN"){hint.remove();deferredInstallPrompt=null;return}
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.finally(function(){deferredInstallPrompt=null;hint.remove()});
+    }
+  };
+  document.body.appendChild(hint);
+  setTimeout(function(){if(hint.parentNode)hint.remove()},15000);
 }
 function playNotifSound(){
   try{
