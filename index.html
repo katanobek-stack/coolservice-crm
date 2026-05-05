@@ -4061,42 +4061,10 @@ function checkNotifications(){
   lastTaskCount=count;
 }
 
-// ── PWA: регистрация service worker через Blob (без отдельного файла) ──
-// Этот воркер обеспечивает только базовый офлайн-кеш интерфейса и ускоряет повторные запуски.
-// Полноценные push-уведомления при закрытом приложении требуют отдельного firebase-messaging-sw.js
-// (см. документацию Firebase Cloud Messaging).
-(function registerInlineSW(){
-  if(!("serviceWorker" in navigator))return;
-  try{
-    var swCode=`
-      var CACHE='refservicedv-v1';
-      self.addEventListener('install',function(e){self.skipWaiting()});
-      self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim())});
-      self.addEventListener('fetch',function(e){
-        if(e.request.method!=='GET')return;
-        var url=e.request.url;
-        // Не кэшируем Firebase API/Storage/Firestore запросы — они должны идти онлайн
-        if(url.indexOf('firebaseio')>=0||url.indexOf('googleapis')>=0||url.indexOf('firebasestorage')>=0||url.indexOf('gstatic')>=0)return;
-        e.respondWith(
-          caches.open(CACHE).then(function(c){
-            return c.match(e.request).then(function(hit){
-              var net=fetch(e.request).then(function(resp){
-                if(resp&&resp.status===200&&resp.type==='basic')c.put(e.request,resp.clone());
-                return resp;
-              }).catch(function(){return hit});
-              return hit||net;
-            });
-          })
-        );
-      });
-    `;
-    var blob=new Blob([swCode],{type:"application/javascript"});
-    var swUrl=URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl,{scope:"./"}).catch(function(err){
-      console.warn("SW register failed",err);
-    });
-  }catch(e){console.warn("SW init err",e)}
-})();
+// ── PWA: офлайн-кеш интерфейса убран ──
+// GitHub Pages блокирует регистрацию service worker через blob: URL.
+// Если в будущем захочется офлайн-режим — нужен отдельный sw.js файл в корне репозитория.
+// Сейчас используется только firebase-messaging-sw.js для FCM push-уведомлений.
 
 // ── Кнопка "Установить приложение" появляется автоматически в Chrome/Edge ──
 var deferredInstallPrompt=null;
