@@ -83,25 +83,37 @@ var VAPID_KEY="BE3sKHxctz5QO0rHWBKUbjMGO_735ppQdm1XKxoa-B-6craCvseHkaZMecYKYjEoB
 var messaging=null;
 var fcmInitTried=false;
 
+// Накапливаем диагностические шаги, чтобы кнопка "Диагностика push" показала их прямо на телефоне
+var fcmLog=[];
+function fcmAdd(stage,info){
+  var ts=new Date().toLocaleTimeString("ru-RU");
+  fcmLog.push({ts:ts,stage:stage,info:info});
+  console.log("[FCM]",stage,info||"");
+}
+
 // Инициализация FCM выполняется один раз — после того, как пользователь:
 //  1) залогинился, 2) дал разрешение на уведомления.
 // Если service worker firebase-messaging-sw.js не положен в репозиторий —
 // инициализация просто молча не выполнится, основной функционал CRM продолжит работать.
 function initFCM(){
-  if(fcmInitTried)return;
-  if(!S.u)return;
-  if(!("Notification" in window))return;
-  if(Notification.permission!=="granted")return;
+  if(fcmInitTried){fcmAdd("⏭ Уже пробовали","fcmInitTried=true");return}
+  if(!S.u){fcmAdd("⛔ Нет пользователя","S.u пуст");return}
+  if(!("Notification" in window)){fcmAdd("⛔ Нет API Notification","браузер не поддерживает");return}
+  if(Notification.permission!=="granted"){fcmAdd("⛔ Нет разрешения","permission="+Notification.permission);return}
   fcmInitTried=true;
+  fcmAdd("✅ Старт","UA="+navigator.userAgent.substring(0,80));
+
   isSupported().then(function(supported){
-    if(!supported){console.log("FCM не поддерживается этим браузером");return}
+    if(!supported){fcmAdd("⛔ FCM не поддерживается","isSupported()=false");return}
+    fcmAdd("✅ FCM поддерживается");
     // Регистрируем sw-файл (должен лежать рядом с index.html)
     return navigator.serviceWorker.register("./firebase-messaging-sw.js",{scope:"./"}).then(function(reg){
-      try{messaging=getMessaging(fbApp)}catch(e){console.warn("getMessaging failed",e);return}
+      fcmAdd("✅ SW зарегистрирован","scope="+reg.scope);
+      try{messaging=getMessaging(fbApp);fcmAdd("✅ getMessaging OK")}catch(e){fcmAdd("⛔ getMessaging failed",String(e));return}
       // Получаем токен этого устройства
       return getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg}).then(function(token){
-        if(!token){console.warn("FCM token пустой");return}
-        console.log("FCM token получен:",token.substring(0,20)+"...");
+        if(!token){fcmAdd("⛔ Токен пустой","getToken вернул null/empty");return}
+        fcmAdd("✅ Токен получен",token.substring(0,30)+"... ("+token.length+" симв.)");
         // Сохраняем токен в Firestore staff/{uid}, чтобы сервер мог слать пуши
         if(S.u){
           var existing=S.st.find(function(s){return s.id===S.u.uid});
@@ -109,21 +121,66 @@ function initFCM(){
           if(tokens.indexOf(token)<0){
             tokens.push(token);
             // Храним массив токенов — у одного человека может быть несколько устройств
-            fbStaff(S.u.uid,{fcmTokens:tokens,fcmUpdatedAt:new Date().toISOString()});
+            fbStaff(S.u.uid,{fcmTokens:tokens,fcmUpdatedAt:new Date().toISOString()}).then(function(){
+              fcmAdd("✅ Токен сохранён в Firestore","всего токенов: "+tokens.length);
+            }).catch(function(err){
+              fcmAdd("⛔ Ошибка записи в Firestore",String(err));
+            });
+          }else{
+            fcmAdd("ℹ️ Токен уже есть в базе","всего токенов: "+tokens.length);
           }
         }
         // Слушаем пуши, когда приложение открыто (foreground)
         onMessage(messaging,function(payload){
           var t=(payload.notification&&payload.notification.title)||"РефСервисДВ";
           var b=(payload.notification&&payload.notification.body)||"";
-          // Используем уже существующую функцию браузерных уведомлений
-          // (она проверит видимость вкладки и т.п.)
           if(typeof showBrowserNotif==="function")showBrowserNotif(t,b);
           else playNotifSound&&playNotifSound();
         });
+      }).catch(function(err){
+        fcmAdd("⛔ getToken ошибка",String(err)+(err.code?" code="+err.code:""));
       });
+    }).catch(function(err){
+      fcmAdd("⛔ SW не зарегистрировался",String(err));
     });
-  }).catch(function(err){console.warn("FCM init err",err)});
+  }).catch(function(err){fcmAdd("⛔ FCM init err",String(err))});
+}
+
+// Показать диагностику в модалке (вызывается с кнопки в Сводке)
+function showFCMDiagnostic(){
+  var info=[];
+  info.push("URL: "+location.href);
+  info.push("Display mode: "+(window.matchMedia("(display-mode: standalone)").matches?"standalone (PWA)":"browser tab"));
+  info.push("HTTPS: "+(location.protocol==="https:"?"да":"нет"));
+  info.push("Service Worker API: "+("serviceWorker" in navigator?"есть":"нет"));
+  info.push("Notification API: "+("Notification" in window?"есть":"нет"));
+  if("Notification" in window)info.push("Notification.permission: "+Notification.permission);
+  info.push("User-Agent: "+navigator.userAgent);
+  info.push("Online: "+navigator.onLine);
+  info.push("--- Логи initFCM ---");
+  if(fcmLog.length===0)info.push("(пусто, initFCM не вызывался)");
+  else fcmLog.forEach(function(e){info.push(e.ts+" "+e.stage+(e.info?" — "+e.info:""))});
+  // Текущие токены пользователя
+  var me=S.st.find(function(s){return s.id===(S.u&&S.u.uid)});
+  if(me&&me.fcmTokens){
+    info.push("--- Токены в Firestore ---");
+    info.push("Всего: "+me.fcmTokens.length);
+    me.fcmTokens.forEach(function(t,i){info.push("["+i+"] "+t.substring(0,40)+"...")});
+  }else info.push("--- Токенов в Firestore нет ---");
+  return info.join("\n");
+}
+
+// Принудительно перезапустить FCM (например после смены разрешения)
+function forceFCMRetry(){
+  fcmLog=[];
+  fcmInitTried=false;
+  // Снимем существующую регистрацию SW и попробуем заново
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){if(r.active&&r.active.scriptURL.indexOf("firebase-messaging")>=0)r.unregister()});
+      setTimeout(initFCM,500);
+    });
+  }else initFCM();
 }
 
 var SVC=[{id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},{id:"ac",l:"Кондиционер",e:"❄️",c:"99,102,241"},{id:"freezer",l:"Морозильная",e:"🥶",c:"6,182,212"},{id:"other",l:"Другое",e:"🔧",c:"148,163,184"}];
@@ -2573,6 +2630,24 @@ function doneTab(ct){
       sizeWrap.appendChild(h("div",{s:{padding:"12px 14px",background:"rgba(34,197,94,.06)",borderRadius:"12px",border:"1px solid rgba(34,197,94,.15)",fontSize:"12px",color:"#4ade80",fontWeight:"600"}},"✅ Все фото уже в Storage — база чистая"));
     }
     ct.appendChild(sizeWrap);
+
+    // ── Диагностика push-уведомлений ──
+    secTitle(ct,"🔧 Диагностика push");
+    var diagWrap=h("div",{s:{marginBottom:"14px"}});
+    var diagOut=h("pre",{s:{display:"none",padding:"10px 12px",background:"rgba(0,0,0,.35)",borderRadius:"10px",border:"1px solid rgba(255,255,255,.08)",fontSize:"10px",color:"#cbd5e1",lineHeight:"1.5",whiteSpace:"pre-wrap",wordBreak:"break-all",fontFamily:"'JetBrains Mono',monospace",maxHeight:"360px",overflow:"auto",margin:"8px 0"}});
+    diagWrap.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(167,139,250,.3)",background:"rgba(167,139,250,.08)",color:"#c4b5fd",fontSize:"12px",fontWeight:"600",cursor:"pointer",width:"100%"},onClick:function(){
+      diagOut.style.display="block";
+      diagOut.textContent=showFCMDiagnostic();
+    }},"🔧 Показать диагностику push"));
+    diagWrap.appendChild(diagOut);
+    diagWrap.appendChild(h("button",{s:{padding:"8px",borderRadius:"10px",border:"1px solid rgba(251,146,60,.25)",background:"rgba(251,146,60,.05)",color:"#fb923c",fontSize:"11px",fontWeight:"600",cursor:"pointer",width:"100%",marginTop:"6px"},onClick:function(){
+      forceFCMRetry();
+      setTimeout(function(){
+        diagOut.style.display="block";
+        diagOut.textContent=showFCMDiagnostic();
+      },2000);
+    }},"♻️ Перезапустить FCM (попытка #2)"));
+    ct.appendChild(diagWrap);
 
     // ── Резервное копирование ──
     secTitle(ct,"💾 Резервное копирование");
