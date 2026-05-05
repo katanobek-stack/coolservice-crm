@@ -73,9 +73,58 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp,writeBatch,getDocs}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
+import{getMessaging,getToken,onMessage,isSupported}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js";
 
 var fbApp=initializeApp({apiKey:"AIzaSyA2r9KzhWVPIvg0L8EoOb6vQHpk4SCZ8dw",authDomain:"coolservice-crm.firebaseapp.com",projectId:"coolservice-crm",storageBucket:"coolservice-crm.firebasestorage.app",messagingSenderId:"871007711725",appId:"1:871007711725:web:0f717e2edc84e6907877e4"});
 var auth=getAuth(fbApp),db=getFirestore(fbApp),storage=getStorage(fbApp);
+
+// ═══ FCM (Firebase Cloud Messaging) — push-уведомления ═══
+var VAPID_KEY="BE3sKHxctz5QO0rHWBKUbjMGO_735ppQdm1XKxoa-B-6craCvseHkaZMecYKYjEoBqe5IrEJ2ESly3l0XE4AQPg";
+var messaging=null;
+var fcmInitTried=false;
+
+// Инициализация FCM выполняется один раз — после того, как пользователь:
+//  1) залогинился, 2) дал разрешение на уведомления.
+// Если service worker firebase-messaging-sw.js не положен в репозиторий —
+// инициализация просто молча не выполнится, основной функционал CRM продолжит работать.
+function initFCM(){
+  if(fcmInitTried)return;
+  if(!S.u)return;
+  if(!("Notification" in window))return;
+  if(Notification.permission!=="granted")return;
+  fcmInitTried=true;
+  isSupported().then(function(supported){
+    if(!supported){console.log("FCM не поддерживается этим браузером");return}
+    // Регистрируем sw-файл (должен лежать рядом с index.html)
+    return navigator.serviceWorker.register("./firebase-messaging-sw.js",{scope:"./"}).then(function(reg){
+      try{messaging=getMessaging(fbApp)}catch(e){console.warn("getMessaging failed",e);return}
+      // Получаем токен этого устройства
+      return getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg}).then(function(token){
+        if(!token){console.warn("FCM token пустой");return}
+        console.log("FCM token получен:",token.substring(0,20)+"...");
+        // Сохраняем токен в Firestore staff/{uid}, чтобы сервер мог слать пуши
+        if(S.u){
+          var existing=S.st.find(function(s){return s.id===S.u.uid});
+          var tokens=(existing&&existing.fcmTokens)||[];
+          if(tokens.indexOf(token)<0){
+            tokens.push(token);
+            // Храним массив токенов — у одного человека может быть несколько устройств
+            fbStaff(S.u.uid,{fcmTokens:tokens,fcmUpdatedAt:new Date().toISOString()});
+          }
+        }
+        // Слушаем пуши, когда приложение открыто (foreground)
+        onMessage(messaging,function(payload){
+          var t=(payload.notification&&payload.notification.title)||"РефСервисДВ";
+          var b=(payload.notification&&payload.notification.body)||"";
+          // Используем уже существующую функцию браузерных уведомлений
+          // (она проверит видимость вкладки и т.п.)
+          if(typeof showBrowserNotif==="function")showBrowserNotif(t,b);
+          else playNotifSound&&playNotifSound();
+        });
+      });
+    });
+  }).catch(function(err){console.warn("FCM init err",err)});
+}
 
 var SVC=[{id:"refrigerator",l:"Рефрижератор",e:"🧊",c:"14,165,233"},{id:"ac",l:"Кондиционер",e:"❄️",c:"99,102,241"},{id:"freezer",l:"Морозильная",e:"🥶",c:"6,182,212"},{id:"other",l:"Другое",e:"🔧",c:"148,163,184"}];
 var FREONS=["","R134a","R404a","R407c","R410a","R422d","R449a","R452a","R507a","Другой"];
@@ -3957,12 +4006,21 @@ var notifPermAsked=false;
 
 function ensureNotifPermission(){
   if(!("Notification" in window))return;
+  // Если разрешение уже выдано — пробуем инициализировать FCM
+  if(Notification.permission==="granted"){
+    initFCM();
+    return;
+  }
   if(notifPermAsked)return;
   if(Notification.permission==="default"){
     notifPermAsked=true;
     // Спрашиваем разрешение мягко — после того как пользователь зашёл и видит интерфейс
     setTimeout(function(){
-      try{Notification.requestPermission().catch(function(){})}catch(e){}
+      try{
+        Notification.requestPermission().then(function(perm){
+          if(perm==="granted")initFCM();
+        }).catch(function(){});
+      }catch(e){}
     },3000);
   }
 }
