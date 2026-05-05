@@ -3591,6 +3591,117 @@ function renderPnL(ct,allR){
   });
   ct.appendChild(elecWidget);
 
+  // ── Закупки / импорт / запчасти — учёт по факту ──
+  if(myRole()==="admin"){
+    var purchases=f.purchases||[];
+    // Закупки текущего месяца — для отображения в виджете и подсчёта в P&L
+    var curMonthPurchases=purchases.filter(function(p){return(p.date||"").substring(0,7)===curMK});
+    var curMonthPurchasesSum=curMonthPurchases.reduce(function(s,p){return s+(parseFloat(p.amount)||0)},0);
+
+    var purWidget=h("div",{s:{background:"rgba(168,85,247,.06)",borderRadius:"14px",padding:"14px 16px",marginBottom:"12px",border:"1px solid rgba(168,85,247,.18)"}});
+    var purHdr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}});
+    purHdr.appendChild(h("div",{s:{fontSize:"11px",fontWeight:"700",color:"#c084fc",textTransform:"uppercase",letterSpacing:".06em"}},"📦 Закупки и материалы"));
+    purHdr.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"700",color:"#c084fc"}},"за месяц: "+curMonthPurchasesSum.toLocaleString("ru-RU")+" ₽"));
+    purWidget.appendChild(purHdr);
+
+    // Форма быстрого ввода: сумма + комментарий + кнопка
+    var purForm=h("div",{s:{display:"flex",gap:"6px",marginBottom:"10px"}});
+    var amtI=h("input",{cls:"fi",type:"number",placeholder:"Сумма ₽",step:"1",s:{flex:"1",padding:"9px 10px",fontSize:"13px",fontWeight:"600"}});
+    var cmtI=h("input",{cls:"fi",placeholder:"Комментарий (что закупили)",s:{flex:"2",padding:"9px 10px",fontSize:"13px"}});
+    var addBtn=h("button",{s:{padding:"9px 16px",borderRadius:"8px",border:"none",background:"linear-gradient(135deg,#7e22ce,#a855f7)",color:"#fff",fontSize:"12px",fontWeight:"700",cursor:"pointer",flexShrink:"0"},onClick:function(){
+      var amt=parseFloat(amtI.value)||0;
+      var cmt=(cmtI.value||"").trim();
+      if(amt<=0){amtI.style.borderColor="#f87171";amtI.focus();return}
+      if(!cmt){cmtI.style.borderColor="#f87171";cmtI.focus();return}
+      var newP={
+        id:gid(),
+        date:new Date().toISOString().substring(0,10),
+        addedAt:new Date().toISOString(),
+        amount:amt,
+        comment:cmt,
+        addedBy:S.u?S.u.uid:"",
+        addedByName:S.u?(S.st.find(function(x){return x.id===S.u.uid})||{}).name||"":""
+      };
+      var allP=(S.finance.purchases||[]).concat([newP]);
+      addBtn.disabled=true;addBtn.textContent="...";
+      fbSaveFinance({purchases:allP}).then(function(){
+        amtI.value="";cmtI.value="";
+        addBtn.disabled=false;addBtn.textContent="+ Добавить";
+      }).catch(function(e){
+        addBtn.disabled=false;addBtn.textContent="+ Добавить";
+        alert("Ошибка: "+e.message);
+      });
+    }},"+ Добавить");
+    purForm.append(amtI,cmtI,addBtn);
+    purWidget.appendChild(purForm);
+
+    // Список закупок текущего месяца (свежие сверху)
+    if(curMonthPurchases.length){
+      var purList=h("div",{s:{maxHeight:"220px",overflowY:"auto"}});
+      curMonthPurchases.slice().sort(function(a,b){return(b.addedAt||b.date||"").localeCompare(a.addedAt||a.date||"")}).forEach(function(p){
+        var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"7px 10px",borderRadius:"8px",background:"rgba(168,85,247,.04)",border:"1px solid rgba(168,85,247,.1)",marginBottom:"4px"}});
+        var info=h("div",{s:{flex:"1",minWidth:"0"}});
+        info.appendChild(h("div",{s:{fontSize:"12px",color:"#e2e8f0",fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},p.comment||"(без комментария)"));
+        var subText=fD(p.date)+(p.addedByName?" · "+p.addedByName:"");
+        info.appendChild(h("div",{s:{fontSize:"10px",color:"#64748b",marginTop:"1px"}},subText));
+        row.appendChild(info);
+        row.appendChild(h("span",{s:{fontSize:"13px",fontWeight:"700",color:"#c084fc",whiteSpace:"nowrap"}},(parseFloat(p.amount)||0).toLocaleString("ru-RU")+" ₽"));
+        row.appendChild(h("button",{s:{padding:"4px 8px",borderRadius:"6px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"12px",cursor:"pointer",flexShrink:"0"},onClick:function(){
+          if(!confirm("Удалить запись о закупке на "+(parseFloat(p.amount)||0).toLocaleString("ru-RU")+" ₽?\n\n"+(p.comment||"")))return;
+          var allP=(S.finance.purchases||[]).filter(function(x){return x.id!==p.id});
+          fbSaveFinance({purchases:allP}).catch(function(e){alert("Ошибка: "+e.message)});
+        }},"×"));
+        purList.appendChild(row);
+      });
+      purWidget.appendChild(purList);
+    }else{
+      purWidget.appendChild(h("div",{s:{fontSize:"11px",color:"#64748b",textAlign:"center",padding:"4px",fontStyle:"italic"}},"В этом месяце закупок ещё не было"));
+    }
+
+    // Показать историю предыдущих месяцев (свернуто)
+    var prevPurchases=purchases.filter(function(p){return(p.date||"").substring(0,7)!==curMK});
+    if(prevPurchases.length){
+      var histToggle=h("button",{s:{width:"100%",padding:"7px",marginTop:"8px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"#94a3b8",fontSize:"11px",fontWeight:"600",cursor:"pointer"}},"📜 История закупок ("+prevPurchases.length+")");
+      var histBlock=h("div",{s:{display:"none",marginTop:"6px",maxHeight:"260px",overflowY:"auto"}});
+      // Группируем по месяцам
+      var byMonth={};
+      prevPurchases.forEach(function(p){
+        var mk=(p.date||"").substring(0,7);
+        if(!byMonth[mk])byMonth[mk]=[];
+        byMonth[mk].push(p);
+      });
+      Object.keys(byMonth).sort().reverse().forEach(function(mk){
+        var mD=new Date(mk+"-01");
+        var monSum=byMonth[mk].reduce(function(s,p){return s+(parseFloat(p.amount)||0)},0);
+        histBlock.appendChild(h("div",{s:{fontSize:"10px",fontWeight:"700",color:"#c084fc",textTransform:"uppercase",letterSpacing:".05em",margin:"8px 0 4px",display:"flex",justifyContent:"space-between"}},
+          h("span",null,mNames[mD.getMonth()]+" "+mD.getFullYear()),
+          h("span",null,monSum.toLocaleString("ru-RU")+" ₽")));
+        byMonth[mk].slice().sort(function(a,b){return(b.addedAt||b.date||"").localeCompare(a.addedAt||a.date||"")}).forEach(function(p){
+          var row=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",padding:"6px 10px",borderRadius:"6px",background:"rgba(255,255,255,.02)",marginBottom:"3px"}});
+          var info=h("div",{s:{flex:"1",minWidth:"0"}});
+          info.appendChild(h("div",{s:{fontSize:"11px",color:"#cbd5e1",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},p.comment||"(без комментария)"));
+          info.appendChild(h("div",{s:{fontSize:"9px",color:"#64748b"}},fD(p.date)));
+          row.appendChild(info);
+          row.appendChild(h("span",{s:{fontSize:"12px",fontWeight:"600",color:"#a78bfa"}},(parseFloat(p.amount)||0).toLocaleString("ru-RU")+" ₽"));
+          row.appendChild(h("button",{s:{padding:"3px 6px",borderRadius:"4px",border:"1px solid rgba(239,68,68,.15)",background:"transparent",color:"#f87171",fontSize:"11px",cursor:"pointer",flexShrink:"0"},onClick:function(){
+            if(!confirm("Удалить запись?"))return;
+            var allP=(S.finance.purchases||[]).filter(function(x){return x.id!==p.id});
+            fbSaveFinance({purchases:allP}).catch(function(e){alert("Ошибка: "+e.message)});
+          }},"×"));
+          histBlock.appendChild(row);
+        });
+      });
+      histToggle.onclick=function(){
+        if(histBlock.style.display==="none"){histBlock.style.display="block";histToggle.textContent="📜 Скрыть историю"}
+        else{histBlock.style.display="none";histToggle.textContent="📜 История закупок ("+prevPurchases.length+")"}
+      };
+      purWidget.appendChild(histToggle);
+      purWidget.appendChild(histBlock);
+    }
+
+    ct.appendChild(purWidget);
+  }
+
   // ── ДОХОДЫ ──
   var repairRev=allR.filter(function(r){return r.closedByManager&&(r.closedAt||r.date||"").substring(0,7)===curMK}).reduce(function(s,r){return s+(parseFloat(r.cost)||0)},0);
   var rentRev=S.freezers.filter(function(fz){return fz.rented&&fz.rentAmount>0}).reduce(function(s,fz){return s+(parseFloat(fz.rentAmount)||0)},0);
@@ -3600,10 +3711,11 @@ function renderPnL(ct,allR){
   // ── РАСХОДЫ ──
   var boxCost=(f.boxes||[]).reduce(function(s,b){return s+(parseFloat(b.cost)||0)},0);
   var salCost=(f.salaries||[]).reduce(function(s,sl){return s+(parseFloat(sl.salary)||0)},0);
-  // Счёт за свет — берём за ПРОШЛЫЙ месяц
   // Счёт за свет — берём за ТЕКУЩИЙ месяц
   var elecBillCost=parseFloat((elecBills[curMK])||0);
-  var totalExpense=boxCost+salCost+elecBillCost;
+  // Закупки и материалы — суммируем все записи за текущий месяц
+  var purchaseCost=(f.purchases||[]).filter(function(p){return(p.date||"").substring(0,7)===curMK}).reduce(function(s,p){return s+(parseFloat(p.amount)||0)},0);
+  var totalExpense=boxCost+salCost+elecBillCost+purchaseCost;
 
   var profit=totalIncome-totalExpense;
 
@@ -3666,7 +3778,11 @@ function renderPnL(ct,allR){
   }else{
     pnlWrap.appendChild(h("div",{s:{fontSize:"11px",color:"#475569",padding:"6px 10px",borderRadius:"8px",background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.1)",marginBottom:"4px"}},"⚡ Счёт за свет за "+mNames[now.getMonth()]+" не введён — добавьте выше"));
   }
-  if(boxCost===0&&salCost===0&&elecBillCost===0){
+  if(purchaseCost>0){
+    var purCount=(f.purchases||[]).filter(function(p){return(p.date||"").substring(0,7)===curMK}).length;
+    pnlWrap.appendChild(expenseRow("📦","Закупки и материалы",purchaseCost,purCount+" "+(purCount===1?"запись":purCount<5?"записи":"записей")+" в "+mNames[now.getMonth()]));
+  }
+  if(boxCost===0&&salCost===0&&elecBillCost===0&&purchaseCost===0){
     pnlWrap.appendChild(h("div",{s:{fontSize:"12px",color:"#475569",textAlign:"center",padding:"6px"}},
       "Расходы не заданы — ",h("span",{s:{color:"#38bdf8",cursor:"pointer",textDecoration:"underline"},onClick:function(){S.mod={t:"editFinance"};R()}},"настроить")));
   }
@@ -3988,6 +4104,15 @@ function exportBackupExcel(){
   var ws6=XLSX.utils.aoa_to_sheet(fzRows);
   ws6["!cols"]=[{wch:10},{wch:20},{wch:12},{wch:30},{wch:12},{wch:12},{wch:8}];
   XLSX.utils.book_append_sheet(wb,ws6,"Камеры");
+
+  // Лист 7: Закупки
+  var purRows=[["Дата","Сумма ₽","Комментарий","Кто добавил"]];
+  ((S.finance||{}).purchases||[]).slice().sort(function(a,b){return(b.date||"").localeCompare(a.date||"")}).forEach(function(p){
+    purRows.push([p.date||"",parseFloat(p.amount)||0,p.comment||"",p.addedByName||""]);
+  });
+  var ws7=XLSX.utils.aoa_to_sheet(purRows);
+  ws7["!cols"]=[{wch:12},{wch:14},{wch:50},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws7,"Закупки");
 
   XLSX.writeFile(wb,"РефСервисДВ_данные_"+stamp+".xlsx");
 }
