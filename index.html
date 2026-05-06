@@ -71,7 +71,7 @@ textarea.fi{min-height:75px;resize:vertical}
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp,writeBatch,getDocs}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,setDoc,onSnapshot,query,orderBy,serverTimestamp,writeBatch}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
 import{getMessaging,getToken,onMessage,isSupported}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js";
 
@@ -83,7 +83,7 @@ var VAPID_KEY="BE3sKHxctz5QO0rHWBKUbjMGO_735ppQdm1XKxoa-B-6craCvseHkaZMecYKYjEoB
 var messaging=null;
 var fcmInitTried=false;
 
-// Накапливаем диагностические шаги, чтобы кнопка "Диагностика push" показала их прямо на телефоне
+// Накапливаем диагностические шаги FCM в этом массиве — они доступны через console.log в DevTools
 var fcmLog=[];
 function fcmAdd(stage,info){
   var ts=new Date().toLocaleTimeString("ru-RU");
@@ -2631,24 +2631,6 @@ function doneTab(ct){
     }
     ct.appendChild(sizeWrap);
 
-    // ── Диагностика push-уведомлений ──
-    secTitle(ct,"🔧 Диагностика push");
-    var diagWrap=h("div",{s:{marginBottom:"14px"}});
-    var diagOut=h("pre",{s:{display:"none",padding:"10px 12px",background:"rgba(0,0,0,.35)",borderRadius:"10px",border:"1px solid rgba(255,255,255,.08)",fontSize:"10px",color:"#cbd5e1",lineHeight:"1.5",whiteSpace:"pre-wrap",wordBreak:"break-all",fontFamily:"'JetBrains Mono',monospace",maxHeight:"360px",overflow:"auto",margin:"8px 0"}});
-    diagWrap.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(167,139,250,.3)",background:"rgba(167,139,250,.08)",color:"#c4b5fd",fontSize:"12px",fontWeight:"600",cursor:"pointer",width:"100%"},onClick:function(){
-      diagOut.style.display="block";
-      diagOut.textContent=showFCMDiagnostic();
-    }},"🔧 Показать диагностику push"));
-    diagWrap.appendChild(diagOut);
-    diagWrap.appendChild(h("button",{s:{padding:"8px",borderRadius:"10px",border:"1px solid rgba(251,146,60,.25)",background:"rgba(251,146,60,.05)",color:"#fb923c",fontSize:"11px",fontWeight:"600",cursor:"pointer",width:"100%",marginTop:"6px"},onClick:function(){
-      forceFCMRetry();
-      setTimeout(function(){
-        diagOut.style.display="block";
-        diagOut.textContent=showFCMDiagnostic();
-      },2000);
-    }},"♻️ Перезапустить FCM (попытка #2)"));
-    ct.appendChild(diagWrap);
-
     // ── Резервное копирование ──
     secTitle(ct,"💾 Резервное копирование");
 
@@ -2698,16 +2680,14 @@ function doneTab(ct){
     });
     bkWrap.appendChild(fi);
 
-    function runImport(mode){
+    function runImport(){
       if(!pendingFile){alert("Сначала выберите файл бэкапа");return}
-      var warnTxt=mode==="replace"
-        ? "ПОЛНАЯ ЗАМЕНА базы!\n\nВСЕ текущие клиенты, задачи и камеры будут УДАЛЕНЫ и заменены данными из бэкапа.\n\nПродолжить?"
-        : "Восстановить данные из бэкапа?\n\nРежим: ДОБАВИТЬ/ОБНОВИТЬ. Существующие записи с теми же id будут обновлены, остальные останутся.";
+      // Только режим merge — replace отключён намеренно для защиты от случайного удаления.
+      var warnTxt="Восстановить данные из бэкапа?\n\nРежим: ДОБАВИТЬ/ОБНОВИТЬ. Существующие записи с теми же id будут обновлены, остальные останутся нетронутыми.";
       if(!confirm(warnTxt))return;
-      if(mode==="replace"&&!confirm("Точно стереть всё и заменить? Это необратимо."))return;
       imStatus.style.display="block";
       imStatus.textContent="Начинаю импорт...";
-      importBackupJSON(pendingFile,mode,function(msg){imStatus.textContent=msg}).then(function(stats){
+      importBackupJSON(pendingFile,"merge",function(msg){imStatus.textContent=msg}).then(function(stats){
         imStatus.innerHTML="";
         imStatus.appendChild(h("div",{s:{color:"#4ade80",fontWeight:"700"}},"✅ Импорт завершён"));
         imStatus.appendChild(h("div",{s:{color:"#94a3b8",marginTop:"4px",fontSize:"11px"}},
@@ -2723,8 +2703,7 @@ function doneTab(ct){
 
     var imRow=h("div",{s:{display:"grid",gridTemplateColumns:"1fr",gap:"6px"}});
     imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(56,189,248,.25)",background:"rgba(56,189,248,.06)",color:"#38bdf8",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){fi.click()}},"📂 Выбрать файл бэкапа"));
-    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(34,197,94,.25)",background:"rgba(34,197,94,.06)",color:"#4ade80",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){runImport("merge")}},"➕ Восстановить (добавить/обновить)"));
-    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(239,68,68,.25)",background:"rgba(239,68,68,.04)",color:"#f87171",fontSize:"11px",fontWeight:"600",cursor:"pointer"},onClick:function(){runImport("replace")}},"🗑 Стереть всё и заменить (опасно)"));
+    imRow.appendChild(h("button",{s:{padding:"10px",borderRadius:"10px",border:"1px solid rgba(34,197,94,.25)",background:"rgba(34,197,94,.06)",color:"#4ade80",fontSize:"12px",fontWeight:"600",cursor:"pointer"},onClick:function(){runImport()}},"➕ Восстановить (добавить/обновить)"));
     bkWrap.appendChild(imRow);
 
     ct.appendChild(bkWrap);
@@ -4141,23 +4120,6 @@ function doImportBackup(data,mode,onStatus){
 
   function chunk(arr,size){var out=[];for(var i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out}
 
-  function eraseCollection(name){
-    onStatus("Очищаю коллекцию "+name+"...");
-    return getDocs(collection(db,name)).then(function(snap){
-      var ids=snap.docs.map(function(d){return d.id});
-      var groups=chunk(ids,400);
-      var p=Promise.resolve();
-      groups.forEach(function(g){
-        p=p.then(function(){
-          var b=writeBatch(db);
-          g.forEach(function(id){b.delete(doc(db,name,id))});
-          return b.commit();
-        });
-      });
-      return p;
-    });
-  }
-
   function writeCollection(name,items,counterKey){
     if(!items||!items.length)return Promise.resolve();
     onStatus("Записываю "+name+" ("+items.length+")...");
@@ -4179,13 +4141,12 @@ function doImportBackup(data,mode,onStatus){
     return p;
   }
 
-  var chain=Promise.resolve();
+  // Режим "replace" отключён намеренно — для защиты от случайной потери данных.
+  // Импорт работает только в режиме merge (добавление/обновление по id).
   if(mode==="replace"){
-    chain=chain
-      .then(function(){return eraseCollection("clients")})
-      .then(function(){return eraseCollection("servicetasks")})
-      .then(function(){return eraseCollection("freezers")});
+    return Promise.reject(new Error("Режим полной замены отключён. Используйте только режим merge."));
   }
+  var chain=Promise.resolve();
   chain=chain
     .then(function(){return writeCollection("clients",data.clients||[],"clients")})
     .then(function(){return writeCollection("servicetasks",data.servicetasks||[],"tasks")})
