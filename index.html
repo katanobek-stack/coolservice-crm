@@ -2942,25 +2942,26 @@ function physForm(md,m){
   );
 }
 
-// ═══ CLIENT FORM (legal) ═══
+// ═══ CLIENT FORM (legal + edit phys) ═══
 function clForm(md,m){
-  var isE=m.t==="editCl";mH(md,isE?"Редактировать компанию":"Новая компания");
-  var nI=h("input",{cls:"fi",placeholder:"Название компании",value:m.d?m.d.name||"":""});
+  var isE=m.t==="editCl";
+  var isPhys=isE&&m.d&&m.d.clientType==="phys";
+  mH(md,isE?(isPhys?"Редактировать клиента":"Редактировать компанию"):"Новая компания");
+  var nI=h("input",{cls:"fi",placeholder:isPhys?"Имя клиента":"Название компании",value:m.d?m.d.name||"":""});
   var pI=h("input",{cls:"fi",type:"tel",placeholder:"Телефон",value:m.d?m.d.phone||"":""});
   var subI=h("input",{cls:"fi",type:"number",placeholder:"0",value:m.d?m.d.subscription||"":"",s:{marginTop:"0"}});
   var subNote=h("div",{s:{fontSize:"11px",color:"#64748b",marginTop:"4px"}},"Если 0 — абонплата не учитывается в доходах");
   var subWrap=h("div",null,subI,subNote);
-  md.append(
-    fg("Компания",nI),
-    fg("Телефон",pI),
-    fg("💰 Абонплата за парк (₽/мес)",subWrap),
-    h("button",{cls:"bp",onClick:function(){
-      var n=nI.value.trim();if(!n)return;
-      var sub=parseFloat(subI.value)||0;
-      if(isE)fbUpd(m.d.id,{name:n,phone:pI.value.trim(),subscription:sub});
-      else fbAdd({name:n,phone:pI.value.trim(),clientType:"legal",subscription:sub});
-      S.mod=null;R()
-    }},isE?"Сохранить":"Добавить компанию"))
+  md.append(fg(isPhys?"Имя":"Компания",nI),fg("Телефон",pI));
+  if(!isPhys)md.appendChild(fg("💰 Абонплата за парк (₽/мес)",subWrap));
+  md.appendChild(h("button",{cls:"bp",onClick:function(){
+    var n=nI.value.trim();if(!n)return;
+    if(isE){
+      if(isPhys)fbUpd(m.d.id,{name:n,phone:pI.value.trim()});
+      else fbUpd(m.d.id,{name:n,phone:pI.value.trim(),subscription:parseFloat(subI.value)||0});
+    }else fbAdd({name:n,phone:pI.value.trim(),clientType:"legal",subscription:parseFloat(subI.value)||0});
+    S.mod=null;R()
+  }},isE?"Сохранить":"Добавить компанию"))
 }
 
 // ═══ VEHICLE FORM ═══
