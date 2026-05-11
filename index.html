@@ -733,7 +733,7 @@ function mainView(){
   setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(sInput.value.length,sInput.value.length)}},0);
   // Nav
   var nav=h("div",{cls:"nb"});
-  var allTabs=[{id:"phys",t:"👤 Физ.лица",mgr:true},{id:"legal",t:"🏢 Юр.лица",mgr:true},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"📑 Отчёты",adm:true}];
+  var allTabs=[{id:"phys",t:"👤 Физ.лица"},{id:"legal",t:"🏢 Юр.лица"},{id:"mytasks",t:"📋 Задачи"},{id:"calendar",t:"📅 Записи"},{id:"freezers",t:"🧊 Камеры",adm:true},{id:"stats",t:"📊 Сводка"},{id:"done",t:"📑 Отчёты",adm:true}];
   var isMgr=canManage();
   var isAdmRole=myRole()==="admin";
   var tabs=allTabs.filter(function(t){return(!t.mgr||isMgr)&&(!t.adm||isAdmRole)});
@@ -766,7 +766,7 @@ function mainView(){
   if(S.tab==="freezers"&&myRole()==="admin"){
     w.appendChild(h("button",{s:{position:"absolute",bottom:"24px",right:"20px",width:"56px",height:"56px",borderRadius:"18px",background:"linear-gradient(135deg,#0891b2,#22d3ee)",color:"#fff",border:"none",cursor:"pointer",fontSize:"24px",boxShadow:"0 6px 24px rgba(6,182,212,.5)",zIndex:"50"},onClick:function(){S.mod={t:"addFreezer"};R()}},"🧊"))
   }
-  if(S.tab==="stats"){
+  if(S.tab==="stats"&&canManage()){
     w.appendChild(h("button",{s:{position:"absolute",bottom:"24px",right:"20px",width:"56px",height:"56px",borderRadius:"18px",background:"linear-gradient(135deg,#d97706,#f59e0b)",color:"#fff",border:"none",cursor:"pointer",fontSize:"22px",boxShadow:"0 6px 24px rgba(245,158,11,.45)",zIndex:"50"},onClick:function(){S.mod={t:"addSvcTask"};R()}},"📝"))
   }
   if(S.tab==="mytasks"&&canManage()){
@@ -1716,7 +1716,7 @@ function statsTab(ct){
       stExp=!stExp;stCont.style.display=stExp?"block":"none";stArrow.style.transform=stExp?"rotate(90deg)":"rotate(0deg)";
     }});
     stHdr.append(stArrow,h("span",{s:{fontSize:"13px",fontWeight:"600",color:"#818cf8"}},"📝 Задачи сервиса ("+activeTasks.length+")"));
-    if(canManage()||myRole()==="mechanic")stHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"task"};R()}},"+"));
+    if(canManage())stHdr.appendChild(h("button",{s:{marginLeft:"auto",padding:"3px 8px",borderRadius:"6px",border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:"11px",cursor:"pointer"},onClick:function(e){e.stopPropagation();S.mod={t:"addSvcTask",taskType:"task"};R()}},"+"));
     ct.appendChild(stHdr);
     activeTasks.forEach(function(t){stCont.appendChild(renderSvcTaskCard(t,true))});
     ct.appendChild(stCont);
@@ -2570,7 +2570,7 @@ function doneTab(ct){
   }
 
   // ── P&L ──
-  renderPnL(ct,allR);
+  if(myRole()==="admin")renderPnL(ct,allR);
 
   // ═══ MIGRATE BASE64 PHOTOS TO STORAGE ═══
   if(myRole()==="admin"){
