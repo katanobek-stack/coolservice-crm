@@ -308,7 +308,7 @@ function makeMicBtn(textarea){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR)return null;
   var btn=h("button",{s:{padding:"8px 14px",borderRadius:"8px",border:"1px solid rgba(239,68,68,.25)",background:"rgba(239,68,68,.05)",color:"#f87171",fontSize:"12px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px",marginTop:"6px",transition:"all .2s"}});
-  btn.textContent="Голос";
+  btn.innerHTML=IC.mic.replace("1em","12px")+" Голос";
   var recording=false;
   var recognition=null;
   btn.addEventListener("click",function(){
@@ -340,7 +340,7 @@ function makeMicBtn(textarea){
     recognition.start();
     function stopRec(){
       recording=false;
-      btn.textContent="Голос";
+      btn.innerHTML=IC.mic.replace("1em","12px")+" Голос";
       btn.style.borderColor="rgba(239,68,68,.25)";
       btn.style.background="rgba(239,68,68,.05)";
       btn.style.animation="none";
@@ -475,37 +475,83 @@ function makeStaffPicker(selectedIds){
 // ═══ DOM ═══
 // ═══ SVG ICON LIBRARY ═══
 var IC={
-  wrench:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
-  check:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-  note:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
-  project:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>',
-  snow:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M20 12H4"/><path d="m6 8 6-4 6 4"/><path d="m6 16 6 4 6-4"/></svg>',
-  frost:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>',
-  thermo:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z"/></svg>',
-  user:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>',
-  building:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>',
-  calendar:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-  chart:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>',
-  money:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
-  trophy:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 22V2h4v20"/><rect x="6" y="2" width="12" height="7" rx="1"/></svg>',
-  camera:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>',
-  image:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
-  mic:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>',
-  clock:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-  ban:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
-  search:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-  bolt:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
-  box:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
-  worker:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
-  up:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
-  down:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>',
-  factory:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20V8l5 4V8l5 4V4l5 4V4l5 4v12H2z"/></svg>',
-  list:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
-  crown:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-9-4 9-6-7z"/><path d="M5 16h14v4H5z"/></svg>',
-  clip:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/></svg>',
-  gauge:'<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>'
+  // ❄ Снежинка — 6 лучей с ответвлениями, настоящий кристалл
+  snowflake:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/><line x1="12" y1="2" x2="9" y2="5"/><line x1="12" y1="2" x2="15" y2="5"/><line x1="12" y1="22" x2="9" y2="19"/><line x1="12" y1="22" x2="15" y2="19"/><line x1="2" y1="12" x2="5" y2="9"/><line x1="2" y1="12" x2="5" y2="15"/><line x1="22" y1="12" x2="19" y2="9"/><line x1="22" y1="12" x2="19" y2="15"/></svg>',
+  // 🔧 Гаечный ключ
+  wrench:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
+  // ✅ Галочка в круге
+  checkCircle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+  // ✓ Галочка простая
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  // 📝 Блокнот с ручкой
+  notepad:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>',
+  // 📐 Проект/чертёж
+  blueprint:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/></svg>',
+  // 👤 Пользователь
+  user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>',
+  // 👥 Пользователи
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+  // 🏢 Здание
+  building:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>',
+  // 📅 Календарь
+  calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>',
+  // 📊 График/статистика
+  chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>',
+  // 💰 Деньги
+  money:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="6" x2="12" y2="18"/><path d="M15.5 9.5a3 3 0 00-3-2.5H11a3 3 0 000 6h2a3 3 0 010 6h-1.5a3 3 0 01-3-2.5"/></svg>',
+  // 🏆 Трофей
+  trophy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/><rect x="6" y="2" width="12" height="12" rx="2"/></svg>',
+  // 📸 Камера
+  camera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+  // 🖼 Галерея
+  image:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+  // 🎙 Микрофон
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+  // ⏱ Часы/таймер
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  // 🚫 Запрет
+  ban:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+  // 🔍 Поиск
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  // ⚡ Молния
+  bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  // 📦 Коробка
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  // 🏭 Здание/гараж
+  garage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M3 21h18"/><rect x="7" y="13" width="10" height="8" rx="1"/><path d="M7 16h10"/></svg>',
+  // ↗ Выход
+  logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  // 📋 Клипборд
+  clipboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+  // 📈 Стрелка вверх
+  trendUp:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+  // 📉 Стрелка вниз
+  trendDown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>',
+  // 🏠 Дом
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  // ❄ Фреон/Термометр
+  thermo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z"/></svg>',
+  // Корона (админ)
+  crown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-9-4 9-6-7z"/><path d="M5 16h14v4H5z"/></svg>',
+  // Список
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  // Рефрижератор (грузовик)
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
+  // Кондиционер (ветер)
+  wind:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1111 8H2"/><path d="M12.59 19.41A2 2 0 1014 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1119.5 12H2"/></svg>',
+  // Шестерёнка
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
+  // Щит (роли)
+  shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  // Стрелка (тренд)
+  arrowUp:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+  arrowDown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
+  // Скачать
+  download:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  // Точка (статус)
+  dot:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>'
 };
-function ico(name,size,color){var sp=document.createElement("span");sp.style.cssText="display:inline-flex;align-items:center;justify-content:center;width:"+(size||"1em")+";height:"+(size||"1em")+";vertical-align:middle;flex-shrink:0;"+(color?"color:"+color+";":"");sp.innerHTML=IC[name]||"";return sp}
+function ico(name,size,color){var sp=document.createElement("span");sp.style.cssText="display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"+(color?"color:"+color+";":"");var svg=(IC[name]||"").replace(/viewBox/,'width="'+(size||"1em")+'" height="'+(size||"1em")+'" viewBox');sp.innerHTML=svg;return sp}
 function csReadableStyle(st){
   var o=Object.assign({},st||{});
   function boost(v){
@@ -588,8 +634,8 @@ function addSwipe(el,onSwipeRight){
 }
 
 function photoGrid(photos,editable,onRemove){var pg=h("div",{cls:"pg"});photos.forEach(function(p){var pw=h("div",{s:{position:"relative"}});var src=p.url||p.data||p;pw.appendChild(h("img",{cls:"pt",src:src,onClick:function(){S.iv=src;R()}}));if(editable){pw.appendChild(h("button",{s:{position:"absolute",top:"3px",right:"3px",width:"20px",height:"20px",borderRadius:"50%",background:"rgba(15,23,42,.70)",border:"none",color:"#f87171",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){onRemove(p.id)}},"×"))}pg.appendChild(pw)});return pg}
-function addPhotoBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:onClick},"Галерея")}
-function addCameraBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(34,197,94,.3)",background:"rgba(34,197,94,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#4ade80",fontSize:"11px",fontWeight:"500"},onClick:onClick},"Камера")}
+function addPhotoBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(56,189,248,.3)",background:"rgba(56,189,248,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#38bdf8",fontSize:"11px",fontWeight:"500"},onClick:onClick},ico("image","13px")," Галерея")}
+function addCameraBtn(onClick){return h("button",{s:{width:"100%",aspectRatio:"1",borderRadius:"10px",border:"2px dashed rgba(34,197,94,.3)",background:"rgba(34,197,94,.05)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px",cursor:"pointer",color:"#4ade80",fontSize:"11px",fontWeight:"500"},onClick:onClick},ico("camera","13px")," Камера")}
 
 function makePhotoUploader(onPhotosAdded){
   var fi=h("input",{type:"file",accept:"image/*",multiple:true,s:{display:"none"}});
@@ -616,8 +662,8 @@ function makeCameraInput(onPhotosAdded){
 function inlineAddPhotoBtn(label,onPhotosAdded){
   var fi=makePhotoUploader(onPhotosAdded);
   var cam=makeCameraInput(onPhotosAdded);
-  var btn=h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){fi.click()}},(label||"Галерея"));
-  var camBtn=h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(34,197,94,.2)",background:"rgba(34,197,94,.05)",color:"#4ade80",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){cam.click()}},"Камера");
+  var btn=h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(56,189,248,.2)",background:"rgba(56,189,248,.05)",color:"#38bdf8",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){fi.click()}},ico("image","12px")," "+(label||"Галерея"));
+  var camBtn=h("button",{s:{padding:"6px 10px",borderRadius:"8px",border:"1px solid rgba(34,197,94,.2)",background:"rgba(34,197,94,.05)",color:"#4ade80",fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:"4px"},onClick:function(){cam.click()}},ico("camera","12px")," Камера");
   var wrap=h("span",{s:{display:"inline-flex",gap:"4px"}},camBtn,btn,fi,cam);
   return wrap;
 }
@@ -836,7 +882,7 @@ function _doRender(){
 function loginView(){
   var w=h("div",{s:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"32px",background:"linear-gradient(180deg,#F7FAFF 0%,#F4F7FB 100%)"}});
   var logo=h("div",{s:{width:"72px",height:"72px",borderRadius:"22px",background:"linear-gradient(135deg,#0284c7,#38bdf8)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"20px",boxShadow:"0 0 50px rgba(14,165,233,.4),0 0 0 1px rgba(56,189,248,.3)"}});
-  logo.innerHTML='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M20 12H4"/><path d="m6 8 6-4 6 4"/><path d="m6 16 6 4 6-4"/><path d="m16 6 4 6-4 6"/><path d="m8 6-4 6 4 6"/></svg>';
+  logo.innerHTML='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/><line x1="12" y1="2" x2="9" y2="5"/><line x1="12" y1="2" x2="15" y2="5"/><line x1="12" y1="22" x2="9" y2="19"/><line x1="12" y1="22" x2="15" y2="19"/><line x1="2" y1="12" x2="5" y2="9"/><line x1="2" y1="12" x2="5" y2="15"/><line x1="22" y1="12" x2="19" y2="9"/><line x1="22" y1="12" x2="19" y2="15"/><line x1="4.93" y1="4.93" x2="7" y2="3.5"/><line x1="4.93" y1="4.93" x2="3.5" y2="7"/><line x1="19.07" y1="19.07" x2="17" y2="20.5"/><line x1="19.07" y1="19.07" x2="20.5" y2="17"/><line x1="19.07" y1="4.93" x2="20.5" y2="7"/><line x1="19.07" y1="4.93" x2="17" y2="3.5"/><line x1="4.93" y1="19.07" x2="3.5" y2="17"/><line x1="4.93" y1="19.07" x2="7" y2="20.5"/></svg>';
   w.append(logo,
     h("div",{s:{fontSize:"26px",fontWeight:"800",background:"linear-gradient(90deg,#111827,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:"4px",letterSpacing:"-.02em"}},"CoolService CRM"),
     h("div",{s:{fontSize:"12px",color:"#98A2B3",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"36px"}},"\u0420\u0435\u0444\u0421\u0435\u0440\u0432\u0438\u0441\u0414\u0412"));
@@ -928,7 +974,7 @@ function csMainHeader(w,sInput){
   var hdr=h("div",{s:{padding:"16px 16px 10px",background:"#FFFFFF",borderBottom:"1px solid #E2E8F0",boxShadow:"0 4px 18px rgba(15,23,42,.04)",flexShrink:"0"}});
   var top=h("div",{s:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}});
   var logoIcon=h("div",{s:{width:"38px",height:"38px",borderRadius:"50%",background:"linear-gradient(135deg,#185FA5,#2D7CC4)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0",boxShadow:"0 2px 8px rgba(24,95,165,.25)"}});
-  logoIcon.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M20 12H4"/><path d="m6 8 6-4 6 4"/><path d="m6 16 6 4 6-4"/><path d="m16 6 4 6-4 6"/><path d="m8 6-4 6 4 6"/></svg>';
+  logoIcon.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/><line x1="12" y1="2" x2="9" y2="5"/><line x1="12" y1="2" x2="15" y2="5"/><line x1="12" y1="22" x2="9" y2="19"/><line x1="12" y1="22" x2="15" y2="19"/><line x1="2" y1="12" x2="5" y2="9"/><line x1="2" y1="12" x2="5" y2="15"/><line x1="22" y1="12" x2="19" y2="9"/><line x1="22" y1="12" x2="19" y2="15"/></svg>';
   top.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"10px",minWidth:"0",flex:"1"}},logoIcon,h("div",{s:{minWidth:"0"}},h("div",{cls:"cs-shell-title",s:{fontSize:"19px",fontWeight:"800",lineHeight:"1.15",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t[0]),h("div",{s:{fontSize:"14px",color:"#667085",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},S.tab==="stats"?csTodayLabel():t[1]))));
   var btns=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",flexShrink:"0"}});
   var searchBtn=h("button",{cls:"cs-top-icon-btn",s:{width:"42px",height:"42px",borderRadius:"50%",border:"1px solid #E2E8F0",background:S.q?"#185FA5":"#fff",color:S.q?"#fff":"#185FA5",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){S.mod={t:"globalSearch"};R()}});
@@ -1556,15 +1602,16 @@ function statsTab(ct){
   // ── KPI GRID ──
   var grid=h("div",{cls:"stat-grid"});
   var kpis=[
-    {v:totalInWork,l:"В работе",cls:""},
-    {v:doneR,l:"Выполнено",cls:"green"},
-    {v:activeTasksCount,l:"Задачи",cls:"purple"},
-    {v:activeProjectsCount,l:"Проекты",cls:"orange"}
+    {v:totalInWork,l:"В работе",cls:"",ic:"wrench"},
+    {v:doneR,l:"Выполнено",cls:"green",ic:"checkCircle"},
+    {v:activeTasksCount,l:"Задачи",cls:"purple",ic:"notepad"},
+    {v:activeProjectsCount,l:"Проекты",cls:"orange",ic:"blueprint"}
   ];
   kpis.forEach(function(k){
     var sc=h("div",{cls:"stat-card"+(k.cls?" "+k.cls:"")});
     sc.appendChild(h("div",{cls:"stat-num"},""+k.v));
-    sc.appendChild(h("div",{cls:"stat-lbl"},k.l));
+    var lbl=h("div",{cls:"stat-lbl"});lbl.appendChild(ico(k.ic,"14px"));lbl.appendChild(document.createTextNode(" "+k.l));
+    sc.appendChild(lbl);
     grid.appendChild(sc);
   });
   ct.appendChild(grid);
@@ -1574,7 +1621,7 @@ function statsTab(ct){
     var chartData=makeRevenueChart(allR,statsRentPerMonth,statsSubPerMonth);
     var cw=h("div",{cls:"chart-wrap"});
     var chHdr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}});
-    chHdr.appendChild(h("div",{cls:"chart-title"},"Общая выручка по месяцам (₽)"));
+    var ct1=h("div",{cls:"chart-title"});ct1.appendChild(ico("chart","14px"));ct1.appendChild(document.createTextNode(" Общая выручка по месяцам (₽)"));chHdr.appendChild(ct1);
     // trend arrow
     if(prevMRev>0||curMRev>0){
       var diff=curMRev-prevMRev;var pct=prevMRev>0?Math.round(diff/prevMRev*100):100;
@@ -1654,7 +1701,7 @@ function statsTab(ct){
       // Render
       var ow=h("div",{cls:"chart-wrap"});
       var oHdr=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}});
-      oHdr.appendChild(h("div",{cls:"chart-title"},"Заявки по месяцам"));
+      var ct2=h("div",{cls:"chart-title"});ct2.appendChild(ico("clipboard","14px"));ct2.appendChild(document.createTextNode(" Заявки по месяцам"));oHdr.appendChild(ct2);
       // Trend vs previous month
       var curOM=omData[omData.length-1];
       var prevOM=omData[omData.length-2];
@@ -1699,7 +1746,7 @@ function statsTab(ct){
     var topClients=Object.values(clientRev).sort(function(a,b){return b.rev-a.rev}).slice(0,5);
     if(topClients.length){
       var topWrap=h("div",{cls:"chart-wrap"});
-      topWrap.appendChild(h("div",{cls:"chart-title"},"Топ клиентов по выручке"));
+      var ct3=h("div",{cls:"chart-title"});ct3.appendChild(ico("trophy","14px"));ct3.appendChild(document.createTextNode(" Топ клиентов по выручке"));topWrap.appendChild(ct3);
       var maxRev2=topClients[0].rev||1;
       topClients.forEach(function(cl,i){
         var row=h("div",{s:{marginBottom:"8px"}});
