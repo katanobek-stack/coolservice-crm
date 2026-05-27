@@ -104,6 +104,27 @@ html,body{background:var(--cs-bg)!important;color:var(--cs-text)!important;font-
 ::-webkit-scrollbar-thumb{background:#CBD5E1!important}.plate,span[style*='JetBrains Mono']{background:#F2F4F7!important;color:#344054!important;border:1px solid #E4E7EC!important;}
 button{touch-action:manipulation}.cs-shell-title{color:var(--cs-text)}
 @media (min-width:700px){#app{height:94vh;margin-top:3vh;border-radius:32px;overflow:hidden}.nb{border-radius:0 0 32px 32px}.ct{border-radius:0 0 32px 32px}}
+
+
+/* ═══ READABILITY BOOST — крупнее текст для сотрудников ═══ */
+html,body{font-size:18px!important;line-height:1.42!important;}
+.ct{padding:16px 15px 112px!important;}
+.fi{font-size:18px!important;min-height:52px!important;padding:14px 16px!important;}
+textarea.fi{min-height:96px!important;}
+.bp{font-size:18px!important;min-height:54px!important;}
+.rc{padding:16px!important;margin-bottom:13px!important;}
+.ti{padding:14px!important;margin-top:10px!important;}
+.card{padding:16px 17px!important;margin-bottom:13px!important;}
+.stat-card{padding:16px!important;min-height:104px!important;}
+.stat-num{font-size:29px!important;}
+.stat-lbl{font-size:14px!important;}
+.tb{font-size:15px!important;min-height:42px!important;padding:11px 12px!important;}
+.nb button{height:62px!important;min-width:72px!important;font-size:12px!important;}
+.md{font-size:17px!important;padding:22px 18px 38px!important;}
+.plate,span[style*='JetBrains Mono']{font-size:16px!important;}
+.cs-search-active-chip{display:inline-flex;align-items:center;gap:7px;margin:0 16px 10px;padding:7px 11px;border-radius:999px;background:#E6F1FB;color:#185FA5;font-size:14px;font-weight:700;border:1px solid rgba(24,95,165,.12);}
+.cs-top-icon-btn{width:42px!important;height:42px!important;font-size:19px!important;border-radius:50%!important;}
+
 </style>
 </head>
 <body>
@@ -426,7 +447,20 @@ function makeStaffPicker(selectedIds){
 }
 
 // ═══ DOM ═══
-function h(tag,attrs){var el=document.createElement(tag);var children=Array.prototype.slice.call(arguments,2);if(attrs){Object.keys(attrs).forEach(function(k){var v=attrs[k];if(k==="cls")el.className=v;else if(k==="s"&&typeof v==="object")Object.assign(el.style,v);else if(k==="value")el.value=v;else if(k.substring(0,2)==="on")el.addEventListener(k.substring(2).toLowerCase(),v);else el.setAttribute(k,v)})}children.forEach(function(c){if(Array.isArray(c))c.forEach(add);else add(c)});function add(c){if(c!=null&&c!==false)el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c)}return el}
+function csReadableStyle(st){
+  var o=Object.assign({},st||{});
+  function boost(v){
+    if(typeof v!=="string")return v;
+    var m=v.match(/^(\d+(?:\.\d+)?)px$/);if(!m)return v;
+    var n=parseFloat(m[1]);
+    if(n<=10)n=12;else if(n<=11)n=13;else if(n<=12)n=14;else if(n<=13)n=15;else if(n<=14)n=16;else if(n<=15)n=17;else if(n<=16)n=18;else if(n<=18)n=n+1;else n=n;
+    return Math.round(n)+"px";
+  }
+  if(o.fontSize)o.fontSize=boost(o.fontSize);
+  if(o.lineHeight&&typeof o.lineHeight==="string"&&o.lineHeight.match(/^\d+(?:\.\d+)?px$/))o.lineHeight=boost(o.lineHeight);
+  return o;
+}
+function h(tag,attrs){var el=document.createElement(tag);var children=Array.prototype.slice.call(arguments,2);if(attrs){Object.keys(attrs).forEach(function(k){var v=attrs[k];if(k==="cls")el.className=v;else if(k==="s"&&typeof v==="object")Object.assign(el.style,csReadableStyle(v));else if(k==="value")el.value=v;else if(k.substring(0,2)==="on")el.addEventListener(k.substring(2).toLowerCase(),v);else el.setAttribute(k,v)})}children.forEach(function(c){if(Array.isArray(c))c.forEach(add);else add(c)});function add(c){if(c!=null&&c!==false)el.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c)}return el}
 function badge(text,rgb,extra){var st={fontSize:"11px",fontWeight:"700",padding:"3px 8px",borderRadius:"8px",whiteSpace:"nowrap",display:"inline-block",background:"rgba("+rgb+",.13)",color:"rgb("+rgb+")",border:"1px solid rgba("+rgb+",.25)"};if(extra)Object.assign(st,extra);return h("span",{s:st},text)}
 function fg(label){var els=Array.prototype.slice.call(arguments,1);var g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#667085",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label));els.forEach(function(e){if(e)g.appendChild(e)});return g}
 function mH(md,title){md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#111827",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},h("span",null,title),h("button",{s:{background:"none",border:"none",color:"#8A96A8",fontSize:"24px",cursor:"pointer"},onClick:function(){S.mod=null;R()}},"×")))}
@@ -787,7 +821,7 @@ function csQuickActions(ct){
   var actions=[
     {i:"＋",t:"Заявка",go:function(){S.mod={t:S.tab==="legal"?"addCl":"addPhys"};R()}},
     {i:"📅",t:"Запись",go:function(){S.tab="calendar";R()}},
-    {i:"🔎",t:"Поиск",go:function(){var el=document.querySelector('[data-cs-search]');if(el)el.focus()}}
+    {i:"🔎",t:"Поиск",go:function(){S.mod={t:"globalSearch"};R()}}
   ];
   actions.forEach(function(a){row.appendChild(h("button",{s:{border:"1px solid #E2E8F0",background:"#FFFFFF",borderRadius:"18px",minHeight:"74px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",boxShadow:"0 3px 14px rgba(15,23,42,.05)",color:"#172033",fontSize:"12px",fontWeight:"700",cursor:"pointer"},onClick:a.go},h("span",{s:{fontSize:"23px",color:"#185FA5"}},a.i),h("span",null,a.t)))});
   ct.appendChild(row)
@@ -830,17 +864,21 @@ function csBaySchedulePreview(ct){
 }
 function csMainHeader(w,sInput){
   var me=S.st.find(function(x){return x.id===S.u.uid});var t=csHeaderTitle();
-  var hdr=h("div",{s:{padding:"16px 16px 12px",background:"#FFFFFF",borderBottom:"1px solid #E2E8F0",boxShadow:"0 4px 18px rgba(15,23,42,.04)",flexShrink:"0"}});
-  var top=h("div",{s:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"11px"}});
-  top.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"10px",minWidth:"0"}},h("div",{s:{width:"36px",height:"36px",borderRadius:"50%",background:"#E6F1FB",display:"flex",alignItems:"center",justifyContent:"center",color:"#185FA5",fontWeight:"800",fontSize:"13px",flexShrink:"0"}},"CS"),h("div",{s:{minWidth:"0"}},h("div",{cls:"cs-shell-title",s:{fontSize:"17px",fontWeight:"800",lineHeight:"1.15",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t[0]),h("div",{s:{fontSize:"12px",color:"#667085",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},S.tab==="stats"?csTodayLabel():t[1]))));
-  top.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"8px"}},h("button",{s:{width:"36px",height:"36px",borderRadius:"50%",border:"1px solid #E2E8F0",background:"#fff",color:"#667085",fontSize:"16px",cursor:"pointer"},onClick:function(){playNotifSound&&playNotifSound()}},"🔔"),h("button",{s:{width:"36px",height:"36px",borderRadius:"50%",border:"1px solid #E2E8F0",background:"#fff",color:"#667085",fontSize:"16px",cursor:"pointer"},onClick:function(){signOut(auth)}},"↗")));
+  var hdr=h("div",{s:{padding:"16px 16px 10px",background:"#FFFFFF",borderBottom:"1px solid #E2E8F0",boxShadow:"0 4px 18px rgba(15,23,42,.04)",flexShrink:"0"}});
+  var top=h("div",{s:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}});
+  top.appendChild(h("div",{s:{display:"flex",alignItems:"center",gap:"10px",minWidth:"0",flex:"1"}},h("div",{s:{width:"38px",height:"38px",borderRadius:"50%",background:"#E6F1FB",display:"flex",alignItems:"center",justifyContent:"center",color:"#185FA5",fontWeight:"800",fontSize:"14px",flexShrink:"0"}},"CS"),h("div",{s:{minWidth:"0"}},h("div",{cls:"cs-shell-title",s:{fontSize:"19px",fontWeight:"800",lineHeight:"1.15",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t[0]),h("div",{s:{fontSize:"14px",color:"#667085",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},S.tab==="stats"?csTodayLabel():t[1]))));
+  var btns=h("div",{s:{display:"flex",alignItems:"center",gap:"8px",flexShrink:"0"}});
+  btns.appendChild(h("button",{cls:"cs-top-icon-btn",s:{width:"42px",height:"42px",borderRadius:"50%",border:"1px solid #E2E8F0",background:S.q?"#185FA5":"#fff",color:S.q?"#fff":"#185FA5",fontSize:"18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){S.mod={t:"globalSearch"};R()}},"🔎"));
+  btns.appendChild(h("button",{cls:"cs-top-icon-btn",s:{width:"42px",height:"42px",borderRadius:"50%",border:"1px solid #E2E8F0",background:"#fff",color:"#667085",fontSize:"18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){playNotifSound&&playNotifSound()}},"🔔"));
+  btns.appendChild(h("button",{cls:"cs-top-icon-btn",s:{width:"42px",height:"42px",borderRadius:"50%",border:"1px solid #E2E8F0",background:"#fff",color:"#667085",fontSize:"18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"},onClick:function(){signOut(auth)}},"↗"));
+  top.appendChild(btns);
   hdr.appendChild(top);
-  var sb=h("div",{s:{display:"flex",alignItems:"center",gap:"9px",background:"#F7F9FC",borderRadius:"16px",padding:"0 12px",border:"1px solid #E2E8F0"}});
-  sb.appendChild(h("span",{s:{color:"#98A2B3",fontSize:"16px"}},"🔎"));
-  sInput.setAttribute("data-cs-search","1");sInput.style.border="none";sInput.style.boxShadow="none";sInput.style.background="transparent";sInput.style.padding="0";sInput.style.minHeight="42px";sInput.style.fontSize="15px";
-  sb.appendChild(sInput);
-  if(S.q)sb.appendChild(h("button",{s:{background:"none",border:"none",color:"#98A2B3",fontSize:"18px",cursor:"pointer"},onClick:function(){S.q="";sInput.value="";var ctEl=w.querySelector(".ct");if(ctEl){ctEl.innerHTML="";renderTab(ctEl)}}},"×"));
-  hdr.appendChild(sb);return hdr
+  if(S.q){
+    var chip=h("div",{cls:"cs-search-active-chip"},"🔎 "+S.q,h("button",{s:{border:"none",background:"transparent",color:"#185FA5",fontSize:"16px",fontWeight:"800",cursor:"pointer",padding:"0 2px"},onClick:function(){S.q="";R()}},"×"));
+    hdr.appendChild(chip);
+  }
+  sInput.setAttribute("data-cs-search","1");sInput.style.position="absolute";sInput.style.opacity="0";sInput.style.pointerEvents="none";sInput.style.width="1px";sInput.style.height="1px";
+  return hdr
 }
 function mainView(){
   var w=h("div",{s:{display:"flex",flexDirection:"column",height:"100%",position:"relative",background:"#F4F7FB"}});
@@ -858,7 +896,6 @@ function mainView(){
   if(S.tab==="freezers"&&myRole()==="admin")fab("▣",function(){S.mod={t:"addFreezer"};R()},"#0891B2");
   if(S.tab==="stats"&&canManage())fab("＋",function(){S.mod={t:"addSvcTask"};R()});
   if(S.tab==="mytasks"&&canManage())fab("🔧",function(){S.mod={t:"quickRepair"};R()});
-  setTimeout(function(){if(S.q){sInput.focus();sInput.setSelectionRange(S.q.length,S.q.length)}},0);
   return w
 }
 
@@ -2902,8 +2939,21 @@ function detailView(){
 // ═══ MODALS ═══
 function modalView(){
   var m=S.mod;var ov=h("div",{cls:"ov",onClick:function(){S.mod=null;R()}});var md=h("div",{cls:"md",onClick:function(e){e.stopPropagation()}});
-  var map={addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm,addSubTask:subTaskForm,addFreezer:freezerForm,editFreezer:freezerForm,editFinance:financeForm,startRent:startRentForm,quickRepair:quickRepairForm};
+  var map={globalSearch:globalSearchForm,addPhys:physForm,addCl:clForm,editCl:clForm,addV:vForm,editV:vForm,addR:rForm,editR:rForm,addRepairTask:repairTaskForm,addA:aForm,editSt:stForm,addSvcTask:svcTaskForm,addSubTask:subTaskForm,addFreezer:freezerForm,editFreezer:freezerForm,editFinance:financeForm,startRent:startRentForm,quickRepair:quickRepairForm};
   var fn=map[m.t];if(fn)fn(md,m);ov.appendChild(md);return ov
+}
+
+
+function globalSearchForm(md,m){
+  mH(md,"Поиск");
+  var qI=h("input",{cls:"fi",placeholder:"Имя, телефон, госномер или задача",value:S.q||""});
+  var hint=h("div",{s:{fontSize:"14px",color:"#667085",lineHeight:"1.45",margin:"8px 0 14px"}},"Введите запрос — список клиентов, заявок и ремонтов отфильтруется на текущей вкладке.");
+  var row=h("div",{s:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}},
+    h("button",{cls:"bp",s:{background:"#185FA5"},onClick:function(){S.q=qI.value.trim();S.mod=null;R()}},"Найти"),
+    h("button",{s:{border:"1px solid #E2E8F0",background:"#FFFFFF",borderRadius:"15px",fontSize:"17px",fontWeight:"700",color:"#667085",cursor:"pointer"},onClick:function(){S.q="";S.mod=null;R()}},"Сбросить")
+  );
+  md.append(fg("🔎 Быстрый поиск",qI),hint,row);
+  setTimeout(function(){qI.focus();qI.setSelectionRange(qI.value.length,qI.value.length)},50);
 }
 
 // ═══ PHYS PERSON QUICK FORM ═══
