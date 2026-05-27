@@ -431,6 +431,31 @@ function badge(text,rgb,extra){var st={fontSize:"11px",fontWeight:"700",padding:
 function fg(label){var els=Array.prototype.slice.call(arguments,1);var g=h("div",{s:{marginBottom:"14px"}},h("label",{s:{display:"block",fontSize:"12px",fontWeight:"600",color:"#667085",marginBottom:"6px",textTransform:"uppercase",letterSpacing:".05em"}},label));els.forEach(function(e){if(e)g.appendChild(e)});return g}
 function mH(md,title){md.appendChild(h("div",{s:{fontSize:"18px",fontWeight:"700",color:"#111827",marginBottom:"16px",display:"flex",justifyContent:"space-between"}},h("span",null,title),h("button",{s:{background:"none",border:"none",color:"#8A96A8",fontSize:"24px",cursor:"pointer"},onClick:function(){S.mod=null;R()}},"×")))}
 function plate(text){return h("span",{s:{display:"inline-flex",background:"rgba(15,23,42,.06)",borderRadius:"6px",padding:"3px 8px",fontSize:"13px",fontWeight:"600",color:"#344054",fontFamily:"'JetBrains Mono',monospace"}},text)}
+
+function parseKg(v){
+  if(v===undefined||v===null||v==="")return 0;
+  var n=parseFloat(String(v).replace(",","."));
+  return isNaN(n)?0:n;
+}
+function repairFreonKg(r){
+  var kg=parseKg(r&&r.freonAmount);
+  if(kg>0)return kg;
+  var total=0;
+  ((r&&r.tasks)||[]).forEach(function(t){
+    var tk=parseKg(t.freonKg);
+    if(tk>0&&(t.freonTask||((t.description||"").toLowerCase().indexOf("фреон")>=0)))total+=tk;
+  });
+  return total;
+}
+function fmtKg(kg){
+  if(!kg)return "";
+  return (Math.round(kg*10)%10===0?String(Math.round(kg)):kg.toFixed(1)).replace(".",",");
+}
+function repairFreonLabel(r){
+  var kg=repairFreonKg(r);
+  if(!kg)return "";
+  return "🧊 "+fmtKg(kg)+" кг"+(r&&r.freonType?" · "+r.freonType:"");
+}
 // Cached count of "мои активные задачи" — пересчёт только когда массивы реально менялись (по ссылке)
 var _myActiveCache={cl:null,tasks:null,uid:null,count:0};
 function getMyActiveCount(){
@@ -1935,9 +1960,11 @@ function statsTab(ct){
         crd.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"600",color:"#344054"}},g.cn+" ("+g.items.length+" ремонтов)"));
         g.items.forEach(function(r){
           var s2=getS(r.serviceType);var os2=rSt(r);
-          var rr=h("div",{s:{display:"flex",gap:"4px",alignItems:"center",marginTop:"3px",fontSize:"11px"}});
+          var rr=h("div",{s:{display:"flex",gap:"4px",alignItems:"center",marginTop:"3px",fontSize:"11px",flexWrap:"wrap"}});
           rr.append(h("span",{s:{color:"#8A96A8"}},fD(r.date)),badge(s2.e,s2.c),h("span",{s:{color:os2==="done"?"#4ade80":os2==="cancelled"?"#8A96A8":"#fb923c"}},os2==="done"?"✅":os2==="cancelled"?"🚫":"🔧"));
-          if(r.cost&&myRole()==="admin")rr.appendChild(h("span",{s:{color:"#4ade80",marginLeft:"auto"}},r.cost+"₽"));
+          var frLbl=repairFreonLabel(r);
+          if(frLbl)rr.appendChild(h("span",{s:{color:"#0891b2",fontWeight:"700",background:"rgba(6,182,212,.08)",border:"1px solid rgba(6,182,212,.15)",borderRadius:"999px",padding:"2px 6px",whiteSpace:"nowrap"}},frLbl));
+          if(r.cost&&myRole()==="admin")rr.appendChild(h("span",{s:{color:"#4ade80",marginLeft:"auto",fontWeight:"700",whiteSpace:"nowrap"}},r.cost+"₽"));
           crd.appendChild(rr);
         });
         content2.appendChild(crd);
