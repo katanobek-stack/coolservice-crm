@@ -913,13 +913,22 @@ function mainView(){
   w.appendChild(csMainHeader(w,sInput));
   var ct=h("div",{cls:"ct"});renderTab(ct);w.appendChild(ct);
   var nav=h("div",{cls:"nb"});
-  var allTabs=[{id:"stats",i:"▦",t:"Сводка"},{id:"mytasks",i:"≡",t:"Заявки"},{id:"calendar",i:"◷",t:"Календарь"},{id:"phys",i:"👤",t:"Клиенты"},{id:"legal",i:"🏢",t:"Компании"},{id:"freezers",i:"▣",t:"Склад",adm:true},{id:"done",i:"↗",t:"Отчёты",adm:true}];
+  var tabIcons={
+    stats:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    mytasks:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="M9 14l2 2 4-4"/></svg>',
+    calendar:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>',
+    phys:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>',
+    legal:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M16 7V5a4 4 0 00-8 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><circle cx="12" cy="12" r=".5" fill="currentColor"/></svg>',
+    freezers:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="4" y1="12" x2="20" y2="12"/><path d="M10 3v18M14 3v18"/></svg>',
+    done:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>'
+  };
+  var allTabs=[{id:"stats",t:"Сводка"},{id:"mytasks",t:"Заявки"},{id:"calendar",t:"Календарь"},{id:"phys",t:"Клиенты"},{id:"legal",t:"Компании"},{id:"freezers",t:"Склад",adm:true},{id:"done",t:"Отчёты",adm:true}];
   var isMgr=canManage();var isAdmRole=myRole()==="admin";var tabs=allTabs.filter(function(t){return(!t.mgr||isMgr)&&(!t.adm||isAdmRole)});if(!tabs.find(function(t){return t.id===S.tab}))S.tab="stats";
-  var myActiveCount=getMyActiveCount();tabs.forEach(function(n){var label=n.t;if(n.id==="mytasks"&&myActiveCount>0)label="Заявки\n"+myActiveCount;var b=h("button",{onClick:function(){S.tab=n.id;R()}},h("span",{s:{fontSize:"20px",lineHeight:"1"}},n.i),h("span",null,label));if(S.tab===n.id)b.className="a";if(n.id==="mytasks"&&myActiveCount>0&&S.tab!=="mytasks"){b.style.position="relative";b.appendChild(h("span",{s:{position:"absolute",top:"7px",right:"10px",width:"8px",height:"8px",borderRadius:"50%",background:"#A32D2D",animation:"notif-pulse 1.5s infinite"}}))}nav.appendChild(b)});
+  var myActiveCount=getMyActiveCount();tabs.forEach(function(n){var label=n.t;if(n.id==="mytasks"&&myActiveCount>0)label="Заявки\n"+myActiveCount;var icoSpan=h("span",{s:{display:"flex",alignItems:"center",justifyContent:"center",width:"24px",height:"24px"}});icoSpan.innerHTML=tabIcons[n.id]||"";var b=h("button",{onClick:function(){S.tab=n.id;R()}},icoSpan,h("span",null,label));if(S.tab===n.id)b.className="a";if(n.id==="mytasks"&&myActiveCount>0&&S.tab!=="mytasks"){b.style.position="relative";b.appendChild(h("span",{s:{position:"absolute",top:"7px",right:"10px",width:"8px",height:"8px",borderRadius:"50%",background:"#A32D2D",animation:"notif-pulse 1.5s infinite"}}))}nav.appendChild(b)});
   w.appendChild(nav);
   function fab(label,go,bg){w.appendChild(h("button",{s:{position:"absolute",bottom:"88px",right:"18px",width:"58px",height:"58px",borderRadius:"19px",background:bg||"#185FA5",color:"#fff",border:"none",cursor:"pointer",fontSize:"26px",boxShadow:"0 10px 28px rgba(24,95,165,.25)",zIndex:"50"},onClick:go},label))}
   if(S.tab==="phys"||S.tab==="legal")fab("+",function(){S.mod={t:S.tab==="phys"?"addPhys":"addCl"};R()});
-  if(S.tab==="freezers"&&myRole()==="admin")fab("▣",function(){S.mod={t:"addFreezer"};R()},"#0891B2");
+  if(S.tab==="freezers"&&myRole()==="admin")fab("+",function(){S.mod={t:"addFreezer"};R()},"#0891B2");
   if(S.tab==="stats"&&canManage())fab("＋",function(){S.mod={t:"addSvcTask"};R()});
   if(S.tab==="mytasks"&&canManage())fab("🔧",function(){S.mod={t:"quickRepair"};R()});
   return w
