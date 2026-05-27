@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CoolService">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMCIgZmlsbD0iIzAyODRjNyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTIlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjMyMCI+4p2E77iPPC90ZXh0Pjwvc3ZnPg==">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=I0ZThpbsUbLOg1jzif8Az5wB-l0HxmRKe9GMaXTgI7Dnb8bGO5QkIVseAF649t6JJTpj6BM5tjdB9d78KDmtc-JO1sm64rJDix9zCVTmxAeLuylje2nW6BtvU7G4fUkRlIizVdl5adr_sq79aGBvQT31wbKGXVIhL1owYHTH-ehe4rnI_sDBhmPRxXUfFsfDCnskpDWLMdkh8dZR91QpWFPpi_BAQ-I2AB6qBAXiZ2bRQgzHB-2GilCb4k2oEdjlnhfhyKRly4gVp7Bbz_rENw" charset="UTF-8"></script><style>
+<style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#F4F7FB;color:#111827;font-family:'DM Sans',sans-serif;overflow:hidden}
 #app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative}
@@ -546,7 +546,6 @@ function freonLeftColor(left,stock){
 function renderFreonStockSection(ct){
   var allR=[];
   S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){allR.push(Object.assign({},r,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})}))})});
-  // ═══ FREON INVENTORY & REPORT ═══
   var freonUsage=collectFreonUsage(allR);
   var freonStock=getFreonStock();
   var freonTypes=freonTypeList(freonUsage,freonStock);
@@ -555,30 +554,32 @@ function renderFreonStockSection(ct){
   var leftTotal=stockTotal-freonTotal;
 
   secTitle(ct,"🧊 Склад фреона",canManage()?function(){S.mod={t:"editFreonStock"};R()}:null);
-  var stockCard=h("div",{cls:"chart-wrap",s:{marginBottom:"12px",background:"#FFFFFF",border:"1px solid #E2E8F0"}});
-  var stockHead=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"12px"}});
-  stockHead.appendChild(h("div",null,
-    h("div",{cls:"chart-title",s:{marginBottom:"2px"}},"Остатки и расход"),
-    h("div",{s:{fontSize:"13px",color:"#667085",lineHeight:"1.35"}},"Укажите общий запас в кг — CRM сама вычитает расход из ремонтов")
-  ));
-  if(canManage())stockHead.appendChild(h("button",{s:{padding:"8px 12px",borderRadius:"12px",border:"1px solid #185FA5",background:"#E6F1FB",color:"#185FA5",fontSize:"13px",fontWeight:"800",cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){S.mod={t:"editFreonStock"};R()}},"Изменить"));
+
+  var stockCard=h("div",{cls:"chart-wrap",s:{marginBottom:"12px",background:"#FFFFFF",border:"1px solid #E2E8F0",borderRadius:"18px",padding:"12px",overflow:"hidden"}});
+  var stockHead=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",marginBottom:"10px"}});
+  var headText=h("div",{s:{minWidth:"0",flex:"1"}},
+    h("div",{s:{fontSize:"13px",fontWeight:"850",color:"#172033",lineHeight:"1.15"}},"Остатки и расход"),
+    h("div",{s:{fontSize:"10px",color:"#8A96A8",lineHeight:"1.25",marginTop:"2px"}},"Запас − расход из ремонтов")
+  );
+  stockHead.appendChild(headText);
+  if(canManage())stockHead.appendChild(h("button",{s:{height:"30px",padding:"0 10px",borderRadius:"10px",border:"1px solid #B9D7F0",background:"#E6F1FB",color:"#185FA5",fontSize:"11px",fontWeight:"850",cursor:"pointer",whiteSpace:"nowrap",flexShrink:"0"},onClick:function(){S.mod={t:"editFreonStock"};R()}} ,"Изменить"));
   stockCard.appendChild(stockHead);
 
-  var stockSummary=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"12px"}});
+  var stockSummary=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"6px",marginBottom:"10px"}});
   [
-    {l:"На складе",v:fmtKg(stockTotal)||"0",c:"#185FA5"},
-    {l:"Израсходовано",v:fmtKg(freonTotal)||"0",c:"#0891B2"},
+    {l:"Склад",v:fmtKg(stockTotal)||"0",c:"#185FA5"},
+    {l:"Расход",v:fmtKg(freonTotal)||"0",c:"#0891B2"},
     {l:"Остаток",v:fmtKg(leftTotal)||"0",c:freonLeftColor(leftTotal,stockTotal)}
   ].forEach(function(x){
-    stockSummary.appendChild(h("div",{s:{background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",padding:"10px",textAlign:"center"}},
-      h("div",{s:{fontSize:"21px",fontWeight:"900",color:x.c,lineHeight:"1.05"}},x.v+" кг"),
-      h("div",{s:{fontSize:"12px",color:"#667085",fontWeight:"700",marginTop:"4px"}},x.l)
+    stockSummary.appendChild(h("div",{s:{background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"12px",padding:"8px 4px",textAlign:"center",minWidth:"0"}},
+      h("div",{s:{fontSize:"15px",fontWeight:"950",color:x.c,lineHeight:"1",whiteSpace:"nowrap",letterSpacing:"-.02em"}},x.v+" кг"),
+      h("div",{s:{fontSize:"9.5px",color:"#7A8699",fontWeight:"800",marginTop:"4px",whiteSpace:"nowrap"}},x.l)
     ));
   });
   stockCard.appendChild(stockSummary);
 
   if(!freonTypes.length||(!stockTotal&&!freonTotal)){
-    stockCard.appendChild(h("div",{s:{padding:"16px",textAlign:"center",background:"#F7F9FC",borderRadius:"14px",color:"#667085",fontSize:"15px",lineHeight:"1.45"}},"Пока нет данных по фреону. Нажмите «Изменить» и внесите количество баллонов/кг на складе."));
+    stockCard.appendChild(h("div",{s:{padding:"13px",textAlign:"center",background:"#F7F9FC",borderRadius:"12px",color:"#667085",fontSize:"12px",lineHeight:"1.35"}},"Пока нет данных. Нажмите «Изменить» и внесите запас фреона в кг."));
   }else{
     freonTypes.forEach(function(typ){
       var stockKg=parseKg(freonStock[typ]);
@@ -587,23 +588,20 @@ function renderFreonStockSection(ct){
       var left=stockKg-usedKg;
       var pct=stockKg>0?Math.min(100,Math.max(0,usedKg/stockKg*100)):0;
       var leftColor=freonLeftColor(left,stockKg);
-      var row=h("div",{s:{padding:"11px 12px",background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",marginBottom:"8px"}});
-      row.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",marginBottom:"8px"}},
-        h("div",{s:{fontSize:"16px",fontWeight:"900",color:"#172033"}},"🧊 "+typ),
-        h("div",{s:{fontSize:"17px",fontWeight:"900",color:leftColor,whiteSpace:"nowrap"}},fmtKg(left)+" кг")
-      ));
-      var line=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px",marginBottom:"8px"}});
-      [
-        {l:"всего",v:stockKg},
-        {l:"расход",v:usedKg},
-        {l:"заправок",v:(freonUsage[typ]&&freonUsage[typ].cnt)||0,noKg:true}
-      ].forEach(function(x){line.appendChild(h("div",{s:{background:"#FFFFFF",borderRadius:"10px",padding:"7px 6px",textAlign:"center",border:"1px solid #EEF2F6"}},h("div",{s:{fontSize:"15px",fontWeight:"850",color:"#344054"}},x.noKg?String(x.v):(fmtKg(x.v)+" кг")),h("div",{s:{fontSize:"11px",color:"#8A96A8",fontWeight:"700"}},x.l))) });
-      row.appendChild(line);
+      var warn=stockKg>0&&left<=stockKg*0.2;
+      var row=h("div",{s:{padding:"9px 10px",background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"13px",marginBottom:"7px",overflow:"hidden"}});
+      var top=h("div",{s:{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:"8px",alignItems:"center",marginBottom:"6px"}});
+      top.appendChild(h("div",{s:{fontSize:"13.5px",fontWeight:"900",color:"#172033",lineHeight:"1.15",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"🧊 "+typ));
+      top.appendChild(h("div",{s:{fontSize:"14px",fontWeight:"950",color:leftColor,whiteSpace:"nowrap",lineHeight:"1.1"}},fmtKg(left)+" кг"));
+      row.appendChild(top);
+
+      var metaText="Склад "+fmtKg(stockKg)+" кг · Расход "+fmtKg(usedKg)+" кг · "+(((freonUsage[typ]&&freonUsage[typ].cnt)||0))+" зап.";
+      row.appendChild(h("div",{s:{fontSize:"10.5px",fontWeight:"750",color:"#667085",lineHeight:"1.25",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginBottom:stockKg>0?"6px":"0"}},metaText));
       if(stockKg>0){
-        row.appendChild(h("div",{s:{height:"7px",borderRadius:"999px",background:"#E2E8F0",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"999px",background:left<=0?"#A32D2D":left<=stockKg*0.2?"#BA7517":"linear-gradient(90deg,#06b6d4,#38bdf8)",width:pct+"%"}})));
-        if(left<=stockKg*0.2){row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:left<=0?"#A32D2D":"#BA7517",marginTop:"6px"}},left<=0?"⚠️ Фреон закончился или ушёл в минус":"⚠️ Осталось меньше 20%"))}
+        row.appendChild(h("div",{s:{height:"5px",borderRadius:"999px",background:"#E2E8F0",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"999px",background:left<=0?"#A32D2D":left<=stockKg*0.2?"#BA7517":"linear-gradient(90deg,#06b6d4,#38bdf8)",width:pct+"%"}})));
+        if(warn){row.appendChild(h("div",{s:{fontSize:"10.5px",fontWeight:"850",color:left<=0?"#A32D2D":"#BA7517",marginTop:"5px",lineHeight:"1.2"}},left<=0?"⚠️ Закончился или ушёл в минус":"⚠️ Осталось меньше 20%"))}
       }else if(usedKg>0){
-        row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:"#BA7517",marginTop:"2px"}},"Укажите остаток на складе, чтобы видеть реальный баланс"));
+        row.appendChild(h("div",{s:{fontSize:"10.5px",fontWeight:"800",color:"#BA7517",marginTop:"5px",lineHeight:"1.2"}},"Укажите запас, чтобы видеть остаток"));
       }
       stockCard.appendChild(row);
     });
@@ -623,31 +621,26 @@ function renderFreonStockSection(ct){
       freonByMonth[monthKey][typ]+=amt;
     }
   });
-  var monthKeys=Object.keys(freonByMonth).sort().reverse();
-  if(monthKeys.length){
-    var monthNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-    monthKeys.forEach(function(mk){
-      var parts=mk.split("-");
-      var monthLabel=monthNames[parseInt(parts[1])]+" "+parts[0];
-      var monthData=freonByMonth[mk];
-      var monthTotal=Object.values(monthData).reduce(function(s,v){return s+v},0);
-      var mCard=h("div",{s:{background:"#FFFFFF",borderRadius:"14px",padding:"10px 12px",marginBottom:"7px",border:"1px solid #E2E8F0"}});
-      mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}},
-        h("span",{s:{fontSize:"15px",fontWeight:"800",color:"#344054"}},monthLabel),
-        h("span",{s:{fontSize:"15px",fontWeight:"900",color:"#0891B2"}},fmtKg(monthTotal)+" кг")));
-      Object.keys(monthData).sort().forEach(function(typ){
-        mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",padding:"3px 6px",fontSize:"13px"}},
-          h("span",{s:{color:"#667085"}},typ),
-          h("span",{s:{color:"#344054",fontWeight:"800"}},fmtKg(monthData[typ])+" кг")));
-      });
-      ct.appendChild(mCard);
-    });
+  var months=Object.keys(freonByMonth).sort().reverse().slice(0,6);
+  if(!months.length){
+    ct.appendChild(h("div",{s:{padding:"14px",background:"#FFFFFF",border:"1px solid #E2E8F0",borderRadius:"14px",fontSize:"13px",color:"#667085"}},"Пока нет расхода фреона в закрытых или текущих ремонтах."));
   }else{
-    ct.appendChild(h("div",{s:{fontSize:"14px",color:"#7A8699",padding:"10px",textAlign:"center"}},"Нет данных по расходу фреона"));
+    var mCard=h("div",{cls:"chart-wrap",s:{background:"#FFFFFF",border:"1px solid #E2E8F0",padding:"12px",borderRadius:"16px"}});
+    months.forEach(function(m){
+      var names=Object.keys(freonByMonth[m]);
+      var total=names.reduce(function(s,n){return s+freonByMonth[m][n]},0);
+      var row=h("div",{s:{padding:"8px 0",borderBottom:m===months[months.length-1]?"none":"1px solid #EEF2F6"}});
+      row.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px"}},
+        h("div",{s:{fontSize:"13px",fontWeight:"900",color:"#172033"}},m.split("-").reverse().join(".")),
+        h("div",{s:{fontSize:"13px",fontWeight:"950",color:"#0891B2",whiteSpace:"nowrap"}},fmtKg(total)+" кг")
+      ));
+      row.appendChild(h("div",{s:{fontSize:"10.5px",color:"#7A8699",lineHeight:"1.25",marginTop:"3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},names.map(function(n){return n+" "+fmtKg(freonByMonth[m][n])+" кг"}).join(" · ")));
+      mCard.appendChild(row);
+    });
+    ct.appendChild(mCard);
   }
-
-
 }
+
 
 // Cached count of "мои активные задачи" — пересчёт только когда массивы реально менялись (по ссылке)
 var _myActiveCache={cl:null,tasks:null,uid:null,count:0};
@@ -3671,22 +3664,22 @@ function freonStockForm(md,m){
   Object.keys(current).forEach(function(k){if(FREONS.indexOf(k)<0)addRow(k,current[k]||"",true)});
   if(!rows.length)addRow("R134a","",false);
 
-  var hint=h("div",{s:{fontSize:"14px",color:"#667085",lineHeight:"1.45",padding:"10px 12px",background:"#F7F9FC",border:"1px solid #E2E8F0",borderRadius:"14px",marginBottom:"12px"}},"Введите общий запас по каждому фреону в килограммах. На сводке CRM покажет: сколько было на складе, сколько уже израсходовано по ремонтам и сколько осталось.");
+  var hint=h("div",{s:{fontSize:"14px",color:"#667085",lineHeight:"1.45",padding:"10px 12px",background:"#F7F9FC",border:"1px solid #E2E8F0",borderRadius:"14px",marginBottom:"12px"}},"Введите общий запас по каждому фреону в килограммах. Во вкладке «Склад» CRM покажет: сколько было на складе, сколько уже израсходовано по ремонтам и сколько осталось.");
   var list=h("div",{s:{marginBottom:"12px"}});
   function renderRows(){
     list.innerHTML="";
     rows.forEach(function(r,i){
-      var row=h("div",{s:{display:"grid",gridTemplateColumns:r.custom?"1.2fr 1fr 42px":"1.2fr 1fr 42px",gap:"8px",alignItems:"center",marginBottom:"8px"}});
+      var row=h("div",{s:{display:"grid",gridTemplateColumns:r.custom?"minmax(0,1.2fr) minmax(72px,.8fr) 36px":"minmax(0,1.2fr) minmax(72px,.8fr) 36px",gap:"8px",alignItems:"center",marginBottom:"8px"}});
       var nameEl;
       if(r.custom){
         nameEl=h("input",{cls:"fi",placeholder:"Тип фреона",value:r.type||""});
         nameEl.addEventListener("input",function(e){rows[i].type=e.target.value});
       }else{
-        nameEl=h("div",{s:{padding:"12px 13px",borderRadius:"14px",background:"#F7F9FC",border:"1px solid #E2E8F0",fontSize:"16px",fontWeight:"850",color:"#172033"}},"🧊 "+r.type);
+        nameEl=h("div",{s:{padding:"10px 11px",borderRadius:"12px",background:"#F7F9FC",border:"1px solid #E2E8F0",fontSize:"14px",fontWeight:"850",color:"#172033",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},"🧊 "+r.type);
       }
       var valEl=h("input",{cls:"fi",type:"number",step:"0.1",placeholder:"кг",value:r.val||"",s:{fontWeight:"850",textAlign:"right"}});
       valEl.addEventListener("input",function(e){rows[i].val=e.target.value});
-      var del=h("button",{s:{height:"44px",borderRadius:"14px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#A32D2D",fontSize:"19px",fontWeight:"900",cursor:"pointer"},onClick:function(){rows.splice(i,1);renderRows()}},"×");
+      var del=h("button",{s:{height:"40px",borderRadius:"12px",border:"1px solid rgba(239,68,68,.2)",background:"rgba(239,68,68,.05)",color:"#A32D2D",fontSize:"19px",fontWeight:"900",cursor:"pointer"},onClick:function(){rows.splice(i,1);renderRows()}},"×");
       row.append(nameEl,valEl,del);
       list.appendChild(row);
     });
