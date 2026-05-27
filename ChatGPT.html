@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="CoolService">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMCIgZmlsbD0iIzAyODRjNyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTIlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjMyMCI+4p2E77iPPC90ZXh0Pjwvc3ZnPg==">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=I0ZThpbsUbLOg1jzif8Az5wB-l0HxmRKe9GMaXTgI7Dnb8bGO5QkIVseAF649t6JJTpj6BM5tjdB9d78KDmtc-JO1sm64rJDix9zCVTmxAeLuylje2nW6BtvU7G4fUkRlIizVdl5adr_sq79aGBvQT31wbKGXVIhL1owYHTH-ehe4rnI_sDBhmPRxXUfFsfDCnskpDWLMdkh8dZR91QpWFPpi_BAQ-I2AB6qBAXiZ2bRQgzHB-2GilCb4k2oEdjlnhfhyKRly4gVp7Bbz_rENw" charset="UTF-8"></script><style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#F4F7FB;color:#111827;font-family:'DM Sans',sans-serif;overflow:hidden}
 #app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative}
@@ -543,6 +543,112 @@ function freonLeftColor(left,stock){
   if(stock>0&&left<=stock*0.2)return "#BA7517";
   return "#3B6D11";
 }
+function renderFreonStockSection(ct){
+  var allR=[];
+  S.cl.forEach(function(c){(c.repairs||[]).forEach(function(r){allR.push(Object.assign({},r,{cid:c.id,cn:c.name,v:(c.vehicles||[]).find(function(x){return x.id===r.vehicleId})}))})});
+  // ═══ FREON INVENTORY & REPORT ═══
+  var freonUsage=collectFreonUsage(allR);
+  var freonStock=getFreonStock();
+  var freonTypes=freonTypeList(freonUsage,freonStock);
+  var freonTotal=Object.keys(freonUsage).reduce(function(s,k){return s+((freonUsage[k]&&freonUsage[k].kg)||0)},0);
+  var stockTotal=freonTypes.reduce(function(s,t){return s+parseKg(freonStock[t])},0);
+  var leftTotal=stockTotal-freonTotal;
+
+  secTitle(ct,"🧊 Склад фреона",canManage()?function(){S.mod={t:"editFreonStock"};R()}:null);
+  var stockCard=h("div",{cls:"chart-wrap",s:{marginBottom:"12px",background:"#FFFFFF",border:"1px solid #E2E8F0"}});
+  var stockHead=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"12px"}});
+  stockHead.appendChild(h("div",null,
+    h("div",{cls:"chart-title",s:{marginBottom:"2px"}},"Остатки и расход"),
+    h("div",{s:{fontSize:"13px",color:"#667085",lineHeight:"1.35"}},"Укажите общий запас в кг — CRM сама вычитает расход из ремонтов")
+  ));
+  if(canManage())stockHead.appendChild(h("button",{s:{padding:"8px 12px",borderRadius:"12px",border:"1px solid #185FA5",background:"#E6F1FB",color:"#185FA5",fontSize:"13px",fontWeight:"800",cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){S.mod={t:"editFreonStock"};R()}},"Изменить"));
+  stockCard.appendChild(stockHead);
+
+  var stockSummary=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"12px"}});
+  [
+    {l:"На складе",v:fmtKg(stockTotal)||"0",c:"#185FA5"},
+    {l:"Израсходовано",v:fmtKg(freonTotal)||"0",c:"#0891B2"},
+    {l:"Остаток",v:fmtKg(leftTotal)||"0",c:freonLeftColor(leftTotal,stockTotal)}
+  ].forEach(function(x){
+    stockSummary.appendChild(h("div",{s:{background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",padding:"10px",textAlign:"center"}},
+      h("div",{s:{fontSize:"21px",fontWeight:"900",color:x.c,lineHeight:"1.05"}},x.v+" кг"),
+      h("div",{s:{fontSize:"12px",color:"#667085",fontWeight:"700",marginTop:"4px"}},x.l)
+    ));
+  });
+  stockCard.appendChild(stockSummary);
+
+  if(!freonTypes.length||(!stockTotal&&!freonTotal)){
+    stockCard.appendChild(h("div",{s:{padding:"16px",textAlign:"center",background:"#F7F9FC",borderRadius:"14px",color:"#667085",fontSize:"15px",lineHeight:"1.45"}},"Пока нет данных по фреону. Нажмите «Изменить» и внесите количество баллонов/кг на складе."));
+  }else{
+    freonTypes.forEach(function(typ){
+      var stockKg=parseKg(freonStock[typ]);
+      var usedKg=(freonUsage[typ]&&freonUsage[typ].kg)||0;
+      if(stockKg<=0&&usedKg<=0)return;
+      var left=stockKg-usedKg;
+      var pct=stockKg>0?Math.min(100,Math.max(0,usedKg/stockKg*100)):0;
+      var leftColor=freonLeftColor(left,stockKg);
+      var row=h("div",{s:{padding:"11px 12px",background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",marginBottom:"8px"}});
+      row.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",marginBottom:"8px"}},
+        h("div",{s:{fontSize:"16px",fontWeight:"900",color:"#172033"}},"🧊 "+typ),
+        h("div",{s:{fontSize:"17px",fontWeight:"900",color:leftColor,whiteSpace:"nowrap"}},fmtKg(left)+" кг")
+      ));
+      var line=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px",marginBottom:"8px"}});
+      [
+        {l:"всего",v:stockKg},
+        {l:"расход",v:usedKg},
+        {l:"заправок",v:(freonUsage[typ]&&freonUsage[typ].cnt)||0,noKg:true}
+      ].forEach(function(x){line.appendChild(h("div",{s:{background:"#FFFFFF",borderRadius:"10px",padding:"7px 6px",textAlign:"center",border:"1px solid #EEF2F6"}},h("div",{s:{fontSize:"15px",fontWeight:"850",color:"#344054"}},x.noKg?String(x.v):(fmtKg(x.v)+" кг")),h("div",{s:{fontSize:"11px",color:"#8A96A8",fontWeight:"700"}},x.l))) });
+      row.appendChild(line);
+      if(stockKg>0){
+        row.appendChild(h("div",{s:{height:"7px",borderRadius:"999px",background:"#E2E8F0",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"999px",background:left<=0?"#A32D2D":left<=stockKg*0.2?"#BA7517":"linear-gradient(90deg,#06b6d4,#38bdf8)",width:pct+"%"}})));
+        if(left<=stockKg*0.2){row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:left<=0?"#A32D2D":"#BA7517",marginTop:"6px"}},left<=0?"⚠️ Фреон закончился или ушёл в минус":"⚠️ Осталось меньше 20%"))}
+      }else if(usedKg>0){
+        row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:"#BA7517",marginTop:"2px"}},"Укажите остаток на складе, чтобы видеть реальный баланс"));
+      }
+      stockCard.appendChild(row);
+    });
+  }
+  ct.appendChild(stockCard);
+
+  secTitle(ct,"🧊 Расход фреона по месяцам");
+  var freonByMonth={};
+  allR.forEach(function(r){
+    var amt=repairFreonKg(r);
+    if(amt<=0)return;
+    var typ=r.freonType||"Не указан";
+    if(r.date){
+      var monthKey=r.date.substring(0,7);
+      if(!freonByMonth[monthKey])freonByMonth[monthKey]={};
+      if(!freonByMonth[monthKey][typ])freonByMonth[monthKey][typ]=0;
+      freonByMonth[monthKey][typ]+=amt;
+    }
+  });
+  var monthKeys=Object.keys(freonByMonth).sort().reverse();
+  if(monthKeys.length){
+    var monthNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    monthKeys.forEach(function(mk){
+      var parts=mk.split("-");
+      var monthLabel=monthNames[parseInt(parts[1])]+" "+parts[0];
+      var monthData=freonByMonth[mk];
+      var monthTotal=Object.values(monthData).reduce(function(s,v){return s+v},0);
+      var mCard=h("div",{s:{background:"#FFFFFF",borderRadius:"14px",padding:"10px 12px",marginBottom:"7px",border:"1px solid #E2E8F0"}});
+      mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}},
+        h("span",{s:{fontSize:"15px",fontWeight:"800",color:"#344054"}},monthLabel),
+        h("span",{s:{fontSize:"15px",fontWeight:"900",color:"#0891B2"}},fmtKg(monthTotal)+" кг")));
+      Object.keys(monthData).sort().forEach(function(typ){
+        mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",padding:"3px 6px",fontSize:"13px"}},
+          h("span",{s:{color:"#667085"}},typ),
+          h("span",{s:{color:"#344054",fontWeight:"800"}},fmtKg(monthData[typ])+" кг")));
+      });
+      ct.appendChild(mCard);
+    });
+  }else{
+    ct.appendChild(h("div",{s:{fontSize:"14px",color:"#7A8699",padding:"10px",textAlign:"center"}},"Нет данных по расходу фреона"));
+  }
+
+
+}
+
 // Cached count of "мои активные задачи" — пересчёт только когда массивы реально менялись (по ссылке)
 var _myActiveCache={cl:null,tasks:null,uid:null,count:0};
 function getMyActiveCount(){
@@ -866,7 +972,7 @@ function csStatusBadge(text,type){
 }
 function csIcon(label){return h("span",{s:{fontSize:"21px",lineHeight:"1"}},label)}
 function csHeaderTitle(){
-  var map={stats:["Сводка","Главные показатели и быстрые действия"],mytasks:["Заявки","Ремонты, задачи и машины в работе"],calendar:["Загрузка постов","Записи по времени и свободные окна"],phys:["Клиенты","Физические лица, авто и история"],legal:["Компании","Юрлица, договоры и техника"],freezers:["Склад","Камеры, аренда и доход"],done:["Отчёты","Готовые машины и закрытие работ"]};
+  var map={stats:["Сводка","Главные показатели и быстрые действия"],mytasks:["Заявки","Ремонты, задачи и машины в работе"],calendar:["Загрузка постов","Записи по времени и свободные окна"],phys:["Клиенты","Физические лица, авто и история"],legal:["Компании","Юрлица, договоры и техника"],freezers:["Склад","Фреон, камеры, аренда и остатки"],done:["Отчёты","Готовые машины и закрытие работ"]};
   return map[S.tab]||["CoolService","CRM"];
 }
 function csQuickActions(ct){
@@ -899,7 +1005,7 @@ function csTabIntro(ct){
   else if(S.tab==="phys"){pill("Клиенты · "+counts.clients,true);pill("В работе",false);pill("С историей",false)}
   else if(S.tab==="legal"){pill("Компании · "+counts.legal,true);pill("Договоры",false);pill("Абонплата",false)}
   else if(S.tab==="done"){pill("На проверку",true);pill("Закрытые · "+counts.done,false)}
-  else if(S.tab==="freezers"){pill("Все камеры",true);pill("Сдаются",false);pill("Свободные",false)}
+  else if(S.tab==="freezers"){pill("Фреон",true);pill("Камеры",false);pill("Аренда",false)}
   ct.appendChild(pills)
 }
 function csBaySchedulePreview(ct){
@@ -1916,106 +2022,6 @@ function statsTab(ct){
     ct.appendChild(prHdr);
     activeProjects.forEach(function(t){prCont.appendChild(renderSvcTaskCard(t,true))});
     ct.appendChild(prCont);
-  }
-
-  // ═══ FREON INVENTORY & REPORT ═══
-  var freonUsage=collectFreonUsage(allR);
-  var freonStock=getFreonStock();
-  var freonTypes=freonTypeList(freonUsage,freonStock);
-  var freonTotal=Object.keys(freonUsage).reduce(function(s,k){return s+((freonUsage[k]&&freonUsage[k].kg)||0)},0);
-  var stockTotal=freonTypes.reduce(function(s,t){return s+parseKg(freonStock[t])},0);
-  var leftTotal=stockTotal-freonTotal;
-
-  secTitle(ct,"🧊 Склад фреона",canManage()?function(){S.mod={t:"editFreonStock"};R()}:null);
-  var stockCard=h("div",{cls:"chart-wrap",s:{marginBottom:"12px",background:"#FFFFFF",border:"1px solid #E2E8F0"}});
-  var stockHead=h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"12px"}});
-  stockHead.appendChild(h("div",null,
-    h("div",{cls:"chart-title",s:{marginBottom:"2px"}},"Остатки и расход"),
-    h("div",{s:{fontSize:"13px",color:"#667085",lineHeight:"1.35"}},"Укажите общий запас в кг — CRM сама вычитает расход из ремонтов")
-  ));
-  if(canManage())stockHead.appendChild(h("button",{s:{padding:"8px 12px",borderRadius:"12px",border:"1px solid #185FA5",background:"#E6F1FB",color:"#185FA5",fontSize:"13px",fontWeight:"800",cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){S.mod={t:"editFreonStock"};R()}},"Изменить"));
-  stockCard.appendChild(stockHead);
-
-  var stockSummary=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",marginBottom:"12px"}});
-  [
-    {l:"На складе",v:fmtKg(stockTotal)||"0",c:"#185FA5"},
-    {l:"Израсходовано",v:fmtKg(freonTotal)||"0",c:"#0891B2"},
-    {l:"Остаток",v:fmtKg(leftTotal)||"0",c:freonLeftColor(leftTotal,stockTotal)}
-  ].forEach(function(x){
-    stockSummary.appendChild(h("div",{s:{background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",padding:"10px",textAlign:"center"}},
-      h("div",{s:{fontSize:"21px",fontWeight:"900",color:x.c,lineHeight:"1.05"}},x.v+" кг"),
-      h("div",{s:{fontSize:"12px",color:"#667085",fontWeight:"700",marginTop:"4px"}},x.l)
-    ));
-  });
-  stockCard.appendChild(stockSummary);
-
-  if(!freonTypes.length||(!stockTotal&&!freonTotal)){
-    stockCard.appendChild(h("div",{s:{padding:"16px",textAlign:"center",background:"#F7F9FC",borderRadius:"14px",color:"#667085",fontSize:"15px",lineHeight:"1.45"}},"Пока нет данных по фреону. Нажмите «Изменить» и внесите количество баллонов/кг на складе."));
-  }else{
-    freonTypes.forEach(function(typ){
-      var stockKg=parseKg(freonStock[typ]);
-      var usedKg=(freonUsage[typ]&&freonUsage[typ].kg)||0;
-      if(stockKg<=0&&usedKg<=0)return;
-      var left=stockKg-usedKg;
-      var pct=stockKg>0?Math.min(100,Math.max(0,usedKg/stockKg*100)):0;
-      var leftColor=freonLeftColor(left,stockKg);
-      var row=h("div",{s:{padding:"11px 12px",background:"#F7F9FC",border:"1px solid #EEF2F6",borderRadius:"14px",marginBottom:"8px"}});
-      row.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"8px",marginBottom:"8px"}},
-        h("div",{s:{fontSize:"16px",fontWeight:"900",color:"#172033"}},"🧊 "+typ),
-        h("div",{s:{fontSize:"17px",fontWeight:"900",color:leftColor,whiteSpace:"nowrap"}},fmtKg(left)+" кг")
-      ));
-      var line=h("div",{s:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px",marginBottom:"8px"}});
-      [
-        {l:"всего",v:stockKg},
-        {l:"расход",v:usedKg},
-        {l:"заправок",v:(freonUsage[typ]&&freonUsage[typ].cnt)||0,noKg:true}
-      ].forEach(function(x){line.appendChild(h("div",{s:{background:"#FFFFFF",borderRadius:"10px",padding:"7px 6px",textAlign:"center",border:"1px solid #EEF2F6"}},h("div",{s:{fontSize:"15px",fontWeight:"850",color:"#344054"}},x.noKg?String(x.v):(fmtKg(x.v)+" кг")),h("div",{s:{fontSize:"11px",color:"#8A96A8",fontWeight:"700"}},x.l))) });
-      row.appendChild(line);
-      if(stockKg>0){
-        row.appendChild(h("div",{s:{height:"7px",borderRadius:"999px",background:"#E2E8F0",overflow:"hidden"}},h("div",{s:{height:"100%",borderRadius:"999px",background:left<=0?"#A32D2D":left<=stockKg*0.2?"#BA7517":"linear-gradient(90deg,#06b6d4,#38bdf8)",width:pct+"%"}})));
-        if(left<=stockKg*0.2){row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:left<=0?"#A32D2D":"#BA7517",marginTop:"6px"}},left<=0?"⚠️ Фреон закончился или ушёл в минус":"⚠️ Осталось меньше 20%"))}
-      }else if(usedKg>0){
-        row.appendChild(h("div",{s:{fontSize:"12px",fontWeight:"800",color:"#BA7517",marginTop:"2px"}},"Укажите остаток на складе, чтобы видеть реальный баланс"));
-      }
-      stockCard.appendChild(row);
-    });
-  }
-  ct.appendChild(stockCard);
-
-  secTitle(ct,"🧊 Расход фреона по месяцам");
-  var freonByMonth={};
-  allR.forEach(function(r){
-    var amt=repairFreonKg(r);
-    if(amt<=0)return;
-    var typ=r.freonType||"Не указан";
-    if(r.date){
-      var monthKey=r.date.substring(0,7);
-      if(!freonByMonth[monthKey])freonByMonth[monthKey]={};
-      if(!freonByMonth[monthKey][typ])freonByMonth[monthKey][typ]=0;
-      freonByMonth[monthKey][typ]+=amt;
-    }
-  });
-  var monthKeys=Object.keys(freonByMonth).sort().reverse();
-  if(monthKeys.length){
-    var monthNames=["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-    monthKeys.forEach(function(mk){
-      var parts=mk.split("-");
-      var monthLabel=monthNames[parseInt(parts[1])]+" "+parts[0];
-      var monthData=freonByMonth[mk];
-      var monthTotal=Object.values(monthData).reduce(function(s,v){return s+v},0);
-      var mCard=h("div",{s:{background:"#FFFFFF",borderRadius:"14px",padding:"10px 12px",marginBottom:"7px",border:"1px solid #E2E8F0"}});
-      mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}},
-        h("span",{s:{fontSize:"15px",fontWeight:"800",color:"#344054"}},monthLabel),
-        h("span",{s:{fontSize:"15px",fontWeight:"900",color:"#0891B2"}},fmtKg(monthTotal)+" кг")));
-      Object.keys(monthData).sort().forEach(function(typ){
-        mCard.appendChild(h("div",{s:{display:"flex",justifyContent:"space-between",padding:"3px 6px",fontSize:"13px"}},
-          h("span",{s:{color:"#667085"}},typ),
-          h("span",{s:{color:"#344054",fontWeight:"800"}},fmtKg(monthData[typ])+" кг")));
-      });
-      ct.appendChild(mCard);
-    });
-  }else{
-    ct.appendChild(h("div",{s:{fontSize:"14px",color:"#7A8699",padding:"10px",textAlign:"center"}},"Нет данных по расходу фреона"));
   }
 
   // ═══ REPAIR HISTORY BY PERIOD ═══
@@ -3483,6 +3489,8 @@ function stForm(md,m){
 var FREEZER_TYPES=["Рефрижераторный контейнер","Холодильная камера","Морозильная камера","Витрина","Другое"];
 
 function freezersTab(ct){
+  renderFreonStockSection(ct);
+  secTitle(ct,"📦 Камеры и аренда");
   var total=S.freezers.length;
   var rented=S.freezers.filter(function(f){return f.rented&&f.rentAmount>0});
   var rentIncome=rented.reduce(function(s,f){return s+(parseFloat(f.rentAmount)||0)},0);
