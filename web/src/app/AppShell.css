@@ -1,0 +1,56 @@
+.shell {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 16px 16px 40px;
+  background: #f4f7fb;
+}
+
+.shell__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.shell__header h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.shell__header p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.95rem;
+}
+
+.shell__logout {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #667085;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.shell__card {
+  border-radius: 16px;
+  padding: 16px 18px;
+  border: 1px solid rgba(24, 95, 165, 0.2);
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.06);
+}
+
+.shell__card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.shell__card p {
+  margin: 0;
+  color: #667085;
+}

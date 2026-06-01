@@ -1,0 +1,85 @@
+:root {
+  font-family: "DM Sans", system-ui, sans-serif;
+  line-height: 1.5;
+  color: #172033;
+  background: #f4f7fb;
+}
+
+.app--message {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.app__header h1 {
+  margin: 0 0 4px;
+  font-size: 1.75rem;
+}
+
+.app__header p {
+  margin: 0 0 20px;
+  color: #667085;
+}
+
+.app__card {
+  border-radius: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.06);
+}
+
+.app__card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.app__card p,
+.app__card ol {
+  margin: 0;
+  color: #667085;
+  font-size: 0.95rem;
+}
+
+.app__card--ok {
+  border-color: rgba(24, 95, 165, 0.2);
+}
+
+.app__card--warn {
+  border-color: rgba(186, 117, 23, 0.25);
+  background: #faeeda;
+}
+
+.app__card--error {
+  border-color: rgba(163, 45, 45, 0.25);
+  background: #fbeaea;
+}
+
+.app__hint {
+  margin-top: 12px !important;
+  font-size: 0.9rem !important;
+}
+
+.app__card code {
+  font-size: 0.85em;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 2px 6px;
+  border-radius: 6px;
+}

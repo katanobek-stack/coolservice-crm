@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  --cs-bg: #F4F7FB;
+  --cs-surface: #FFFFFF;
+  --cs-text: #172033;
+  --cs-muted: #667085;
+  --cs-border: #E2E8F0;
+  --cs-blue: #185FA5;
+  --cs-blue-bg: #E6F1FB;
+  --cs-green: #3B6D11;
+  --cs-green-bg: #EAF3DE;
+  --cs-amber: #BA7517;
+  --cs-amber-bg: #FAEEDA;
+  --cs-red: #A32D2D;
+  --cs-red-bg: #FBEAEA;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  background: var(--cs-bg);
+  color: var(--cs-text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--cs-bg);
+  box-shadow: 0 0 0 1px rgba(15,23,42,.05), 0 20px 60px rgba(15,23,42,.10);
+  position: relative;
+}
+
+@media (min-width: 700px) {
+  #root {
+    height: 94vh;
+    margin-top: 3vh;
+    border-radius: 32px;
+    overflow: hidden;
+  }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+input, select, textarea, button {
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scroll-area::-webkit-scrollbar { display: none; }
+
+/* Status badge colors */
+.badge-blue   { background: #E6F1FB; color: #0C447C; }
+.badge-green  { background: #EAF3DE; color: #27500A; }
+.badge-amber  { background: #FAEEDA; color: #854F0B; }
+.badge-red    { background: #FBEAEA; color: #A32D2D; }
+.badge-gray   { background: #F2F4F7; color: #667085; }
+.badge-cyan   { background: rgba(6,182,212,.1); color: #0891b2; }
