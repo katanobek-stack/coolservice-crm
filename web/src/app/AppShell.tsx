@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../features/auth";
 import { DataProvider, useData } from "../shared/context/DataContext";
+import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
 import { MyTasksTab } from "../features/mytasks/MyTasksTab";
 import { ClientsTab } from "../features/clients/ClientsTab";
@@ -26,6 +27,7 @@ function Shell() {
   const { myProfile, signOutUser } = useAuth();
   const { tasks, clients } = useData();
   const [tab, setTab] = useState<Tab>("stats");
+  const [showSearch, setShowSearch] = useState(false);
 
   const role = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin";
@@ -71,13 +73,23 @@ function Shell() {
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void signOutUser()}
-          className="text-xs text-[#667085] bg-[#F2F4F7] px-3 py-1.5 rounded-xl border border-[#E2E8F0] cursor-pointer"
-        >
-          Выйти
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSearch(true)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#F2F4F7] border border-[#E2E8F0] cursor-pointer text-base"
+            title="Поиск"
+          >
+            🔍
+          </button>
+          <button
+            type="button"
+            onClick={() => void signOutUser()}
+            className="text-xs text-[#667085] bg-[#F2F4F7] px-3 py-1.5 rounded-xl border border-[#E2E8F0] cursor-pointer"
+          >
+            Выйти
+          </button>
+        </div>
       </header>
 
       {/* Content */}
@@ -114,6 +126,8 @@ function Shell() {
           );
         })}
       </nav>
+
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
     </div>
   );
 }
