@@ -20,6 +20,7 @@ import {
   updateClientArray,
 } from "../../shared/firebase/firestore";
 import type {
+  Appointment,
   Client,
   Repair,
   RepairTask,
@@ -284,6 +285,84 @@ function AddRepairModal({ client, onClose }: { client: Client; onClose: () => vo
   );
 }
 
+// ─── Vehicle Modal (add / edit) ──────────────────────────────────────────────
+
+function VehicleModal({
+  client,
+  vehicle,
+  onClose,
+}: {
+  client:   Client;
+  vehicle?: Vehicle;
+  onClose:  () => void;
+}) {
+  const [plate, setPlate] = useState(vehicle?.plate ?? "");
+  const [model, setModel] = useState(vehicle?.model ?? "");
+  const [saving, setSaving] = useState(false);
+  const isEdit = !!vehicle;
+
+  async function handleSave() {
+    if (!plate.trim()) return;
+    setSaving(true);
+    const normalised = plate.trim().toUpperCase();
+
+    if (isEdit) {
+      const vehicles = (client.vehicles ?? []).map((v) =>
+        v.id === vehicle.id ? { ...v, plate: normalised, model: model.trim() || undefined } : v,
+      );
+      await updateClient(client.id, { vehicles });
+    } else {
+      const newV: Vehicle = { id: genId(), plate: normalised, model: model.trim() || undefined };
+      const vehicles = [...(client.vehicles ?? []), newV];
+      await updateClient(client.id, { vehicles });
+    }
+    onClose();
+  }
+
+  async function handleDelete() {
+    if (!vehicle) return;
+    if (!confirm(`Удалить авто ${vehicle.plate}?`)) return;
+    // Also remove repairs/appointments linked to this vehicle
+    const vehicles    = (client.vehicles ?? []).filter((v) => v.id !== vehicle.id);
+    const repairs     = (client.repairs ?? []).filter((r) => r.vehicleId !== vehicle.id);
+    const appointments = (client.appointments ?? []).filter(
+      (a) => (a as Appointment & { vehicleId?: string }).vehicleId !== vehicle.id,
+    );
+    await updateClient(client.id, { vehicles, repairs, appointments });
+    onClose();
+  }
+
+  return (
+    <Modal title={isEdit ? "Редактировать авто" : "Добавить авто"} onClose={onClose}>
+      <FormGroup label="Гос. номер">
+        <Input
+          placeholder="А123БВ 125"
+          value={plate}
+          onChange={(e) => setPlate(e.target.value)}
+          style={{ fontFamily: "monospace", fontWeight: 700, textTransform: "uppercase" }}
+        />
+      </FormGroup>
+      <FormGroup label="Марка / модель">
+        <Input placeholder="Toyota Dyna" value={model} onChange={(e) => setModel(e.target.value)} />
+      </FormGroup>
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+        {saving ? "Сохранение..." : isEdit ? "Сохранить" : "Добавить"}
+      </Button>
+      {isEdit && (
+        <div className="mt-3 pt-3 border-t border-[#E2E8F0]">
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            className="text-xs text-red-400 cursor-pointer bg-transparent border-none"
+          >
+            🗑 Удалить авто
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Repair Card ──────────────────────────────────────────────────────────────
 
 function RepairCard({
@@ -437,6 +516,8 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
 
   const [showRepair,     setShowRepair]     = useState(false);
   const [showEditClient, setShowEditClient] = useState(false);
+  const [vehicleEdit,    setVehicleEdit]    = useState<Vehicle | null>(null);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
 
   async function handleDeleteClient() {
     if (!confirm(`Удалить клиента "${client.name}"?`)) return;
@@ -470,16 +551,40 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
       </div>
 
       {/* Vehicles */}
-      {(client.vehicles ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {(client.vehicles ?? []).map((v) => (
-            <span key={v.id} className="text-xs bg-[#F2F4F7] text-[#344054] px-2.5 py-1 rounded-lg font-mono border border-[#E2E8F0]">
-              {v.plate}
-              {v.model && <span className="text-[#98A2B3] ml-1 font-sans">{v.model}</span>}
-            </span>
-          ))}
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-bold text-[#667085] uppercase tracking-wide">
+            Авто ({(client.vehicles ?? []).length})
+          </span>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAddVehicle(true)}
+              className="text-xs text-[#185FA5] cursor-pointer bg-transparent border-none font-semibold"
+            >
+              + Добавить
+            </button>
+          )}
         </div>
-      )}
+        {(client.vehicles ?? []).length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {(client.vehicles ?? []).map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => isAdmin && setVehicleEdit(v)}
+                className={`text-xs bg-[#F2F4F7] text-[#344054] px-2.5 py-1 rounded-lg font-mono border border-[#E2E8F0] ${isAdmin ? "cursor-pointer hover:bg-[#E6F1FB]" : ""}`}
+              >
+                {v.plate}
+                {v.model && <span className="text-[#98A2B3] ml-1 font-sans">{v.model}</span>}
+                {isAdmin && <span className="text-[#98A2B3] ml-1">✏️</span>}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-[#98A2B3]">Нет автомобилей</div>
+        )}
+      </div>
 
       {/* Toolbar */}
       {isAdmin && (
@@ -488,7 +593,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
             + Ремонт
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowEditClient(true)}>
-            ✏️ Изменить
+            ✏️ Данные
           </Button>
         </div>
       )}
@@ -530,8 +635,10 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         </div>
       )}
 
-      {showRepair     && <AddRepairModal     client={client} onClose={() => setShowRepair(false)} />}
-      {showEditClient && <EditClientModal    client={client} onClose={() => setShowEditClient(false)} />}
+      {showRepair      && <AddRepairModal  client={client} onClose={() => setShowRepair(false)} />}
+      {showEditClient  && <EditClientModal client={client} onClose={() => setShowEditClient(false)} />}
+      {showAddVehicle  && <VehicleModal   client={client} onClose={() => setShowAddVehicle(false)} />}
+      {vehicleEdit     && <VehicleModal   client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
     </Modal>
   );
 }
