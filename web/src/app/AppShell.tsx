@@ -9,8 +9,9 @@ import { CalendarTab } from "../features/calendar/CalendarTab";
 import { FreezersTab } from "../features/freezers/FreezersTab";
 import { DoneTab } from "../features/done/DoneTab";
 import { PnlTab } from "../features/pnl/PnlTab";
+import { StaffTab } from "../features/staff/StaffTab";
 
-export type Tab = "stats" | "mytasks" | "phys" | "legal" | "calendar" | "freezers" | "done" | "pnl";
+export type Tab = "stats" | "mytasks" | "phys" | "legal" | "calendar" | "freezers" | "done" | "pnl" | "staff";
 
 const TABS: Array<{ id: Tab; label: string; icon: string; adminOnly?: boolean }> = [
   { id: "stats",    label: "Сводка",   icon: "📊" },
@@ -21,6 +22,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string; adminOnly?: boolean }>
   { id: "freezers", label: "Склад",    icon: "📦" },
   { id: "done",     label: "Отчёты",   icon: "✅" },
   { id: "pnl",      label: "P&L",      icon: "💰", adminOnly: true },
+  { id: "staff",    label: "Персонал", icon: "👥", adminOnly: true },
 ];
 
 function Shell() {
@@ -52,6 +54,7 @@ function Shell() {
       case "freezers": return <FreezersTab />;
       case "done":     return <DoneTab />;
       case "pnl":      return isAdmin ? <PnlTab /> : null;
+      case "staff":    return isAdmin ? <StaffTab /> : null;
       default:         return null;
     }
   }
