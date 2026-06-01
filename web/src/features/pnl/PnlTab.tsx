@@ -36,8 +36,8 @@ export function PnlTab() {
   }, [clients]);
 
   const rentalIncome = freezers
-    .filter((f) => f.status === "rented")
-    .reduce((s, f) => s + (parseFloat(f.rentalRate ?? "0") || 0), 0);
+    .filter((f) => f.rented === true || f.status === "rented")
+    .reduce((s, f) => s + (parseFloat(String(f.rentAmount ?? 0)) || 0), 0);
 
   const totalRevenue = monthStats.reduce((s, m) => s + m.revenue, 0);
   const expenses = parseFloat(String(finance.expenses ?? "0")) || 0;
