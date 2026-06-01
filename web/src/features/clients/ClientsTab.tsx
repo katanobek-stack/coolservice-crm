@@ -1,7 +1,13 @@
 import { useState, useMemo } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
-import { repairStatus, taskStatus, getAssignees, SERVICE_TYPES, FREON_TYPES } from "../../shared/utils/repair";
+import {
+  repairStatus,
+  taskStatus,
+  getAssignees,
+  SERVICE_TYPES,
+  FREON_TYPES,
+} from "../../shared/utils/repair";
 import { fmtDate, daysAgo, genId } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
@@ -13,7 +19,14 @@ import {
   deleteClient,
   updateClientArray,
 } from "../../shared/firebase/firestore";
-import type { Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
+import type {
+  Client,
+  Repair,
+  RepairTask,
+  ClientType,
+  ServiceType,
+  Vehicle,
+} from "../../shared/types/client";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -23,21 +36,80 @@ function RepairStatusBadge({ status }: { status: ReturnType<typeof repairStatus>
   return <Badge variant="amber">В работе</Badge>;
 }
 
-// ─── Add Client Modal ────────────────────────────────────────────────────────
+// ─── Edit Client Modal ────────────────────────────────────────────────────────
 
-function AddClientModal({
-  type,
+function EditClientModal({
+  client,
   onClose,
 }: {
-  type: ClientType;
+  client: Client;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [note, setNote] = useState("");
-  const [inn, setInn] = useState("");
-  const [contact, setContact] = useState("");
+  const [name, setName] = useState(client.name);
+  const [phone, setPhone] = useState(client.phone ?? "");
+  const [note, setNote] = useState(client.note ?? "");
+  const [inn, setInn] = useState(client.inn ?? "");
+  const [contact, setContact] = useState(client.contactPerson ?? "");
+  const [subscription, setSubscription] = useState(
+    (client as Client & { subscription?: string }).subscription ?? "",
+  );
   const [saving, setSaving] = useState(false);
+  const isLegal = (client.type ?? "phys") === "legal";
+
+  async function handleSave() {
+    if (!name.trim()) return;
+    setSaving(true);
+    await updateClient(client.id, {
+      name: name.trim(),
+      phone: phone.trim() || undefined,
+      note: note.trim() || undefined,
+      inn: inn.trim() || undefined,
+      contactPerson: contact.trim() || undefined,
+      ...(isLegal && subscription ? { subscription: subscription.trim() } : {}),
+    });
+    onClose();
+  }
+
+  return (
+    <Modal title="Редактировать клиента" onClose={onClose}>
+      <FormGroup label="Название / ФИО">
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </FormGroup>
+      <FormGroup label="Телефон">
+        <Input type="tel" placeholder="+7 924 000 00 00" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      </FormGroup>
+      {isLegal && (
+        <>
+          <FormGroup label="ИНН">
+            <Input placeholder="1234567890" value={inn} onChange={(e) => setInn(e.target.value)} />
+          </FormGroup>
+          <FormGroup label="Контактное лицо">
+            <Input placeholder="Директор Петров" value={contact} onChange={(e) => setContact(e.target.value)} />
+          </FormGroup>
+          <FormGroup label="Абонплата (₽/мес)">
+            <Input type="number" placeholder="0" value={subscription} onChange={(e) => setSubscription(e.target.value)} />
+          </FormGroup>
+        </>
+      )}
+      <FormGroup label="Примечание">
+        <Textarea placeholder="..." value={note} onChange={(e) => setNote(e.target.value)} />
+      </FormGroup>
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+        {saving ? "Сохранение..." : "Сохранить"}
+      </Button>
+    </Modal>
+  );
+}
+
+// ─── Add Client Modal ─────────────────────────────────────────────────────────
+
+function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => void }) {
+  const [name, setName]       = useState("");
+  const [phone, setPhone]     = useState("");
+  const [note, setNote]       = useState("");
+  const [inn, setInn]         = useState("");
+  const [contact, setContact] = useState("");
+  const [saving, setSaving]   = useState(false);
 
   async function handleSave() {
     if (!name.trim()) return;
@@ -45,10 +117,10 @@ function AddClientModal({
     await addClient({
       name: name.trim(),
       type,
-      phone: phone.trim(),
-      note: note.trim(),
-      inn: type === "legal" ? inn.trim() : undefined,
-      contactPerson: type === "legal" ? contact.trim() : undefined,
+      phone: phone.trim() || undefined,
+      note: note.trim() || undefined,
+      inn: type === "legal" ? inn.trim() || undefined : undefined,
+      contactPerson: type === "legal" ? contact.trim() || undefined : undefined,
       vehicles: [],
       repairs: [],
       appointments: [],
@@ -59,7 +131,11 @@ function AddClientModal({
   return (
     <Modal title={type === "phys" ? "Новый клиент" : "Новая компания"} onClose={onClose}>
       <FormGroup label="Название / ФИО">
-        <Input placeholder={type === "phys" ? "Иван Иванов" : "ООО «Пример»"} value={name} onChange={(e) => setName(e.target.value)} />
+        <Input
+          placeholder={type === "phys" ? "Иван Иванов" : "ООО «Пример»"}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </FormGroup>
       <FormGroup label="Телефон">
         <Input type="tel" placeholder="+7 924 000 00 00" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -84,31 +160,25 @@ function AddClientModal({
   );
 }
 
-// ─── Add Repair Modal ────────────────────────────────────────────────────────
+// ─── Add Repair Modal ─────────────────────────────────────────────────────────
 
-function AddRepairModal({
-  client,
-  onClose,
-}: {
-  client: Client;
-  onClose: () => void;
-}) {
+function AddRepairModal({ client, onClose }: { client: Client; onClose: () => void }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
   const role = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager";
 
-  const [vehicleId, setVehicleId] = useState(client.vehicles[0]?.id ?? "");
-  const [newPlate, setNewPlate] = useState("");
+  const [vehicleId, setVehicleId]   = useState(client.vehicles[0]?.id ?? "");
+  const [newPlate, setNewPlate]     = useState("");
   const [serviceType, setServiceType] = useState<ServiceType>("refrigerator");
-  const [desc, setDesc] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [cost, setCost] = useState("");
-  const [freonType, setFreonType] = useState("");
-  const [freonAmt, setFreonAmt] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [desc, setDesc]             = useState("");
+  const [date, setDate]             = useState(new Date().toISOString().slice(0, 10));
+  const [cost, setCost]             = useState("");
+  const [freonType, setFreonType]   = useState("");
+  const [freonAmt, setFreonAmt]     = useState("");
+  const [assignee, setAssignee]     = useState("");
+  const [taskDesc, setTaskDesc]     = useState("");
+  const [saving, setSaving]         = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -123,15 +193,7 @@ function AddRepairModal({
     }
 
     const tasks: RepairTask[] = taskDesc.trim()
-      ? [
-          {
-            id: genId(),
-            description: taskDesc.trim(),
-            assignees: assignee ? [assignee] : [],
-            doneBy: [],
-            status: "in_progress",
-          },
-        ]
+      ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" }]
       : [];
 
     const repair: Repair = {
@@ -140,7 +202,7 @@ function AddRepairModal({
       serviceType,
       description: desc.trim(),
       date,
-      cost: isAdmin ? cost.trim() : undefined,
+      cost: isAdmin && cost.trim() ? cost.trim() : undefined,
       status: "in_progress",
       freonType: freonType || undefined,
       freonAmount: freonAmt.trim() || undefined,
@@ -165,11 +227,7 @@ function AddRepairModal({
       </FormGroup>
       {!vehicleId && (
         <FormGroup label="Номер нового авто">
-          <Input
-            placeholder="А123БВ 125"
-            value={newPlate}
-            onChange={(e) => setNewPlate(e.target.value)}
-          />
+          <Input placeholder="А123БВ 125" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} />
         </FormGroup>
       )}
       <FormGroup label="Тип услуги">
@@ -180,10 +238,7 @@ function AddRepairModal({
               type="button"
               onClick={() => setServiceType(s.id)}
               className={`py-2.5 rounded-xl border text-sm font-semibold cursor-pointer transition-all
-                ${serviceType === s.id
-                  ? "bg-[#185FA5] text-white border-[#185FA5]"
-                  : "bg-white text-[#667085] border-[#E2E8F0]"
-                }`}
+                ${serviceType === s.id ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-white text-[#667085] border-[#E2E8F0]"}`}
             >
               {s.emoji} {s.label}
             </button>
@@ -229,54 +284,188 @@ function AddRepairModal({
   );
 }
 
-// ─── Client Detail Modal ─────────────────────────────────────────────────────
+// ─── Repair Card ──────────────────────────────────────────────────────────────
 
-function ClientDetail({
+function RepairCard({
   client,
-  onClose,
+  repair,
+  isAdmin,
+  isHistory,
 }: {
   client: Client;
-  onClose: () => void;
+  repair: Repair;
+  isAdmin: boolean;
+  isHistory?: boolean;
 }) {
-  const { myProfile } = useAuth();
-  const role = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
-  const [showRepair, setShowRepair] = useState(false);
-  const [editingRepairId, setEditingRepairId] = useState<string | null>(null);
+  const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const status  = repairStatus(repair);
+  const svc     = SERVICE_TYPES.find((s) => s.id === repair.serviceType) ?? SERVICE_TYPES[3];
+  const days    = daysAgo(repair.date);
+  const isCancelled = status === "cancelled";
 
-  async function deleteRepair(repairId: string) {
-    if (!confirm("Удалить ремонт?")) return;
-    const repairs = (client.repairs ?? []).filter((r) => r.id !== repairId);
-    await updateClientArray(client.id, "repairs", repairs);
-  }
+  async function setRepairStatus(newStatus: "in_progress" | "cancelled" | "done") {
+    const updates: Partial<Repair> =
+      newStatus === "done"
+        ? { closedByManager: true, status: "in_progress" }
+        : newStatus === "cancelled"
+        ? { status: "cancelled", closedByManager: false }
+        : { status: "in_progress", closedByManager: false };
 
-  async function closeRepair(repairId: string) {
     const repairs = (client.repairs ?? []).map((r) =>
-      r.id === repairId ? { ...r, closedByManager: true } : r,
+      r.id === repair.id ? { ...r, ...updates } : r,
     );
     await updateClientArray(client.id, "repairs", repairs);
   }
 
+  async function handleDelete() {
+    if (!confirm("Удалить заказ-наряд?")) return;
+    const repairs = (client.repairs ?? []).filter((r) => r.id !== repair.id);
+    await updateClientArray(client.id, "repairs", repairs);
+  }
+
+  return (
+    <div
+      className={`bg-white rounded-[16px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2.5 shadow-sm ${
+        isCancelled ? "opacity-50" : ""
+      }`}
+      style={{
+        borderLeftColor:
+          status === "done" ? "#3B6D11" : isCancelled ? "#98A2B3" : "#185FA5",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="blue">{svc.emoji} {svc.label}</Badge>
+          <RepairStatusBadge status={status} />
+          {status === "in_progress" && days > 3 && (
+            <Badge variant={days > 7 ? "red" : "amber"}>{days} дн.</Badge>
+          )}
+        </div>
+
+        {/* Actions */}
+        {isAdmin && (
+          <div className="flex gap-1 flex-shrink-0">
+            {isCancelled ? (
+              <button
+                type="button"
+                onClick={() => void setRepairStatus("in_progress")}
+                className="text-[10px] text-[#BA7517] bg-[#FAEEDA] px-2 py-0.5 rounded-lg cursor-pointer border-none"
+              >
+                ↩ Вернуть
+              </button>
+            ) : status === "in_progress" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void setRepairStatus("done")}
+                  className="text-[10px] text-[#3B6D11] bg-[#EAF3DE] px-2 py-0.5 rounded-lg cursor-pointer border-none"
+                >
+                  Закрыть
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void setRepairStatus("cancelled")}
+                  className="text-[10px] text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded-lg cursor-pointer border-none"
+                >
+                  Отказ
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-[#98A2B3] cursor-pointer bg-transparent border-none text-base leading-none"
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
+
+      {vehicle && (
+        <span className="text-xs bg-[#F2F4F7] text-[#344054] px-2 py-0.5 rounded font-mono mr-1">
+          {vehicle.plate}
+        </span>
+      )}
+      {repair.description && (
+        <div className="text-sm text-[#344054] mt-1">{repair.description}</div>
+      )}
+
+      <div className="flex items-center justify-between mt-1.5">
+        <span className="text-xs text-[#98A2B3]">{fmtDate(repair.date)}</span>
+        {repair.cost && isAdmin && (
+          <span className="text-sm font-bold text-[#3B6D11]">{repair.cost} ₽</span>
+        )}
+      </div>
+
+      {(repair.freonType || repair.freonAmount) && (
+        <div className="mt-1.5 text-xs text-cyan-600 bg-cyan-50 rounded-lg px-2 py-1 border border-cyan-100 inline-block">
+          ❄️ {repair.freonType} {repair.freonAmount && `${repair.freonAmount} кг`}
+        </div>
+      )}
+
+      {/* Tasks */}
+      {(repair.tasks ?? []).length > 0 && (
+        <div className="mt-2 space-y-1">
+          {(repair.tasks ?? []).map((t) => {
+            const ts = taskStatus(t);
+            return (
+              <div key={t.id} className="flex items-center gap-2 text-xs bg-[#F7F9FC] rounded-lg px-2.5 py-1.5">
+                <span className={ts === "done" ? "text-[#3B6D11]" : "text-[#BA7517]"}>
+                  {ts === "done" ? "✓" : "●"}
+                </span>
+                <span className="text-[#344054] flex-1">{t.description}</span>
+                {t.workComment && (
+                  <span className="text-purple-400 text-[10px]">📝</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Client Detail ────────────────────────────────────────────────────────────
+
+function ClientDetail({ client, onClose }: { client: Client; onClose: () => void }) {
+  const { myProfile } = useAuth();
+  const role    = myProfile?.role ?? "mechanic";
+  const isAdmin = role === "admin" || role === "manager";
+
+  const [showRepair,     setShowRepair]     = useState(false);
+  const [showEditClient, setShowEditClient] = useState(false);
+
   async function handleDeleteClient() {
-    if (!confirm(`Удалить клиента "${client.name}"? Все данные будут удалены.`)) return;
+    if (!confirm(`Удалить клиента "${client.name}"?`)) return;
     await deleteClient(client.id);
     onClose();
   }
 
-  const activeRepairs = (client.repairs ?? []).filter(
-    (r) => repairStatus(r) === "in_progress",
-  );
-  const doneRepairs = (client.repairs ?? []).filter(
-    (r) => repairStatus(r) !== "in_progress",
-  );
+  const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
+  const doneRepairs   = (client.repairs ?? []).filter((r) => repairStatus(r) !== "in_progress");
 
   return (
     <Modal title={client.name} onClose={onClose}>
-      {/* Client info */}
+      {/* Info block */}
       <div className="bg-[#F7F9FC] rounded-xl p-3 mb-3 border border-[#E2E8F0]">
-        {client.phone && <div className="text-sm mb-1">📞 <a href={`tel:${client.phone}`} className="text-[#185FA5] font-semibold">{client.phone}</a></div>}
-        {client.inn && <div className="text-xs text-[#667085]">ИНН: {client.inn}</div>}
+        {client.phone && (
+          <div className="text-sm mb-1">
+            📞{" "}
+            <a href={`tel:${client.phone}`} className="text-[#185FA5] font-semibold">
+              {client.phone}
+            </a>
+          </div>
+        )}
+        {client.inn         && <div className="text-xs text-[#667085]">ИНН: {client.inn}</div>}
         {client.contactPerson && <div className="text-xs text-[#667085]">Контакт: {client.contactPerson}</div>}
+        {(client as Client & { subscription?: string }).subscription && (
+          <div className="text-xs text-[#3B6D11] font-semibold mt-0.5">
+            💰 Абонплата: {(client as Client & { subscription?: string }).subscription} ₽/мес
+          </div>
+        )}
         {client.note && <div className="text-xs text-[#98A2B3] mt-1">{client.note}</div>}
       </div>
 
@@ -292,16 +481,16 @@ function ClientDetail({
         </div>
       )}
 
-      {/* Add repair */}
+      {/* Toolbar */}
       {isAdmin && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="mb-3 w-full"
-          onClick={() => setShowRepair(true)}
-        >
-          + Новый ремонт
-        </Button>
+        <div className="flex gap-2 mb-3">
+          <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowRepair(true)}>
+            + Ремонт
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowEditClient(true)}>
+            ✏️ Изменить
+          </Button>
+        </div>
       )}
 
       {/* Active repairs */}
@@ -311,38 +500,24 @@ function ClientDetail({
             В работе ({activeRepairs.length})
           </div>
           {activeRepairs.map((r) => (
-            <RepairCard
-              key={r.id}
-              client={client}
-              repair={r}
-              isAdmin={isAdmin}
-              onDelete={() => void deleteRepair(r.id)}
-              onClose={() => void closeRepair(r.id)}
-            />
+            <RepairCard key={r.id} client={client} repair={r} isAdmin={isAdmin} />
           ))}
         </>
       )}
 
-      {/* Done repairs */}
+      {/* History */}
       {doneRepairs.length > 0 && (
         <>
           <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2 mt-3">
             История ({doneRepairs.length})
           </div>
           {doneRepairs.map((r) => (
-            <RepairCard
-              key={r.id}
-              client={client}
-              repair={r}
-              isAdmin={isAdmin}
-              onDelete={() => void deleteRepair(r.id)}
-              onClose={() => void closeRepair(r.id)}
-              isHistory
-            />
+            <RepairCard key={r.id} client={client} repair={r} isAdmin={isAdmin} isHistory />
           ))}
         </>
       )}
 
+      {/* Delete client */}
       {isAdmin && (
         <div className="mt-4 pt-3 border-t border-[#E2E8F0]">
           <button
@@ -355,110 +530,13 @@ function ClientDetail({
         </div>
       )}
 
-      {showRepair && <AddRepairModal client={client} onClose={() => setShowRepair(false)} />}
+      {showRepair     && <AddRepairModal     client={client} onClose={() => setShowRepair(false)} />}
+      {showEditClient && <EditClientModal    client={client} onClose={() => setShowEditClient(false)} />}
     </Modal>
   );
 }
 
-// ─── Repair Card inside Client Detail ────────────────────────────────────────
-
-function RepairCard({
-  client,
-  repair,
-  isAdmin,
-  onDelete,
-  onClose: onCloseRepair,
-  isHistory = false,
-}: {
-  client: Client;
-  repair: Repair;
-  isAdmin: boolean;
-  onDelete: () => void;
-  onClose: () => void;
-  isHistory?: boolean;
-}) {
-  const { myProfile } = useAuth();
-  const role = myProfile?.role ?? "mechanic";
-  const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
-  const status = repairStatus(repair);
-  const svc = SERVICE_TYPES.find((s) => s.id === repair.serviceType) ?? SERVICE_TYPES[3];
-  const days = daysAgo(repair.date);
-
-  return (
-    <div
-      className={`bg-white rounded-[16px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2.5 shadow-sm ${
-        status === "cancelled" ? "opacity-50" : ""
-      }`}
-      style={{
-        borderLeftColor:
-          status === "done" ? "#3B6D11" : status === "cancelled" ? "#98A2B3" : "#185FA5",
-      }}
-    >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="flex flex-wrap gap-1">
-          <Badge variant="blue">{svc.emoji} {svc.label}</Badge>
-          <RepairStatusBadge status={status} />
-          {status === "in_progress" && days > 3 && (
-            <Badge variant={days > 7 ? "red" : "amber"}>{days} дн.</Badge>
-          )}
-        </div>
-        {!isHistory && isAdmin && (
-          <div className="flex gap-1">
-            {status === "in_progress" && (
-              <button
-                type="button"
-                onClick={onCloseRepair}
-                className="text-xs text-[#3B6D11] bg-[#EAF3DE] px-2 py-0.5 rounded-lg cursor-pointer border-none"
-              >
-                Закрыть
-              </button>
-            )}
-            <button type="button" onClick={onDelete} className="text-[#98A2B3] cursor-pointer bg-transparent border-none text-base">
-              ×
-            </button>
-          </div>
-        )}
-      </div>
-      {vehicle && (
-        <span className="text-xs bg-[#F2F4F7] text-[#344054] px-2 py-0.5 rounded font-mono">
-          {vehicle.plate}
-        </span>
-      )}
-      {repair.description && (
-        <div className="text-sm text-[#344054] mt-1">{repair.description}</div>
-      )}
-      <div className="flex items-center justify-between mt-1.5">
-        <span className="text-xs text-[#98A2B3]">{fmtDate(repair.date)}</span>
-        {repair.cost && isAdmin && (
-          <span className="text-sm font-bold text-[#3B6D11]">{repair.cost} ₽</span>
-        )}
-      </div>
-      {(repair.freonType || repair.freonAmount) && (
-        <div className="mt-1.5 text-xs text-cyan-600 bg-cyan-50 rounded-lg px-2 py-1 border border-cyan-100 inline-block">
-          ❄️ {repair.freonType} {repair.freonAmount && `${repair.freonAmount} кг`}
-        </div>
-      )}
-      {/* Tasks */}
-      {(repair.tasks ?? []).length > 0 && (
-        <div className="mt-2 space-y-1">
-          {(repair.tasks ?? []).map((t) => {
-            const ts = taskStatus(t);
-            return (
-              <div key={t.id} className="flex items-center gap-2 text-xs bg-[#F7F9FC] rounded-lg px-2.5 py-1.5">
-                <span className={ts === "done" ? "text-[#3B6D11]" : "text-[#BA7517]"}>
-                  {ts === "done" ? "✓" : "●"}
-                </span>
-                <span className="text-[#344054]">{t.description}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Client Card ─────────────────────────────────────────────────────────────
+// ─── Client Card (list item) ──────────────────────────────────────────────────
 
 function ClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
   const activeRepairs = (client.repairs ?? []).filter(
@@ -481,13 +559,9 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
     >
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="font-semibold text-[#172033] text-sm">{client.name}</div>
-        {activeRepairs > 0 && (
-          <Badge variant="amber">В работе: {activeRepairs}</Badge>
-        )}
+        {activeRepairs > 0 && <Badge variant="amber">В работе: {activeRepairs}</Badge>}
       </div>
-      {client.phone && (
-        <div className="text-xs text-[#667085] mb-1">📞 {client.phone}</div>
-      )}
+      {client.phone && <div className="text-xs text-[#667085] mb-1">📞 {client.phone}</div>}
       {(client.vehicles ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1">
           {(client.vehicles ?? []).slice(0, 3).map((v) => (
@@ -507,15 +581,16 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
   );
 }
 
-// ─── Main Tab ────────────────────────────────────────────────────────────────
+// ─── Main Tab ─────────────────────────────────────────────────────────────────
 
 export function ClientsTab({ type }: { type: ClientType }) {
   const { clients } = useData();
   const { myProfile } = useAuth();
-  const role = myProfile?.role ?? "mechanic";
+  const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager";
-  const [search, setSearch] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
+
+  const [search,   setSearch]   = useState("");
+  const [showAdd,  setShowAdd]  = useState(false);
   const [selected, setSelected] = useState<Client | null>(null);
 
   const filtered = useMemo(
@@ -533,6 +608,11 @@ export function ClientsTab({ type }: { type: ClientType }) {
         }),
     [clients, type, search],
   );
+
+  // Keep selected in sync when Firestore updates arrive
+  const selectedLive = selected
+    ? (clients.find((c) => c.id === selected.id) ?? selected)
+    : null;
 
   const title = type === "phys" ? "Клиенты" : "Компании";
 
@@ -570,8 +650,8 @@ export function ClientsTab({ type }: { type: ClientType }) {
       ))}
 
       {showAdd && <AddClientModal type={type} onClose={() => setShowAdd(false)} />}
-      {selected && (
-        <ClientDetail client={selected} onClose={() => setSelected(null)} />
+      {selectedLive && (
+        <ClientDetail client={selectedLive} onClose={() => setSelected(null)} />
       )}
     </div>
   );
