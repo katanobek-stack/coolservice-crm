@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, Fragment, type CSSProperties } from "reac
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
-  repairStatus, taskStatus, getAssignees, SERVICE_TYPES, FREON_TYPES,
+  repairStatus, taskStatus, SERVICE_TYPES, FREON_TYPES,
 } from "../../shared/utils/repair";
 import { fmtDate, daysAgo, genId } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
@@ -181,13 +181,13 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
 
 // ─── Add Repair Modal ─────────────────────────────────────────────────────────
 
-function AddRepairModal({ client, onClose }: { client: Client; onClose: () => void }) {
+function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager";
 
-  const [vehicleId,   setVehicleId]   = useState(client.vehicles[0]?.id ?? "");
+  const [vehicleId,   setVehicleId]   = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
   const [newPlate,    setNewPlate]    = useState("");
   const [serviceType, setServiceType] = useState<ServiceType>("refrigerator");
   const [desc,        setDesc]        = useState("");
@@ -236,7 +236,7 @@ function AddRepairModal({ client, onClose }: { client: Client; onClose: () => vo
         <div className="grid grid-cols-2 gap-2">
           {SERVICE_TYPES.map((s) => (
             <button key={s.id} type="button" onClick={() => setServiceType(s.id)}
-              className={`py-2.5 rounded-xl border text-sm font-semibold cursor-pointer transition-all ${serviceType === s.id ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-white text-[#667085] border-[#E2E8F0]"}`}>
+              className={`py-2.5 rounded-xl border text-sm font-semibold cursor-pointer transition-all ${serviceType === s.id ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-transparent text-[var(--text2)] border-[var(--border2)]"}`}>
               {s.emoji} {s.label}
             </button>
           ))}
@@ -305,7 +305,7 @@ function EditRepairModal({ client, repair, onClose }: { client: Client; repair: 
         <div className="grid grid-cols-2 gap-2">
           {SERVICE_TYPES.map((s) => (
             <button key={s.id} type="button" onClick={() => setServiceType(s.id)}
-              className={`py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-all ${serviceType === s.id ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-white text-[#667085] border-[#E2E8F0]"}`}>
+              className={`py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-all ${serviceType === s.id ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-transparent text-[var(--text2)] border-[var(--border2)]"}`}>
               {s.emoji} {s.label}
             </button>
           ))}
@@ -361,14 +361,18 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
         r.id === repair.id ? { ...r, photos: [...(r.photos ?? []), ...photos] } : r));
   }
 
+  const borderLeft = status === "done" ? "var(--green)" : isCancelled ? "var(--text3)" : "var(--accent)";
+
   return (
-    <div
-      className={`bg-white rounded-[16px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2.5 shadow-sm ${isCancelled ? "opacity-50" : ""}`}
-      style={{ borderLeftColor: status === "done" ? "var(--green)" : isCancelled ? "var(--text3)" : "var(--accent)" }}
-    >
+    <div style={{
+      background: "var(--bg2)", borderRadius: 14,
+      borderLeft: `3px solid ${borderLeft}`, border: `1px solid var(--border)`,
+      borderLeftWidth: 3, borderLeftColor: borderLeft,
+      padding: "12px 14px", opacity: isCancelled ? 0.55 : 1,
+    }}>
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="flex flex-wrap gap-1.5">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           <Badge variant="blue">{svc.emoji} {svc.label}</Badge>
           <RepairStatusBadge status={status} />
           {status === "in_progress" && days > 3 && (
@@ -376,73 +380,55 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
           )}
         </div>
         {isAdmin && (
-          <div className="flex gap-1 flex-shrink-0">
-            <button type="button" onClick={() => setShowEdit(true)}
-              className="text-[10px] text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded-lg cursor-pointer border-none">
-              ✏️
-            </button>
+          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            <button type="button" onClick={() => setShowEdit(true)} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>✏️</button>
             {isCancelled ? (
-              <button type="button" onClick={() => void setRepairStatus("in_progress")}
-                className="text-[10px] text-[#BA7517] bg-[#FAEEDA] px-2 py-0.5 rounded-lg cursor-pointer border-none">
-                ↩ Вернуть
-              </button>
+              <button type="button" onClick={() => void setRepairStatus("in_progress")} style={{ fontSize: 11, color: "#fcd34d", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>↩ Вернуть</button>
             ) : status === "in_progress" ? (
               <>
-                <button type="button" onClick={() => void setRepairStatus("done")}
-                  className="text-[10px] text-[#3B6D11] bg-[#EAF3DE] px-2 py-0.5 rounded-lg cursor-pointer border-none">
-                  Закрыть
-                </button>
-                <button type="button" onClick={() => void setRepairStatus("cancelled")}
-                  className="text-[10px] text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded-lg cursor-pointer border-none">
-                  Отказ
-                </button>
+                <button type="button" onClick={() => void setRepairStatus("done")} style={{ fontSize: 11, color: "#6ee7b7", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>Закрыть</button>
+                <button type="button" onClick={() => void setRepairStatus("cancelled")} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>Отказ</button>
               </>
             ) : null}
-            <button type="button" onClick={() => void handleDelete()}
-              className="text-[#98A2B3] cursor-pointer bg-transparent border-none text-base leading-none">
-              ×
-            </button>
+            <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 16, color: "var(--text3)", background: "transparent", border: "none", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>×</button>
           </div>
         )}
       </div>
 
       {vehicle && (
-        <span className="text-xs bg-[#F2F4F7] text-[#344054] px-2 py-0.5 rounded font-mono mr-1">{vehicle.plate}</span>
+        <span style={{ fontSize: 11.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{vehicle.plate}</span>
       )}
-      {repair.description && <div className="text-sm text-[#344054] mt-1">{repair.description}</div>}
+      {repair.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6 }}>{repair.description}</div>}
 
-      <div className="flex items-center justify-between mt-1.5">
-        <span className="text-xs text-[#98A2B3]">{fmtDate(repair.date)}</span>
-        {repair.cost && isAdmin && <span className="text-sm font-bold text-[#3B6D11]">{repair.cost} ₽</span>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+        {repair.cost && isAdmin && <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>{repair.cost} ₽</span>}
       </div>
 
       {(repair.freonType || repair.freonAmount) && (
-        <div className="mt-1.5 text-xs text-cyan-600 bg-cyan-50 rounded-lg px-2 py-1 border border-cyan-100 inline-block">
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "#67e8f9", background: "rgba(6,182,212,0.10)", border: "1px solid rgba(6,182,212,0.20)", borderRadius: 8, padding: "4px 10px", display: "inline-block" }}>
           ❄️ {repair.freonType} {repair.freonAmount && `${repair.freonAmount} кг`}
         </div>
       )}
 
-      {/* Photos */}
       <PhotoGrid photos={repair.photos ?? []} readOnly onView={setLightbox} />
 
-      {/* Add photo button (active repairs only) */}
       {isAdmin && status === "in_progress" && (
-        <div className="mt-2">
+        <div style={{ marginTop: 8 }}>
           <InlinePhotoButton onUploaded={addPhotos} label="Фото к наряду" capture="environment" folder="repairs" />
         </div>
       )}
 
-      {/* Tasks */}
       {(repair.tasks ?? []).length > 0 && (
-        <div className="mt-2 space-y-1">
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
           {(repair.tasks ?? []).map((t) => {
             const ts = taskStatus(t);
             return (
-              <div key={t.id} className="flex items-center gap-2 text-xs bg-[#F7F9FC] rounded-lg px-2.5 py-1.5">
-                <span className={ts === "done" ? "text-[#3B6D11]" : "text-[#BA7517]"}>{ts === "done" ? "✓" : "●"}</span>
-                <span className="text-[#344054] flex-1">{t.description}</span>
-                {t.freonKg && <span className="text-cyan-500 text-[10px]">❄️ {t.freonKg} кг</span>}
-                {t.workComment && <span className="text-purple-400 text-[10px]">📝</span>}
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
+                <span style={{ color: ts === "done" ? "#4ade80" : "#fbbf24" }}>{ts === "done" ? "✓" : "●"}</span>
+                <span style={{ color: "var(--text)", flex: 1 }}>{t.description}</span>
+                {t.freonKg && <span style={{ fontSize: 10, color: "#67e8f9" }}>❄️ {t.freonKg} кг</span>}
+                {t.workComment && <span style={{ fontSize: 10, color: "#c4b5fd" }}>📝</span>}
               </div>
             );
           })}
@@ -483,7 +469,7 @@ function RepairHistory({ client, isAdmin }: { client: Client; isAdmin: boolean }
 
   return (
     <>
-      <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2 mt-3">
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
         История ({doneRepairs.length})
       </div>
       {Array.from(byMonth.entries()).map(([mk, repairs]) => (
@@ -500,21 +486,26 @@ function CollapsibleMonth({ label, count, isAdmin, client, repairs }: {
   const totalCost = repairs.reduce((s, r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
 
   return (
-    <div className="mb-2">
+    <div style={{ marginBottom: 8 }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 bg-[#F7F9FC] rounded-xl px-3 py-2.5 border border-[#E2E8F0] cursor-pointer text-left"
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          background: "var(--bg3)", borderRadius: 10, padding: "10px 12px",
+          border: "1px solid var(--border)", cursor: "pointer", textAlign: "left",
+          fontFamily: "Manrope, sans-serif",
+        }}
       >
-        <span className={`text-xs transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
-        <span className="text-sm font-semibold text-[#344054] flex-1">{label}</span>
-        <span className="text-xs text-[#98A2B3]">{count} ремонтов</span>
+        <span style={{ fontSize: 10, color: "var(--text3)", transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>{label}</span>
+        <span style={{ fontSize: 11, color: "var(--text3)" }}>{count} ремонтов</span>
         {totalCost > 0 && isAdmin && (
-          <span className="text-xs font-bold text-[#3B6D11]">{totalCost.toLocaleString("ru-RU")} ₽</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#4ade80" }}>{totalCost.toLocaleString("ru-RU")} ₽</span>
         )}
       </button>
       {open && (
-        <div className="mt-1.5">
+        <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
           {repairs.map((r) => <RepairCard key={r.id} client={client} repair={r} isAdmin={isAdmin} isHistory />)}
         </div>
       )}
@@ -534,24 +525,114 @@ function AppointmentsList({ client, isAdmin }: { client: Client; isAdmin: boolea
 
   return (
     <>
-      <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2 mt-3">
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8, marginTop: 4, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
         Записи ({appts.length})
       </div>
       {appts.map((a) => (
-        <div key={a.id} className="bg-white rounded-xl border border-[#E2E8F0] p-3 mb-1.5 flex items-start justify-between gap-2">
+        <div key={a.id} style={{ background: "var(--bg2)", borderRadius: 10, border: "1px solid var(--border)", padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
             <Badge variant="amber">📅 {fmtDate(a.date)}</Badge>
-            {a.description && <div className="text-xs text-[#667085] mt-1">{a.description}</div>}
+            {a.description && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 4 }}>{a.description}</div>}
           </div>
           {isAdmin && (
-            <button type="button" onClick={() => void deleteAppt(a.id)}
-              className="text-[#98A2B3] text-base cursor-pointer bg-transparent border-none leading-none flex-shrink-0">
-              ×
-            </button>
+            <button type="button" onClick={() => void deleteAppt(a.id)} style={{ fontSize: 18, color: "var(--text3)", background: "transparent", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}>×</button>
           )}
         </div>
       ))}
     </>
+  );
+}
+
+// ─── Detail section helpers ───────────────────────────────────────────────────
+
+function SectionHeader({ title, count, accent }: { title: string; count?: number; accent?: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, paddingBottom: 7, borderBottom: "1px solid var(--border)" }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: accent ? "var(--accent2)" : "var(--text2)", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+        {title}
+      </span>
+      {count !== undefined && (
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text3)", background: "var(--bg)", border: "1px solid var(--border)", padding: "1px 6px", borderRadius: 10 }}>
+          {count}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function VehicleRow({ vehicle, onEdit }: { vehicle: Vehicle; onEdit?: () => void }) {
+  const brand = vehicle.brand ?? vehicle.model;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, background: "var(--bg2)", border: "1px solid var(--border)", marginBottom: 6 }}>
+      <span style={{ fontSize: 20, flexShrink: 0 }}>🚗</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
+        {brand && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 1 }}>{brand}</div>}
+      </div>
+      {onEdit && (
+        <button type="button" onClick={onEdit} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "var(--text2)", flexShrink: 0 }}>
+          ✏️
+        </button>
+      )}
+    </div>
+  );
+}
+
+function VehiclePickerModal({ client, onPick, onClose }: {
+  client: Client;
+  onPick: (vehicleId: string | undefined) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Выберите автомобиль" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {(client.vehicles ?? []).map((v) => {
+          const brand = v.brand ?? v.model;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => onPick(v.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "13px 16px", borderRadius: 14,
+                background: "var(--bg2)", border: "1px solid var(--border2)",
+                cursor: "pointer", textAlign: "left", fontFamily: "Manrope, sans-serif",
+                transition: "border-color 0.15s, background 0.15s",
+              }}
+            >
+              <span style={{ fontSize: 24, flexShrink: 0 }}>🚗</span>
+              <div>
+                <div style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{v.plate}</div>
+                {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
+              </div>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => onPick(undefined)}
+          style={{
+            padding: "12px", borderRadius: 12, background: "transparent",
+            border: "1.5px dashed var(--border2)", color: "var(--text3)",
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "Manrope, sans-serif",
+          }}
+        >
+          Без привязки к авто
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            padding: "12px", borderRadius: 12, background: "var(--bg2)",
+            border: "1px solid var(--border)", color: "var(--text2)",
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "Manrope, sans-serif",
+          }}
+        >
+          Отмена
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -562,13 +643,31 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager";
 
-  const [showRepair,     setShowRepair]     = useState(false);
-  const [showEditClient, setShowEditClient] = useState(false);
-  const [showAddAppt,    setShowAddAppt]    = useState(false);
-  const [vehicleEdit,    setVehicleEdit]    = useState<Vehicle | null>(null);
-  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [showPickVehicle, setShowPickVehicle] = useState(false);
+  const [pickedVehicleId, setPickedVehicleId] = useState<string | undefined>();
+  const [showRepair,      setShowRepair]      = useState(false);
+  const [showEditClient,  setShowEditClient]  = useState(false);
+  const [showAddAppt,     setShowAddAppt]     = useState(false);
+  const [vehicleEdit,     setVehicleEdit]     = useState<Vehicle | null>(null);
+  const [showAddVehicle,  setShowAddVehicle]  = useState(false);
 
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
+  const vehicles      = client.vehicles ?? [];
+
+  function handleNewRepair() {
+    if (vehicles.length === 0) {
+      setPickedVehicleId(undefined);
+      setShowRepair(true);
+    } else {
+      setShowPickVehicle(true);
+    }
+  }
+
+  function handleVehiclePicked(vId: string | undefined) {
+    setPickedVehicleId(vId);
+    setShowPickVehicle(false);
+    setShowRepair(true);
+  }
 
   async function handleDeleteClient() {
     if (!confirm(`Удалить клиента "${client.name}"?`)) return;
@@ -576,80 +675,121 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
     onClose();
   }
 
+  const sec: CSSProperties = { marginBottom: 20 };
+
   return (
     <Modal title={client.name} onClose={onClose}>
-      {/* Info */}
-      <div className="bg-[#F7F9FC] rounded-xl p-3 mb-3 border border-[#E2E8F0]">
-        {client.phone && <div className="text-sm mb-1">📞 <a href={`tel:${client.phone}`} className="text-[#185FA5] font-semibold">{client.phone}</a></div>}
-        {client.inn          && <div className="text-xs text-[#667085]">ИНН: {client.inn}</div>}
-        {client.contactPerson && <div className="text-xs text-[#667085]">Контакт: {client.contactPerson}</div>}
-        {client.subscription && (
-          <div className="text-xs text-[#3B6D11] font-semibold mt-0.5">
-            💰 Абонплата: {client.subscription} ₽/мес
-          </div>
-        )}
-        {client.note && <div className="text-xs text-[#98A2B3] mt-1">{client.note}</div>}
-      </div>
 
-      {/* Vehicles */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-bold text-[#667085] uppercase tracking-wide">Авто ({(client.vehicles ?? []).length})</span>
-          {isAdmin && <button type="button" onClick={() => setShowAddVehicle(true)} className="text-xs text-[#185FA5] cursor-pointer bg-transparent border-none font-semibold">+ Добавить</button>}
-        </div>
-        {(client.vehicles ?? []).length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {(client.vehicles ?? []).map((v) => {
-              const brandName = v.brand ?? v.model;
-              return (
-              <button key={v.id} type="button" onClick={() => isAdmin && setVehicleEdit(v)}
-                className={`flex items-center gap-1.5 text-xs bg-[#F2F4F7] text-[#344054] px-2.5 py-1 rounded-lg border border-[#E2E8F0] ${isAdmin ? "cursor-pointer hover:bg-[#E6F1FB]" : ""}`}>
-                {v.photo && (
-                  <img src={v.photo} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
-                )}
-                <span className="font-mono">{v.plate}</span>
-                {brandName && <span className="text-[#98A2B3] font-sans">{brandName}</span>}
-                {isAdmin && <span>✏️</span>}
-              </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-xs text-[#98A2B3]">Нет автомобилей</div>
+      {/* ── КОНТАКТЫ ── */}
+      <div style={{ background: "var(--bg2)", borderRadius: 14, padding: "12px 14px", marginBottom: 20, border: "1px solid var(--border)" }}>
+        {client.phone && (
+          <a href={`tel:${client.phone}`} style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", marginBottom: 5 }}>
+            <span style={{ fontSize: 13 }}>📞</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--accent2)" }}>{client.phone}</span>
+          </a>
+        )}
+        {client.inn           && <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 3 }}>ИНН: {client.inn}</div>}
+        {client.contactPerson && <div style={{ fontSize: 12, color: "var(--text2)" }}>👤 {client.contactPerson}</div>}
+        {client.subscription  && <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 600, marginTop: 5 }}>💰 Абонплата: {client.subscription} ₽/мес</div>}
+        {client.note          && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6, fontStyle: "italic" }}>{client.note}</div>}
+        {isAdmin && (
+          <button type="button" onClick={() => setShowEditClient(true)} style={{ marginTop: 10, fontSize: 11.5, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+            ✏️ Редактировать
+          </button>
         )}
       </div>
 
-      {/* Toolbar */}
+      {/* ── АВТОМОБИЛИ ── */}
+      <div style={sec}>
+        <SectionHeader title="Автомобили" count={vehicles.length} />
+        {vehicles.map((v) => (
+          <VehicleRow key={v.id} vehicle={v} onEdit={isAdmin ? () => setVehicleEdit(v) : undefined} />
+        ))}
+        {vehicles.length === 0 && !isAdmin && (
+          <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>Нет автомобилей</div>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setShowAddVehicle(true)}
+            style={{
+              width: "100%", padding: "11px 0", borderRadius: 12,
+              border: "1.5px dashed rgba(255,255,255,0.15)",
+              background: "transparent", color: "var(--text3)",
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              fontFamily: "Manrope, sans-serif",
+              marginTop: vehicles.length > 0 ? 4 : 0,
+            }}
+          >
+            + Добавить авто
+          </button>
+        )}
+      </div>
+
+      {/* ── ДЕЙСТВИЯ ── */}
       {isAdmin && (
-        <div className="flex gap-2 mb-3 flex-wrap">
-          <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowRepair(true)}>+ Ремонт</Button>
-          <Button variant="secondary" size="sm" onClick={() => setShowAddAppt(true)}>📅 Запись</Button>
-          <Button variant="ghost"     size="sm" onClick={() => setShowEditClient(true)}>✏️</Button>
+        <div style={sec}>
+          <SectionHeader title="Действия" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleNewRepair}
+              style={{
+                width: "100%", padding: "14px 0", borderRadius: 14,
+                background: "var(--accent)", border: "none",
+                color: "#fff", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              <i className="ti ti-tools" style={{ fontSize: 16 }} /> + Новый ремонт
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddAppt(true)}
+              style={{
+                width: "100%", padding: "13px 0", borderRadius: 14,
+                background: "var(--bg2)", border: "1px solid var(--border2)",
+                color: "var(--text)", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              <i className="ti ti-calendar" style={{ fontSize: 16 }} /> Записать на приём
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Active repairs */}
+      {/* ── В РАБОТЕ ── */}
       {activeRepairs.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">В работе ({activeRepairs.length})</div>
-          {activeRepairs.map((r) => <RepairCard key={r.id} client={client} repair={r} isAdmin={isAdmin} />)}
-        </>
+        <div style={sec}>
+          <SectionHeader title="В работе" count={activeRepairs.length} accent />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {activeRepairs.map((r) => <RepairCard key={r.id} client={client} repair={r} isAdmin={isAdmin} />)}
+          </div>
+        </div>
       )}
 
-      {/* History grouped by month */}
-      <RepairHistory client={client} isAdmin={isAdmin} />
+      {/* ── ИСТОРИЯ ── */}
+      <div style={sec}>
+        <RepairHistory client={client} isAdmin={isAdmin} />
+      </div>
 
-      {/* Appointments */}
+      {/* ── ЗАПИСИ ── */}
       <AppointmentsList client={client} isAdmin={isAdmin} />
 
-      {/* Delete */}
+      {/* ── УДАЛИТЬ ── */}
       {isAdmin && (
-        <div className="mt-4 pt-3 border-t border-[#E2E8F0]">
-          <button type="button" onClick={() => void handleDeleteClient()} className="text-xs text-red-400 cursor-pointer bg-transparent border-none">🗑 Удалить клиента</button>
+        <div style={{ marginTop: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <button type="button" onClick={() => void handleDeleteClient()} style={{ fontSize: 12, color: "var(--red)", background: "transparent", border: "none", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+            🗑 Удалить клиента
+          </button>
         </div>
       )}
 
-      {showRepair      && <AddRepairModal      client={client} onClose={() => setShowRepair(false)} />}
+      {showPickVehicle && <VehiclePickerModal client={client} onPick={handleVehiclePicked} onClose={() => setShowPickVehicle(false)} />}
+      {showRepair      && <AddRepairModal      client={client} preVehicleId={pickedVehicleId} onClose={() => setShowRepair(false)} />}
       {showEditClient  && <EditClientModal     client={client} onClose={() => setShowEditClient(false)} />}
       {showAddAppt     && <AddAppointmentModal client={client} onClose={() => setShowAddAppt(false)} />}
       {showAddVehicle  && <VehicleModal        client={client} onClose={() => setShowAddVehicle(false)} />}
