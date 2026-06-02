@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../features/auth";
 import { DataProvider, useData } from "../shared/context/DataContext";
+import { repairStatus } from "../shared/utils/repair";
 import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
 import { MyTasksTab } from "../features/mytasks/MyTasksTab";
@@ -95,12 +96,14 @@ function useFCMAndNotifications(myProfile: StaffMember | undefined) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
-  tab:       Tab;
-  onTab:     (t: Tab) => void;
-  myProfile: StaffMember | undefined;
-  onSignOut: () => void;
-  activeMine: number;
+function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount }: {
+  tab:           Tab;
+  onTab:         (t: Tab) => void;
+  myProfile:     StaffMember | undefined;
+  onSignOut:     () => void;
+  activeRepairs: number;
+  totalClients:  number;
+  freezersCount: number;
 }) {
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin";
@@ -116,6 +119,13 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
 
   const roleLabel = { admin: "Администратор", manager: "Менеджер", mechanic: "Механик" }[role];
 
+  function getBadge(id: Tab): { count: number; variant: "red" | "blue" | "" } | null {
+    if (id === "mytasks" && activeRepairs > 0) return { count: activeRepairs, variant: "red" };
+    if ((id === "phys" || id === "legal") && totalClients > 0) return { count: totalClients, variant: "blue" };
+    if (id === "freezers" && freezersCount > 0) return { count: freezersCount, variant: "red" };
+    return null;
+  }
+
   return (
     <aside className="sidebar">
       {/* Logo */}
@@ -124,7 +134,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
           <div className="sidebar-logo-icon">❄️</div>
           <div className="sidebar-logo-name">RefServiceDV</div>
         </div>
-        <div className="sidebar-logo-sub">CoolService CRM</div>
+        <div className="sidebar-logo-sub">crm.refservicedv.ru</div>
       </div>
 
       {/* Nav */}
@@ -133,8 +143,8 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
           <div key={g.key}>
             <div className="nav-group-label">{g.label}</div>
             {g.tabs.map((t) => {
-              const isActive  = tab === t.id;
-              const showBadge = t.id === "mytasks" && activeMine > 0;
+              const isActive = tab === t.id;
+              const badge    = getBadge(t.id);
               return (
                 <button
                   key={t.id}
@@ -144,8 +154,8 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
                 >
                   <i className={`ti ${t.icon}`} />
                   {t.label}
-                  {showBadge && (
-                    <span className="nav-badge red">{activeMine}</span>
+                  {badge && (
+                    <span className={`nav-badge ${badge.variant}`}>{badge.count}</span>
                   )}
                 </button>
               );
@@ -162,7 +172,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeMine }: {
             <div className="user-name">{myProfile?.name ?? myProfile?.email?.split("@")[0] ?? "—"}</div>
             <div className="user-role">{roleLabel}</div>
           </div>
-          <i className="ti ti-logout" style={{ fontSize: 15, color: "var(--text3)" }} />
+          <i className="ti ti-settings" style={{ fontSize: 15, color: "var(--text3)" }} />
         </div>
       </div>
     </aside>
@@ -249,9 +259,9 @@ function MobileNav({ tab, onTab, activeMine, isAdmin }: {
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 function Shell() {
-  const { myProfile, signOutUser } = useAuth();
-  const { tasks, clients }         = useData();
-  const [tab, setTab]              = useState<Tab>("stats");
+  const { myProfile, signOutUser }  = useAuth();
+  const { tasks, clients, freezers } = useData();
+  const [tab, setTab]               = useState<Tab>("stats");
   const [showSearch, setShowSearch] = useState(false);
 
   const role    = myProfile?.role ?? "mechanic";
@@ -264,6 +274,11 @@ function Shell() {
       t.status !== "done" &&
       !(t.doneBy ?? []).includes(uid),
   ).length;
+
+  const activeRepairs = useMemo(
+    () => clients.flatMap((c) => c.repairs ?? []).filter((r) => repairStatus(r) === "in_progress").length,
+    [clients],
+  );
 
   useFCMAndNotifications(myProfile);
 
@@ -296,7 +311,9 @@ function Shell() {
           onTab={setTab}
           myProfile={myProfile}
           onSignOut={() => void signOutUser()}
-          activeMine={activeMine}
+          activeRepairs={activeRepairs}
+          totalClients={clients.length}
+          freezersCount={freezers.length}
         />
 
         {/* Main area */}
@@ -304,7 +321,7 @@ function Shell() {
           <Topbar
             tab={tab}
             onSearch={() => setShowSearch(true)}
-            activeMine={activeMine}
+            activeMine={activeRepairs}
             onNewRepair={() => setTab("phys")}
           />
           <div className="crm-content">
@@ -313,7 +330,7 @@ function Shell() {
         </div>
 
         {/* Mobile bottom nav */}
-        <MobileNav tab={tab} onTab={setTab} activeMine={activeMine} isAdmin={isAdmin} />
+        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} isAdmin={isAdmin} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}

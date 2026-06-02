@@ -688,6 +688,17 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 .bar.active + .bar-value,
 .bar-wrap:hover .bar-value { color: var(--cyan); }
 
+/* ═══ BOTTOM GRID (chart + mechanics side by side) ═══ */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .bottom-grid { grid-template-columns: 1fr; }
+}
+
 /* ═══ MECHANIC LOAD ═══ */
 .mechanic-list {
   padding: 8px 12px 12px;

@@ -175,35 +175,61 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   new:         { label: "Новая",    cls: "new"  },
 };
 
+const AVATAR_COLORS = [
+  { bg: "rgba(239,68,68,0.15)",   color: "#f87171" },
+  { bg: "rgba(59,130,246,0.15)",  color: "#60a5fa" },
+  { bg: "rgba(34,197,94,0.15)",   color: "#4ade80" },
+  { bg: "rgba(139,92,246,0.15)",  color: "#a78bfa" },
+  { bg: "rgba(6,182,212,0.15)",   color: "#22d3ee" },
+  { bg: "rgba(245,158,11,0.15)",  color: "#fbbf24" },
+];
+
+function repairPriority(date?: string): { color: string; shadow?: string } {
+  if (!date) return { color: "var(--text3)" };
+  const days = (Date.now() - new Date(date).getTime()) / 86_400_000;
+  if (days > 3) return { color: "var(--red)", shadow: "0 0 6px var(--red)" };
+  if (days > 1) return { color: "var(--yellow)" };
+  return { color: "var(--text3)" };
+}
+
 function RepairCard({ clientName, description, date, cost, status, plate, isAdmin, idx }: {
   clientName: string; description?: string; date?: string;
   cost?: string; status: string; plate?: string; isAdmin: boolean; idx: number;
 }) {
-  const s = STATUS_MAP[status] ?? { label: status, cls: "new" };
+  const s       = STATUS_MAP[status] ?? { label: status, cls: "new" };
   const initials = clientName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-  const costNum = parseFloat(cost ?? "0") || 0;
+  const costNum  = parseFloat(cost ?? "0") || 0;
+  const av       = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+  const prio     = repairPriority(date);
   return (
     <div
       className="tr-animate"
       style={{
         padding: "12px 20px", borderBottom: "1px solid var(--border)",
-        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        display: "flex", alignItems: "center", gap: 12,
         animationDelay: `${0.35 + idx * 0.07}s`,
       }}
     >
+      {/* Priority dot */}
       <div style={{
-        width: 30, height: 30, borderRadius: 7, flexShrink: 0,
-        background: "rgba(59,130,246,0.15)", color: "var(--accent2)",
+        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+        background: prio.color,
+        boxShadow: prio.shadow,
+      }} />
+      {/* Colored client avatar */}
+      <div style={{
+        width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+        background: av.bg, color: av.color,
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 11, fontWeight: 700,
       }}>
         {initials}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{clientName}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{clientName}</span>
           {plate && (
-            <span className="mono" style={{ background: "var(--bg3)", padding: "1px 6px", borderRadius: 5 }}>
+            <span className="mono" style={{ background: "var(--bg3)", padding: "1px 6px", borderRadius: 5, flexShrink: 0 }}>
               {plate}
             </span>
           )}
