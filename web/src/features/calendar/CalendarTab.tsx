@@ -256,70 +256,59 @@ export function CalendarTab() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="text-lg font-bold text-[#172033]">Записи</div>
-          <div className="text-xs text-[#667085]">Предстоящие: {upcoming.length}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Upcoming */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
+        <div className="section-header">
+          <i className="ti ti-calendar" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">Предстоящие записи</span>
+          {upcoming.length > 0 && <span className="section-count">{upcoming.length}</span>}
+          {isAdmin && (
+            <div className="section-actions">
+              <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
+                <i className="ti ti-plus" /> Запись
+              </button>
+            </div>
+          )}
         </div>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="text-xs text-[#185FA5] bg-[#E6F1FB] px-3 py-1.5 rounded-xl border border-[#185FA5]/10 cursor-pointer font-semibold"
-          >
-            + Запись
-          </button>
+
+        {upcoming.length === 0 ? (
+          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет предстоящих записей
+          </div>
+        ) : (
+          <div style={{ padding: "8px 12px 12px" }}>
+            {upcoming.map((a) => (
+              <ApptCard key={a.id} appt={a} isAdmin={isAdmin} onDelete={() => void deleteAppt(a.clientId, a.id)} />
+            ))}
+          </div>
         )}
       </div>
 
-      {allAppts.length === 0 && (
-        <div className="text-center py-16 text-[#98A2B3] text-sm">
-          Нет записей
-        </div>
-      )}
-
-      {/* Upcoming */}
-      {upcoming.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">
-            Предстоящие ({upcoming.length})
-          </div>
-          {upcoming.map((a) => (
-            <ApptCard
-              key={a.id}
-              appt={a}
-              isAdmin={isAdmin}
-              onDelete={() => void deleteAppt(a.clientId, a.id)}
-            />
-          ))}
-        </>
-      )}
-
-      {/* Past — collapsible */}
+      {/* Past — collapsible section */}
       {past.length > 0 && (
-        <>
-          <button
-            type="button"
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
+          <div
+            className="section-header"
+            style={{ cursor: "pointer" }}
             onClick={() => setShowPast((p) => !p)}
-            className="w-full flex items-center gap-2 text-left bg-[#F7F9FC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 mt-3 mb-2 cursor-pointer"
           >
-            <span className={`text-xs transition-transform ${showPast ? "rotate-90" : ""}`}>▶</span>
-            <span className="text-sm font-semibold text-[#667085]">
-              История записей ({past.length})
-            </span>
-          </button>
-          {showPast &&
-            past.map((a) => (
-              <ApptCard
-                key={a.id}
-                appt={a}
-                faded
-                isAdmin={isAdmin}
-                onDelete={() => void deleteAppt(a.clientId, a.id)}
-              />
-            ))}
-        </>
+            <i className="ti ti-history" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">История записей</span>
+            <span className="section-count">{past.length}</span>
+            <div className="section-actions">
+              <i className={`ti ${showPast ? "ti-chevron-up" : "ti-chevron-down"}`} style={{ fontSize: 15, color: "var(--text3)" }} />
+            </div>
+          </div>
+          {showPast && (
+            <div style={{ padding: "8px 12px 12px" }}>
+              {past.map((a) => (
+                <ApptCard key={a.id} appt={a} faded isAdmin={isAdmin} onDelete={() => void deleteAppt(a.clientId, a.id)} />
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {showAdd && <AddAppointmentFlow onClose={() => setShowAdd(false)} />}
