@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Fragment, type CSSProperties } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
@@ -658,41 +658,204 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   );
 }
 
-// ─── Client Card ──────────────────────────────────────────────────────────────
+// ─── Client cards ─────────────────────────────────────────────────────────────
 
-function ClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
+const AVATAR_PALETTES = [
+  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#93c5fd" },
+  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#6ee7b7" },
+  { bg: "rgba(245,158,11,0.18)",  border: "rgba(245,158,11,0.38)",  text: "#fcd34d" },
+  { bg: "rgba(239,68,68,0.18)",   border: "rgba(239,68,68,0.38)",   text: "#fca5a5" },
+  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#c4b5fd" },
+  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#67e8f9"  },
+  { bg: "rgba(249,115,22,0.18)",  border: "rgba(249,115,22,0.38)",  text: "#fdba74" },
+  { bg: "rgba(236,72,153,0.18)",  border: "rgba(236,72,153,0.38)",  text: "#f9a8d4" },
+];
+
+function avatarPalette(name: string) {
+  const sum = name.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+  return AVATAR_PALETTES[sum % AVATAR_PALETTES.length];
+}
+
+function getInitials(name: string): string {
+  return name.split(" ").map((w) => w[0] ?? "").join("").toUpperCase().slice(0, 2) || "?";
+}
+
+const cardBase: CSSProperties = {
+  display: "flex", gap: 12, padding: "12px 14px",
+  background: "var(--bg3)", borderRadius: 16,
+  cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.22)",
+  transition: "background 0.12s",
+};
+
+function PhysClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
+  const [pressed, setPressed] = useState(false);
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress").length;
   const lastDate = (client.repairs ?? []).map((r) => r.date ?? "").filter(Boolean).sort().at(-1);
   const days     = daysAgo(lastDate);
+  const palette  = avatarPalette(client.name);
+  const vehicles = client.vehicles ?? [];
 
   return (
     <div
-      className="bg-white rounded-[18px] border-l-4 border border-[#E2E8F0] p-4 mb-2.5 cursor-pointer shadow-sm active:scale-[.99] transition-all"
-      style={{ borderLeftColor: activeRepairs > 0 ? "var(--accent)" : "var(--border)" }}
       onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        ...cardBase,
+        background: pressed ? "var(--bg2)" : "var(--bg3)",
+        border: activeRepairs > 0 ? "1px solid rgba(59,130,246,0.22)" : "1px solid var(--border)",
+      }}
     >
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div className="font-semibold text-[#172033] text-sm">{client.name}</div>
-        {activeRepairs > 0 && <Badge variant="amber">В работе: {activeRepairs}</Badge>}
+      {/* Avatar */}
+      <div style={{
+        width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+        background: palette.bg, border: `1.5px solid ${palette.border}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 14, fontWeight: 800, color: palette.text, marginTop: 1,
+      }}>
+        {getInitials(client.name)}
       </div>
-      {client.phone && <div className="text-xs text-[#667085] mb-1">📞 {client.phone}</div>}
-      {(client.vehicles ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {(client.vehicles ?? []).slice(0, 3).map((v) => (
-            <span key={v.id} className="text-xs bg-[#F2F4F7] px-1.5 py-0.5 rounded font-mono text-[#344054]">
-              {v.plate}
-              {(v.brand ?? v.model) && <span className="text-[#98A2B3] font-sans ml-1">{v.brand ?? v.model}</span>}
+
+      {/* Right side */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Name row */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {client.name}
+          </div>
+          {activeRepairs > 0 && (
+            <span style={{
+              fontSize: 9.5, fontWeight: 700, flexShrink: 0,
+              color: "#fbbf24", background: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.22)",
+              padding: "2px 6px", borderRadius: 6,
+            }}>
+              В работе: {activeRepairs}
             </span>
-          ))}
+          )}
         </div>
-      )}
-      {lastDate && (
-        <div className="text-[10px] text-[#98A2B3] mt-1.5">
-          {days > 60 ? "⚠️ " : ""}{days === 0 ? "Сегодня" : `${days} дн. назад`}
-        </div>
-      )}
+
+        {/* Phone */}
+        {client.phone && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>📞</span>
+            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.phone}</span>
+          </div>
+        )}
+
+        {/* Vehicles */}
+        {vehicles.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+            {vehicles.slice(0, 3).map((v) => {
+              const brand = v.brand ?? v.model;
+              return (
+                <Fragment key={v.id}>
+                  <span style={{
+                    fontSize: 10.5, fontFamily: "monospace", fontWeight: 700,
+                    color: "#93c5fd", background: "rgba(59,130,246,0.10)",
+                    border: "1px solid rgba(59,130,246,0.20)",
+                    padding: "2px 7px", borderRadius: 6,
+                  }}>
+                    🚗 {v.plate}
+                  </span>
+                  {brand && (
+                    <span style={{
+                      fontSize: 10.5, color: "var(--text2)",
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid var(--border)",
+                      padding: "2px 7px", borderRadius: 6,
+                    }}>
+                      {brand}
+                    </span>
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Last visit */}
+        {lastDate && (
+          <div style={{ textAlign: "right", marginTop: 5 }}>
+            <span style={{ fontSize: 10, color: days > 60 ? "#f59e0b" : "var(--text3)" }}>
+              {days === 0 ? "Сегодня" : days === 1 ? "Вчера" : `${days} дн. назад`}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+function LegalClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
+  const [pressed, setPressed] = useState(false);
+  const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress").length;
+
+  return (
+    <div
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        ...cardBase,
+        background: pressed ? "var(--bg2)" : "var(--bg3)",
+        border: activeRepairs > 0 ? "1px solid rgba(139,92,246,0.25)" : "1px solid var(--border)",
+      }}
+    >
+      {/* Building icon */}
+      <div style={{
+        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+        background: "rgba(139,92,246,0.15)", border: "1.5px solid rgba(139,92,246,0.30)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 20, marginTop: 1,
+      }}>
+        🏢
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {client.name}
+          </div>
+          {activeRepairs > 0 && (
+            <span style={{
+              fontSize: 9.5, fontWeight: 700, flexShrink: 0,
+              color: "#fbbf24", background: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.22)",
+              padding: "2px 6px", borderRadius: 6,
+            }}>
+              В работе: {activeRepairs}
+            </span>
+          )}
+        </div>
+        {client.inn && (
+          <div style={{ fontSize: 10.5, color: "var(--text3)", marginTop: 2 }}>ИНН: {client.inn}</div>
+        )}
+        {client.contactPerson && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>👤</span>
+            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.contactPerson}</span>
+          </div>
+        )}
+        {client.phone && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>📞</span>
+            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.phone}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
+  const isLegal = (client.clientType ?? client.type ?? "phys") === "legal";
+  return isLegal
+    ? <LegalClientCard client={client} onClick={onClick} />
+    : <PhysClientCard  client={client} onClick={onClick} />;
 }
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
@@ -702,14 +865,17 @@ export function ClientsTab({ type }: { type: ClientType }) {
   const { myProfile } = useAuth();
   const isAdmin = (myProfile?.role ?? "mechanic") !== "mechanic";
 
-  const [search,   setSearch]   = useState("");
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [selected, setSelected] = useState<Client | null>(null);
+  const [activeType, setActiveType] = useState<ClientType>(type);
+  const [search,     setSearch]     = useState("");
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [selected,   setSelected]   = useState<Client | null>(null);
+
+  // Sync with sidebar navigation (desktop switches phys↔legal via tab state)
+  useEffect(() => { setActiveType(type); setSearch(""); }, [type]);
 
   const filtered = useMemo(
     () => clients
-      // Поддерживаем оба поля: clientType (старый формат Firebase) и type (новый)
-      .filter((c) => (c.clientType ?? c.type ?? "phys") === type)
+      .filter((c) => (c.clientType ?? c.type ?? "phys") === activeType)
       .filter((c) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
@@ -722,27 +888,51 @@ export function ClientsTab({ type }: { type: ClientType }) {
           )
         );
       }),
-    [clients, type, search],
+    [clients, activeType, search],
   );
 
   const selectedLive = selected ? (clients.find((c) => c.id === selected.id) ?? selected) : null;
-  const title = type === "phys" ? "Клиенты" : "Компании";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
       <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
         <div className="section-header">
-          <i className={`ti ${type === "phys" ? "ti-users" : "ti-building"}`} style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">{title}</span>
+          <i className={`ti ${activeType === "phys" ? "ti-users" : "ti-building"}`} style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">{activeType === "phys" ? "Клиенты" : "Компании"}</span>
           <span className="section-count">{filtered.length} записей</span>
           {isAdmin && (
             <div className="section-actions">
               <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
-                <i className="ti ti-plus" /> {type === "phys" ? "Клиент" : "Компания"}
+                <i className="ti ti-plus" /> {activeType === "phys" ? "Клиент" : "Компания"}
               </button>
             </div>
           )}
+        </div>
+
+        {/* Физ. лица / Компании switcher */}
+        <div style={{ padding: "10px 14px 0" }}>
+          <div style={{
+            display: "flex", background: "var(--bg2)",
+            border: "1px solid var(--border)", borderRadius: 12, padding: 3,
+          }}>
+            {(["phys", "legal"] as ClientType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => { setActiveType(t); setSearch(""); }}
+                style={{
+                  flex: 1, padding: "7px 0", borderRadius: 9, border: "none",
+                  cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                  fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
+                  background: activeType === t ? "var(--accent)" : "transparent",
+                  color: activeType === t ? "#fff" : "var(--text2)",
+                }}
+              >
+                {t === "phys" ? "👤 Физ. лица" : "🏢 Компании"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Search */}
@@ -752,16 +942,16 @@ export function ClientsTab({ type }: { type: ClientType }) {
 
         {filtered.length === 0 ? (
           <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            {search ? "Ничего не найдено" : `Нет ${type === "phys" ? "клиентов" : "компаний"}`}
+            {search ? "Ничего не найдено" : `Нет ${activeType === "phys" ? "клиентов" : "компаний"}`}
           </div>
         ) : (
-          <div style={{ padding: "8px 12px 12px" }}>
+          <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
             {filtered.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
           </div>
         )}
       </div>
 
-      {showAdd      && <AddClientModal type={type} onClose={() => setShowAdd(false)} />}
+      {showAdd      && <AddClientModal type={activeType} onClose={() => setShowAdd(false)} />}
       {selectedLive && <ClientDetail client={selectedLive} onClose={() => setSelected(null)} />}
     </div>
   );
