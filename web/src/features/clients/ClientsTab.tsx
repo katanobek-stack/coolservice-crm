@@ -48,15 +48,23 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    await updateClient(client.id, {
-      name: name.trim(),
-      phone: phone.trim() || undefined,
-      note: note.trim() || undefined,
-      inn: inn.trim() || undefined,
-      contactPerson: contact.trim() || undefined,
-      ...(isLegal && sub ? { subscription: parseFloat(sub) || undefined } : {}),
-    });
-    onClose();
+    try {
+      // Firestore rejects undefined values — build update without them
+      const data: Record<string, unknown> = { name: name.trim() };
+      if (phone.trim())   data.phone         = phone.trim();
+      if (note.trim())    data.note          = note.trim();
+      if (inn.trim())     data.inn           = inn.trim();
+      if (contact.trim()) data.contactPerson = contact.trim();
+      if (isLegal && sub.trim()) {
+        const s = parseFloat(sub);
+        if (!isNaN(s)) data.subscription = s;
+      }
+      await updateClient(client.id, data as Partial<Client>);
+      onClose();
+    } catch (err) {
+      console.error("[EditClientModal] handleSave failed:", err);
+      setSaving(false);
+    }
   }
 
   return (
@@ -84,9 +92,23 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
   const [contact, setContact] = useState(""); const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!name.trim()) return; setSaving(true);
-    await addClient({ name: name.trim(), clientType: type, phone: phone.trim() || undefined, note: note.trim() || undefined, inn: type === "legal" ? inn.trim() || undefined : undefined, contactPerson: type === "legal" ? contact.trim() || undefined : undefined, vehicles: [], repairs: [], appointments: [] });
-    onClose();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const data: Record<string, unknown> = {
+        name: name.trim(), clientType: type,
+        vehicles: [], repairs: [], appointments: [],
+      };
+      if (phone.trim())   data.phone         = phone.trim();
+      if (note.trim())    data.note          = note.trim();
+      if (type === "legal" && inn.trim())     data.inn           = inn.trim();
+      if (type === "legal" && contact.trim()) data.contactPerson = contact.trim();
+      await addClient(data as Omit<Client, "id" | "createdAt">);
+      onClose();
+    } catch (err) {
+      console.error("[AddClientModal] handleSave failed:", err);
+      setSaving(false);
+    }
   }
   return (
     <Modal title={type === "phys" ? "Новый клиент" : "Новая компания"} onClose={onClose}>
@@ -109,14 +131,30 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
   const isEdit = !!vehicle;
 
   async function handleSave() {
-    if (!plate.trim()) return; setSaving(true);
-    const norm = plate.trim().toUpperCase();
-    if (isEdit) {
-      await updateClient(client.id, { vehicles: (client.vehicles ?? []).map((v) => v.id === vehicle.id ? { ...v, plate: norm, brand: brand.trim() || undefined } : v) });
-    } else {
-      await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), { id: genId(), plate: norm, brand: brand.trim() || undefined }] });
+    if (!plate.trim()) return;
+    setSaving(true);
+    try {
+      const norm = plate.trim().toUpperCase();
+      const brandVal = brand.trim() || undefined;
+      if (isEdit) {
+        await updateClient(client.id, {
+          vehicles: (client.vehicles ?? []).map((v): Vehicle => {
+            if (v.id !== vehicle.id) return v;
+            const upd: Vehicle = { ...v, plate: norm };
+            if (brandVal) upd.brand = brandVal; else delete upd.brand;
+            return upd;
+          }),
+        });
+      } else {
+        const newV: Vehicle = { id: genId(), plate: norm };
+        if (brandVal) newV.brand = brandVal;
+        await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), newV] });
+      }
+      onClose();
+    } catch (err) {
+      console.error("[VehicleModal] handleSave failed:", err);
+      setSaving(false);
     }
-    onClose();
   }
 
   async function handleDelete() {
