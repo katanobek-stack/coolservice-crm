@@ -763,6 +763,14 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 .bg-\[\#3B6D11\]                 { background: var(--green)                    !important; }
 .bg-\[\#A32D2D\]                 { background: rgba(239,68,68,0.12)            !important; }
 .bg-cyan-500                     { background: var(--cyan)                     !important; }
+.bg-cyan-50                      { background: rgba(6,182,212,0.08)            !important; }
+.text-cyan-600                   { color: #22d3ee                              !important; }
+.text-cyan-500                   { color: #22d3ee                              !important; }
+.border-cyan-100                 { border-color: rgba(6,182,212,0.2)           !important; }
+.border-cyan-200                 { border-color: rgba(6,182,212,0.3)           !important; }
+.border-green-100                { border-color: rgba(34,197,94,0.2)           !important; }
+.green-600                       { color: var(--green)                         !important; }
+.bg-green-600                    { background: var(--green)                    !important; }
 .hover\:bg-\[\#E6F1FB\]:hover    { background: rgba(59,130,246,0.08)           !important; }
 .hover\:bg-\[\#d4e8f9\]:hover    { background: rgba(59,130,246,0.18)           !important; }
 .hover\:bg-gray-100:hover        { background: var(--bg3)                      !important; }

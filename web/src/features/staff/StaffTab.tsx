@@ -14,9 +14,9 @@ const ROLE_LABELS: Record<StaffRole, string> = {
 };
 
 const ROLE_COLORS: Record<StaffRole, { bg: string; text: string }> = {
-  admin:    { bg: "#FAEEDA", text: "#854F0B" },
-  manager:  { bg: "#E6F1FB", text: "#185FA5" },
-  mechanic: { bg: "#EAF3DE", text: "#3B6D11" },
+  admin:    { bg: "rgba(245,158,11,0.15)", text: "#fbbf24" },
+  manager:  { bg: "rgba(59,130,246,0.15)", text: "var(--accent2)" },
+  mechanic: { bg: "rgba(34,197,94,0.15)",  text: "#4ade80" },
 };
 
 // ─── Edit staff modal ─────────────────────────────────────────────────────────
@@ -110,42 +110,52 @@ export function StaffTab() {
   });
 
   return (
-    <div className="p-4">
-      <div className="text-lg font-bold text-[#172033] mb-1">Персонал</div>
-      <div className="text-xs text-[#667085] mb-4">{staff.length} сотрудников</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      {/* KPI */}
+      <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
         {(["admin", "manager", "mechanic"] as StaffRole[]).map((r) => {
           const count = staff.filter((s) => s.role === r).length;
           const c     = ROLE_COLORS[r];
+          const icons: Record<StaffRole, string> = { admin: "ti-shield", manager: "ti-user-star", mechanic: "ti-tools" };
           return (
-            <div key={r} className="bg-white rounded-xl p-2.5 border border-[#E2E8F0] text-center">
-              <div className="text-lg font-bold" style={{ color: c.text }}>{count}</div>
-              <div className="text-[10px] text-[#667085]">{ROLE_LABELS[r].split("и")[0]}</div>
+            <div key={r} className="kpi-card" style={{ borderTop: `2px solid ${c.text}` }}>
+              <i className={`ti ${icons[r]} kpi-icon`} />
+              <div className="kpi-label">{ROLE_LABELS[r]}</div>
+              <div className="kpi-value" style={{ color: c.text }}>{count}</div>
             </div>
           );
         })}
       </div>
 
-      {sorted.map((s) => (
-        <StaffCard
-          key={s.id}
-          member={s}
-          canEdit={isAdmin}
-          onClick={() => setEditing(s)}
-        />
-      ))}
-
-      {!isAdmin && (
-        <div className="text-center text-xs text-[#98A2B3] mt-4">
-          Только администратор может менять роли
+      {/* Staff list */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
+        <div className="section-header">
+          <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">Сотрудники</span>
+          <span className="section-count">{staff.length} чел.</span>
         </div>
-      )}
 
-      {editing && (
-        <EditStaffModal member={editing} onClose={() => setEditing(null)} />
-      )}
+        {sorted.length === 0 ? (
+          <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет сотрудников
+          </div>
+        ) : (
+          <div style={{ padding: "8px 12px 12px" }}>
+            {sorted.map((s) => (
+              <StaffCard key={s.id} member={s} canEdit={isAdmin} onClick={() => setEditing(s)} />
+            ))}
+          </div>
+        )}
+
+        {!isAdmin && (
+          <div style={{ padding: "8px 16px 12px", textAlign: "center", fontSize: 11, color: "var(--text3)" }}>
+            Только администратор может менять роли
+          </div>
+        )}
+      </div>
+
+      {editing && <EditStaffModal member={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

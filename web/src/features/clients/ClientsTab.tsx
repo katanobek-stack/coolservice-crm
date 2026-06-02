@@ -729,28 +729,37 @@ export function ClientsTab({ type }: { type: ClientType }) {
   const title = type === "phys" ? "Клиенты" : "Компании";
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-lg font-bold text-[#172033]">{title}</div>
-        {isAdmin && (
-          <button type="button" onClick={() => setShowAdd(true)}
-            className="text-xs text-[#185FA5] bg-[#E6F1FB] px-3 py-1.5 rounded-xl border border-[#185FA5]/10 cursor-pointer font-semibold">
-            + {type === "phys" ? "Клиент" : "Компания"}
-          </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
+        <div className="section-header">
+          <i className={`ti ${type === "phys" ? "ti-users" : "ti-building"}`} style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">{title}</span>
+          <span className="section-count">{filtered.length} записей</span>
+          {isAdmin && (
+            <div className="section-actions">
+              <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
+                <i className="ti ti-plus" /> {type === "phys" ? "Клиент" : "Компания"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+          <Input placeholder="Поиск по имени, телефону, авто..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+
+        {filtered.length === 0 ? (
+          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            {search ? "Ничего не найдено" : `Нет ${type === "phys" ? "клиентов" : "компаний"}`}
+          </div>
+        ) : (
+          <div style={{ padding: "8px 12px 12px" }}>
+            {filtered.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
+          </div>
         )}
       </div>
-
-      <div className="mb-3">
-        <Input placeholder="🔍 Поиск по имени, телефону, авто..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-[#98A2B3] text-sm">
-          {search ? "Ничего не найдено" : `Нет ${type === "phys" ? "клиентов" : "компаний"}`}
-        </div>
-      )}
-
-      {filtered.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
 
       {showAdd      && <AddClientModal type={type} onClose={() => setShowAdd(false)} />}
       {selectedLive && <ClientDetail client={selectedLive} onClose={() => setSelected(null)} />}

@@ -191,40 +191,46 @@ export function DoneTab() {
     : 0;
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-lg font-bold text-[#172033]">Отчёты</div>
-        {isAdmin && totalRevenue > 0 && (
-          <div className="text-sm font-bold text-[#3B6D11]">{fmtMoney(totalRevenue)}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Section with search */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
+        <div className="section-header">
+          <i className="ti ti-file-export" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">Отчёты</span>
+          <span className="section-count">
+            {doneRepairs.length} рем.{doneTasks.length > 0 ? ` · ${doneTasks.length} задач` : ""}
+          </span>
+          {isAdmin && totalRevenue > 0 && (
+            <div className="section-actions">
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+                {fmtMoney(totalRevenue)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Search bar */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+          <Input
+            placeholder="Поиск по клиенту, авто, описанию..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {byMonth.length === 0 ? (
+          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            {search ? "Ничего не найдено" : "Нет завершённых работ"}
+          </div>
+        ) : (
+          <div style={{ padding: "8px 12px 12px" }}>
+            {byMonth.map(([mk, { repairs, tasks: mTasks }]) => (
+              <MonthBlock key={mk} mk={mk} repairs={repairs} tasks={mTasks} isAdmin={isAdmin} />
+            ))}
+          </div>
         )}
       </div>
-      <div className="text-xs text-[#667085] mb-3">
-        Ремонтов: {doneRepairs.length} · Задач: {doneTasks.length}
-      </div>
-
-      <div className="mb-3">
-        <Input
-          placeholder="🔍 Поиск по клиенту, авто, описанию..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {byMonth.length === 0 && (
-        <div className="text-center py-12 text-[#98A2B3] text-sm">
-          {search ? "Ничего не найдено" : "Нет завершённых работ"}
-        </div>
-      )}
-
-      {byMonth.map(([mk, { repairs, tasks: mTasks }]) => (
-        <MonthBlock
-          key={mk}
-          mk={mk}
-          repairs={repairs}
-          tasks={mTasks}
-          isAdmin={isAdmin}
-        />
-      ))}
     </div>
   );
 }

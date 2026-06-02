@@ -24,11 +24,11 @@ function getRentAmount(f: Freezer): number {
 
 // ─── Info cell ────────────────────────────────────────────────────────────────
 
-function InfoCell({ label, value, color = "#172033" }: { label: string; value: string; color?: string }) {
+function InfoCell({ label, value, color = "var(--text)" }: { label: string; value: string; color?: string }) {
   return (
-    <div className="bg-[#F7F9FC] rounded-xl p-2.5 border border-[#E2E8F0]">
-      <div className="text-[9px] text-[#98A2B3] font-bold uppercase tracking-wide mb-1">{label}</div>
-      <div className="text-sm font-bold" style={{ color }}>{value || "—"}</div>
+    <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ fontSize: 9, color: "var(--text3)", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color }}>{value || "—"}</div>
     </div>
   );
 }
@@ -406,52 +406,63 @@ export function FreezersTab() {
   const selectedLive = selected ? (freezers.find((f) => f.id === selected.id) ?? selected) : null;
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="text-lg font-bold text-[#172033]">Склад</div>
-          {isAdmin && totalRentIncome > 0 && (
-            <div className="text-xs text-[#3B6D11]">
-              Доход от аренды: {totalRentIncome.toLocaleString("ru-RU")} ₽/мес
-            </div>
-          )}
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* KPI */}
+      <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
+        <div className="kpi-card blue">
+          <i className="ti ti-package kpi-icon" />
+          <div className="kpi-label">Всего камер</div>
+          <div className="kpi-value" style={{ color: "var(--accent2)" }}>{freezers.length}</div>
         </div>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="text-xs text-[#185FA5] bg-[#E6F1FB] px-3 py-1.5 rounded-xl border border-[#185FA5]/10 cursor-pointer font-semibold"
-          >
-            + Камера
-          </button>
+        <div className="kpi-card green">
+          <i className="ti ti-home kpi-icon" />
+          <div className="kpi-label">Сдаётся</div>
+          <div className="kpi-value" style={{ color: "#4ade80" }}>{rentedCount}</div>
+        </div>
+        <div className="kpi-card" style={{ borderTop: "2px solid var(--text3)" }}>
+          <i className="ti ti-lock-open kpi-icon" />
+          <div className="kpi-label">Свободно</div>
+          <div className="kpi-value" style={{ color: "var(--text2)" }}>{freeCount}</div>
+        </div>
+        {isAdmin && totalRentIncome > 0 && (
+          <div className="kpi-card yellow">
+            <i className="ti ti-currency-ruble kpi-icon" />
+            <div className="kpi-label">Аренда / мес</div>
+            <div className="kpi-value" style={{ color: "#fbbf24" }}>
+              {totalRentIncome.toLocaleString("ru-RU")}₽
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="bg-white rounded-xl p-2.5 border border-[#E2E8F0] text-center">
-          <div className="text-lg font-bold text-[#172033]">{freezers.length}</div>
-          <div className="text-[10px] text-[#667085]">Всего</div>
+      {/* Freezer list */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
+        <div className="section-header">
+          <i className="ti ti-snowflake" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">Холодильные камеры</span>
+          <span className="section-count">{freezers.length} ед.</span>
+          {isAdmin && (
+            <div className="section-actions">
+              <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
+                <i className="ti ti-plus" /> Камера
+              </button>
+            </div>
+          )}
         </div>
-        <div className="bg-white rounded-xl p-2.5 border border-[#E2E8F0] text-center">
-          <div className="text-lg font-bold text-[#3B6D11]">{rentedCount}</div>
-          <div className="text-[10px] text-[#667085]">Сдаётся</div>
-        </div>
-        <div className="bg-white rounded-xl p-2.5 border border-[#E2E8F0] text-center">
-          <div className="text-lg font-bold text-[#667085]">{freeCount}</div>
-          <div className="text-[10px] text-[#667085]">Свободно</div>
-        </div>
+
+        {freezers.length === 0 ? (
+          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет камер на балансе
+          </div>
+        ) : (
+          <div style={{ padding: "8px 12px 12px" }}>
+            {freezers.map((f) => (
+              <FreezerCard key={f.id} freezer={f} onClick={() => setSelected(f)} />
+            ))}
+          </div>
+        )}
       </div>
-
-      {freezers.length === 0 && (
-        <div className="text-center py-16 text-[#98A2B3] text-sm">
-          Нет камер на балансе
-        </div>
-      )}
-
-      {freezers.map((f) => (
-        <FreezerCard key={f.id} freezer={f} onClick={() => setSelected(f)} />
-      ))}
 
       {showAdd       && <FreezerFormModal onClose={() => setShowAdd(false)} />}
       {selectedLive  && <FreezerDetail freezer={selectedLive} onClose={() => setSelected(null)} />}
