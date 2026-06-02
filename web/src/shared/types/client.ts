@@ -3,9 +3,12 @@ export type ClientType = "phys" | "legal";
 export interface Vehicle {
   id: string;
   plate: string;
-  model?: string;
+  brand?: string;   // поле в Firebase называется brand (не model)
+  model?: string;   // алиас для совместимости
   year?: string;
-  photo?: string;
+  notes?: string;
+  photo?: string;   // base64 data URL (сжатая миниатюра)
+  serviceType?: string;
 }
 
 export interface RepairTask {
@@ -21,9 +24,10 @@ export interface RepairTask {
 }
 
 export interface Photo {
-  id: string;
-  url: string;
-  path: string;
+  id:    string;
+  url?:  string;   // Firebase Storage URL (новый формат)
+  data?: string;   // base64 (устаревший формат)
+  path?: string;
 }
 
 export type ServiceType = "refrigerator" | "ac" | "freezer" | "other";
@@ -48,16 +52,21 @@ export interface Appointment {
   date: string;
   time?: string;
   description?: string;
+  vehicleId?: string;
+  serviceType?: string;
 }
 
 export interface Client {
   id: string;
   name: string;
-  type?: ClientType;
+  // Firebase поле называется clientType, не type
+  clientType?: ClientType;
+  type?: ClientType;          // для совместимости с данными нового кода
   phone?: string;
   note?: string;
   inn?: string;
   contactPerson?: string;
+  subscription?: number;
   vehicles: Vehicle[];
   repairs: Repair[];
   appointments: Appointment[];

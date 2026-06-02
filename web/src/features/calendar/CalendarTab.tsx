@@ -103,7 +103,7 @@ function AddAppointmentFlow({ onClose }: { onClose: () => void }) {
     return (
       c.name.toLowerCase().includes(q) ||
       (c.phone ?? "").includes(q) ||
-      (c.vehicles ?? []).some((v) => v.plate.toLowerCase().includes(q))
+      (c.vehicles ?? []).some((v) => v.plate.toLowerCase().includes(q) || (v.brand ?? v.model ?? "").toLowerCase().includes(q))
     );
   });
 

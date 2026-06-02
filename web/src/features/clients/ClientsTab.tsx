@@ -40,9 +40,10 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
   const [note,   setNote]   = useState(client.note ?? "");
   const [inn,    setInn]    = useState(client.inn ?? "");
   const [contact, setContact] = useState(client.contactPerson ?? "");
-  const [sub,    setSub]    = useState((client as Client & { subscription?: string }).subscription ?? "");
+  const [sub,    setSub]    = useState(String(client.subscription ?? ""));
   const [saving, setSaving] = useState(false);
-  const isLegal = (client.type ?? "phys") === "legal";
+  // clientType — поле в старом Firebase; type — в новом коде
+  const isLegal = (client.clientType ?? client.type ?? "phys") === "legal";
 
   async function handleSave() {
     if (!name.trim()) return;
@@ -53,7 +54,7 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
       note: note.trim() || undefined,
       inn: inn.trim() || undefined,
       contactPerson: contact.trim() || undefined,
-      ...(isLegal && sub ? { subscription: sub.trim() } : {}),
+      ...(isLegal && sub ? { subscription: parseFloat(sub) || undefined } : {}),
     });
     onClose();
   }
@@ -84,7 +85,7 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
 
   async function handleSave() {
     if (!name.trim()) return; setSaving(true);
-    await addClient({ name: name.trim(), type, phone: phone.trim() || undefined, note: note.trim() || undefined, inn: type === "legal" ? inn.trim() || undefined : undefined, contactPerson: type === "legal" ? contact.trim() || undefined : undefined, vehicles: [], repairs: [], appointments: [] });
+    await addClient({ name: name.trim(), clientType: type, phone: phone.trim() || undefined, note: note.trim() || undefined, inn: type === "legal" ? inn.trim() || undefined : undefined, contactPerson: type === "legal" ? contact.trim() || undefined : undefined, vehicles: [], repairs: [], appointments: [] });
     onClose();
   }
   return (
@@ -102,7 +103,8 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
 
 function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: Vehicle; onClose: () => void }) {
   const [plate, setPlate] = useState(vehicle?.plate ?? "");
-  const [model, setModel] = useState(vehicle?.model ?? "");
+  // Firebase хранит поле как brand (не model)
+  const [brand, setBrand] = useState(vehicle?.brand ?? vehicle?.model ?? "");
   const [saving, setSaving] = useState(false);
   const isEdit = !!vehicle;
 
@@ -110,9 +112,9 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
     if (!plate.trim()) return; setSaving(true);
     const norm = plate.trim().toUpperCase();
     if (isEdit) {
-      await updateClient(client.id, { vehicles: (client.vehicles ?? []).map((v) => v.id === vehicle.id ? { ...v, plate: norm, model: model.trim() || undefined } : v) });
+      await updateClient(client.id, { vehicles: (client.vehicles ?? []).map((v) => v.id === vehicle.id ? { ...v, plate: norm, brand: brand.trim() || undefined } : v) });
     } else {
-      await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), { id: genId(), plate: norm, model: model.trim() || undefined }] });
+      await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), { id: genId(), plate: norm, brand: brand.trim() || undefined }] });
     }
     onClose();
   }
@@ -130,7 +132,7 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
   return (
     <Modal title={isEdit ? "Редактировать авто" : "Добавить авто"} onClose={onClose}>
       <FormGroup label="Гос. номер"><Input placeholder="А123БВ 125" value={plate} onChange={(e) => setPlate(e.target.value)} style={{ fontFamily: "monospace", fontWeight: 700, textTransform: "uppercase" }} /></FormGroup>
-      <FormGroup label="Марка / модель"><Input placeholder="Toyota Dyna" value={model} onChange={(e) => setModel(e.target.value)} /></FormGroup>
+      <FormGroup label="Марка / модель"><Input placeholder="Toyota Dyna" value={brand} onChange={(e) => setBrand(e.target.value)} /></FormGroup>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : isEdit ? "Сохранить" : "Добавить"}</Button>
       {isEdit && (<div className="mt-3 pt-3 border-t border-[#E2E8F0]"><button type="button" onClick={() => void handleDelete()} className="text-xs text-red-400 cursor-pointer bg-transparent border-none">🗑 Удалить авто</button></div>)}
     </Modal>
@@ -226,7 +228,7 @@ function AddRepairModal({ client, onClose }: { client: Client; onClose: () => vo
       <FormGroup label="Автомобиль">
         <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
           <option value="">— новый авто —</option>
-          {(client.vehicles ?? []).map((v) => <option key={v.id} value={v.id}>{v.plate}{v.model ? ` · ${v.model}` : ""}</option>)}
+          {(client.vehicles ?? []).map((v) => <option key={v.id} value={v.id}>{v.plate}{(v.brand ?? v.model) ? ` · ${v.brand ?? v.model}` : ""}</option>)}
         </Select>
       </FormGroup>
       {!vehicleId && <FormGroup label="Номер нового авто"><Input placeholder="А123БВ 125" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} /></FormGroup>}
@@ -581,9 +583,9 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         {client.phone && <div className="text-sm mb-1">📞 <a href={`tel:${client.phone}`} className="text-[#185FA5] font-semibold">{client.phone}</a></div>}
         {client.inn          && <div className="text-xs text-[#667085]">ИНН: {client.inn}</div>}
         {client.contactPerson && <div className="text-xs text-[#667085]">Контакт: {client.contactPerson}</div>}
-        {(client as Client & { subscription?: string }).subscription && (
+        {client.subscription && (
           <div className="text-xs text-[#3B6D11] font-semibold mt-0.5">
-            💰 Абонплата: {(client as Client & { subscription?: string }).subscription} ₽/мес
+            💰 Абонплата: {client.subscription} ₽/мес
           </div>
         )}
         {client.note && <div className="text-xs text-[#98A2B3] mt-1">{client.note}</div>}
@@ -597,14 +599,20 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         </div>
         {(client.vehicles ?? []).length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {(client.vehicles ?? []).map((v) => (
+            {(client.vehicles ?? []).map((v) => {
+              const brandName = v.brand ?? v.model;
+              return (
               <button key={v.id} type="button" onClick={() => isAdmin && setVehicleEdit(v)}
-                className={`text-xs bg-[#F2F4F7] text-[#344054] px-2.5 py-1 rounded-lg font-mono border border-[#E2E8F0] ${isAdmin ? "cursor-pointer hover:bg-[#E6F1FB]" : ""}`}>
-                {v.plate}
-                {v.model && <span className="text-[#98A2B3] ml-1 font-sans">{v.model}</span>}
-                {isAdmin && <span className="ml-1">✏️</span>}
+                className={`flex items-center gap-1.5 text-xs bg-[#F2F4F7] text-[#344054] px-2.5 py-1 rounded-lg border border-[#E2E8F0] ${isAdmin ? "cursor-pointer hover:bg-[#E6F1FB]" : ""}`}>
+                {v.photo && (
+                  <img src={v.photo} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+                )}
+                <span className="font-mono">{v.plate}</span>
+                {brandName && <span className="text-[#98A2B3] font-sans">{brandName}</span>}
+                {isAdmin && <span>✏️</span>}
               </button>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-xs text-[#98A2B3]">Нет автомобилей</div>
@@ -671,7 +679,10 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
       {(client.vehicles ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1">
           {(client.vehicles ?? []).slice(0, 3).map((v) => (
-            <span key={v.id} className="text-xs bg-[#F2F4F7] px-1.5 py-0.5 rounded font-mono text-[#344054]">{v.plate}</span>
+            <span key={v.id} className="text-xs bg-[#F2F4F7] px-1.5 py-0.5 rounded font-mono text-[#344054]">
+              {v.plate}
+              {(v.brand ?? v.model) && <span className="text-[#98A2B3] font-sans ml-1">{v.brand ?? v.model}</span>}
+            </span>
           ))}
         </div>
       )}
@@ -697,14 +708,18 @@ export function ClientsTab({ type }: { type: ClientType }) {
 
   const filtered = useMemo(
     () => clients
-      .filter((c) => (c.type ?? "phys") === type)
+      // Поддерживаем оба поля: clientType (старый формат Firebase) и type (новый)
+      .filter((c) => (c.clientType ?? c.type ?? "phys") === type)
       .filter((c) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
           (c.phone ?? "").includes(q) ||
-          (c.vehicles ?? []).some((v) => v.plate.toLowerCase().includes(q))
+          (c.vehicles ?? []).some((v) =>
+            v.plate.toLowerCase().includes(q) ||
+            (v.brand ?? v.model ?? "").toLowerCase().includes(q),
+          )
         );
       }),
     [clients, type, search],

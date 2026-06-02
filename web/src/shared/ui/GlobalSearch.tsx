@@ -48,15 +48,16 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
         });
       }
 
-      // Match vehicles by plate
+      // Match vehicles by plate or brand
       (c.vehicles ?? []).forEach((v) => {
-        if (v.plate.toLowerCase().includes(q)) {
+        const brandName = v.brand ?? v.model ?? "";
+        if (v.plate.toLowerCase().includes(q) || brandName.toLowerCase().includes(q)) {
           out.push({
             type:       "vehicle",
             clientId:   c.id,
             clientName: c.name,
             title:      v.plate,
-            sub:        `${c.name}${v.model ? " · " + v.model : ""}`,
+            sub:        `${c.name}${brandName ? " · " + brandName : ""}`,
           });
         }
       });

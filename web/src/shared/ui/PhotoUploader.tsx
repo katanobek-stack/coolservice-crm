@@ -9,8 +9,13 @@ interface Props {
   readOnly?: boolean;
 }
 
+// Handles both {url} (Storage) and {data} (legacy base64) photo formats
+function photoSrc(p: PhotoData & { data?: string }): string {
+  return p.url ?? p.data ?? "";
+}
+
 export function PhotoGrid({ photos, onRemove, readOnly, onView }: {
-  photos:    PhotoData[];
+  photos:    (PhotoData & { data?: string })[];
   onRemove?: (id: string) => void;
   readOnly?: boolean;
   onView?:   (url: string) => void;
@@ -18,13 +23,16 @@ export function PhotoGrid({ photos, onRemove, readOnly, onView }: {
   if (!photos.length) return null;
   return (
     <div className="grid grid-cols-3 gap-1.5 mt-2">
-      {photos.map((p) => (
+      {photos.map((p) => {
+        const src = photoSrc(p);
+        if (!src) return null;
+        return (
         <div key={p.id} className="relative aspect-square">
           <img
-            src={p.url}
+            src={src}
             alt=""
             className="w-full h-full object-cover rounded-xl border border-[#E2E8F0] cursor-pointer"
-            onClick={() => onView?.(p.url)}
+            onClick={() => onView?.(src)}
           />
           {!readOnly && onRemove && (
             <button
@@ -36,7 +44,8 @@ export function PhotoGrid({ photos, onRemove, readOnly, onView }: {
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

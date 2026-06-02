@@ -3,9 +3,10 @@ import { getFirebaseStorage } from "../firebase/app";
 import { genId } from "./format";
 
 export interface PhotoData {
-  id:   string;
-  url:  string;
-  path: string;
+  id:    string;
+  url?:  string;   // Firebase Storage URL
+  data?: string;   // Legacy base64 format
+  path?: string;
 }
 
 function compressToBlob(file: File, maxWidth = 800, quality = 0.65): Promise<Blob> {
