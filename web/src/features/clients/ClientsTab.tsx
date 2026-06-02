@@ -396,7 +396,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
                 </button>
               </>
             ) : null}
-            <button type="button" onClick={handleDelete}
+            <button type="button" onClick={() => void handleDelete()}
               className="text-[#98A2B3] cursor-pointer bg-transparent border-none text-base leading-none">
               ×
             </button>

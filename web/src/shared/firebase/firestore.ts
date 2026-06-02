@@ -6,10 +6,9 @@ import {
   deleteDoc,
   setDoc,
   serverTimestamp,
-  writeBatch,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./app";
-import type { Client, Repair, Vehicle, Appointment } from "../types/client";
+import type { Client } from "../types/client";
 import type { ServiceTask } from "../types/task";
 import type { Freezer } from "../types/freezer";
 import type { StaffProfileInput } from "../types/staff";

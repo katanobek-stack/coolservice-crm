@@ -14,8 +14,11 @@ const MONTH_NAMES_FULL = [
 ];
 
 function monthLabel(mk: string): string {
+  if (mk === "0000-00" || !mk.includes("-")) return "Без даты";
   const [y, m] = mk.split("-");
-  return `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+  const month = MONTH_NAMES_FULL[parseInt(m) - 1];
+  if (!month) return mk;
+  return `${month} ${y}`;
 }
 
 // ─── Repair row ───────────────────────────────────────────────────────────────

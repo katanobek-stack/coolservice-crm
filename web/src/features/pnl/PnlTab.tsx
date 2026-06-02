@@ -131,7 +131,7 @@ function ExpensesModal({ finance, onClose }: { finance: FinanceDoc; onClose: () 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function PnlTab() {
-  const { clients, freezers, finance: rawFinance, staff } = useData();
+  const { clients, freezers, finance: rawFinance } = useData();
   const finance = rawFinance as unknown as FinanceDoc;
   const now     = new Date();
   const curMK   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
