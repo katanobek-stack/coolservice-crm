@@ -630,6 +630,16 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   to   { transform: scaleX(1); transform-origin: left; }
 }
 
+@keyframes fanSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulseGreen {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
 /* ═══ REVENUE BAR CHART ═══ */
 .chart-bars {
   display: flex;

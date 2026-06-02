@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
-import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { addFreezer, updateFreezer, deleteFreezer } from "../../shared/firebase/firestore";
-import { fmtDate, genId } from "../../shared/utils/format";
+import { fmtDate } from "../../shared/utils/format";
 import { FREEZER_TYPES } from "../../shared/types/freezer";
 import type { Freezer, RentHistoryEntry } from "../../shared/types/freezer";
 
@@ -342,45 +341,155 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
   );
 }
 
-// ─── Freezer card ─────────────────────────────────────────────────────────────
+// ─── Isometric freezer card ───────────────────────────────────────────────────
+
+function FanBlades({ cx, cy, r, spinning }: { cx: number; cy: number; r: number; spinning: boolean }) {
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r + 1} fill="rgba(15,25,45,0.7)" stroke="rgba(100,140,180,0.4)" strokeWidth="0.6" />
+      <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: spinning ? "fanSpin 0.7s linear infinite" : "none" }}>
+        <ellipse cx={cx} cy={cy - r * 0.55} rx={r * 0.38} ry={r * 0.6} fill="rgba(186,230,253,0.75)" />
+        <ellipse cx={cx + r * 0.55} cy={cy} rx={r * 0.6} ry={r * 0.38} fill="rgba(186,230,253,0.6)" />
+        <ellipse cx={cx} cy={cy + r * 0.55} rx={r * 0.38} ry={r * 0.6} fill="rgba(186,230,253,0.75)" />
+        <ellipse cx={cx - r * 0.55} cy={cy} rx={r * 0.6} ry={r * 0.38} fill="rgba(186,230,253,0.6)" />
+      </g>
+      <circle cx={cx} cy={cy} r={r * 0.22} fill="rgba(120,160,210,0.9)" />
+    </g>
+  );
+}
 
 function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => void }) {
-  const rented  = isRented(freezer);
-  const rentAmt = getRentAmount(freezer);
+  const rented   = isRented(freezer);
+  const isActive = !rented;
+  const uid      = freezer.id.slice(-4);
+
+  const edgeColor = rented ? "rgba(96,165,250,0.8)"  : "rgba(148,163,184,0.30)";
+  const ew        = rented ? 1.4 : 0.7;
 
   return (
     <div
-      className="bg-white rounded-[18px] border border-[#E2E8F0] p-4 mb-2.5 cursor-pointer shadow-sm active:scale-[.99] transition-all"
       onClick={onClick}
+      style={{
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "12px 6px 10px",
+        background: "var(--bg3)",
+        border: rented ? "1px solid rgba(96,165,250,0.30)" : "1px solid var(--border)",
+        borderRadius: 18,
+        boxShadow: rented ? "0 0 22px rgba(59,130,246,0.11), 0 2px 8px rgba(0,0,0,0.3)" : "0 2px 8px rgba(0,0,0,0.2)",
+        transition: "box-shadow 0.2s",
+        position: "relative",
+      }}
     >
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div>
-          <div className="font-semibold text-[#172033] text-sm">
-            {freezer.name ?? freezer.type ?? "Камера"}
-          </div>
-          {freezer.name && freezer.type && (
-            <div className="text-xs text-[#667085]">{freezer.type}</div>
-          )}
-        </div>
-        <Badge variant={rented ? "green" : "gray"}>{rented ? "Сдаётся" : "Свободна"}</Badge>
+      <svg width="100%" viewBox="0 0 200 140" style={{ display: "block", overflow: "visible" }}>
+        <defs>
+          <filter id={`glow${uid}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <linearGradient id={`tg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stopColor={rented ? "rgba(147,197,253,0.22)" : "rgba(180,210,255,0.10)"} />
+            <stop offset="100%" stopColor={rented ? "rgba(59,130,246,0.08)"  : "rgba(90,130,200,0.05)"} />
+          </linearGradient>
+        </defs>
+
+        {/* ── Container body ── */}
+        {/* Top face */}
+        <polygon points="20,60 110,20 190,60 110,100"
+          fill={`url(#tg${uid})`} stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
+        {/* Front face */}
+        <polygon points="20,60 110,100 110,132 20,92"
+          fill={rented ? "rgba(59,130,246,0.10)" : "rgba(80,110,170,0.06)"}
+          stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
+        {/* Right face */}
+        <polygon points="110,100 190,60 190,92 110,132"
+          fill={rented ? "rgba(30,80,200,0.13)" : "rgba(50,80,150,0.05)"}
+          stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
+
+        {/* Vertical ribs — front face */}
+        {[0.33, 0.66].map((t, i) => (
+          <line key={i}
+            x1={20 + t * 90} y1={60 + t * 40}
+            x2={20 + t * 90} y2={92 + t * 40}
+            stroke={edgeColor} strokeWidth={ew * 0.55} opacity={0.5} />
+        ))}
+        {/* Vertical ribs — right face */}
+        {[0.33, 0.66].map((t, i) => (
+          <line key={i}
+            x1={110 + t * 80} y1={100 - t * 40}
+            x2={110 + t * 80} y2={132 - t * 40}
+            stroke={edgeColor} strokeWidth={ew * 0.55} opacity={0.5} />
+        ))}
+
+        {/* ── Blue edge glow when rented ── */}
+        {rented && (
+          <>
+            <line x1="20" y1="60" x2="20" y2="92"   stroke="rgba(96,165,250,0.65)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
+            <line x1="20" y1="60" x2="110" y2="20"  stroke="rgba(96,165,250,0.55)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
+            <line x1="190" y1="60" x2="190" y2="92" stroke="rgba(96,165,250,0.65)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
+            <line x1="110" y1="20" x2="190" y2="60" stroke="rgba(96,165,250,0.55)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
+          </>
+        )}
+
+        {/* ── Carrier unit on top-left of top face ── */}
+        {/* Carrier top */}
+        <polygon points="38,54 84,32 122,54 76,76"
+          fill="rgba(22,32,52,0.85)" stroke="rgba(100,130,170,0.55)" strokeWidth="0.9" />
+        {/* Carrier front */}
+        <polygon points="38,54 76,76 76,88 38,66"
+          fill="rgba(15,24,42,0.88)" stroke="rgba(90,120,160,0.45)" strokeWidth="0.9" />
+        {/* Carrier right */}
+        <polygon points="76,76 122,54 122,66 76,88"
+          fill="rgba(10,18,36,0.88)" stroke="rgba(80,110,150,0.40)" strokeWidth="0.9" />
+
+        {/* Brand text on carrier front */}
+        <text x="41" y="85" fontSize="5" fill="rgba(148,163,184,0.75)" fontWeight="bold" letterSpacing="0.6">CARRIER</text>
+
+        {/* ── Fans ── */}
+        <FanBlades cx={52} cy={68} r={7} spinning={rented} />
+        <FanBlades cx={68} cy={76} r={7} spinning={rented} />
+      </svg>
+
+      {/* ── Name + indicators ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+        {isActive && (
+          <span style={{
+            width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0,
+            animation: "pulseGreen 1.8s ease-in-out infinite",
+            boxShadow: "0 0 5px #22c55e",
+          }} />
+        )}
+        {rented && (
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, boxShadow: "0 0 7px rgba(59,130,246,0.8)" }} />
+        )}
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {freezer.name ?? freezer.type ?? "Камера"}
+        </span>
       </div>
 
-      <div className="flex flex-wrap gap-2 mt-1.5">
-        {freezer.volume     && <span className="text-xs text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded-lg">📦 {freezer.volume} м³</span>}
-        {freezer.temp       && <span className="text-xs text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-lg">❄️ {freezer.temp}</span>}
-        {freezer.location   && <span className="text-xs text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded-lg">📍 {freezer.location}</span>}
-        {rented && rentAmt > 0 && (
-          <span className="text-xs text-[#3B6D11] bg-[#EAF3DE] px-2 py-0.5 rounded-lg">
-            💰 {rentAmt.toLocaleString("ru-RU")} ₽/мес
+      {/* Temp + status */}
+      <div style={{ display: "flex", gap: 5, marginTop: 5, flexWrap: "wrap", justifyContent: "center" }}>
+        {freezer.temp && (
+          <span style={{ fontSize: 10, color: "#67e8f9", background: "rgba(6,182,212,0.12)", padding: "2px 6px", borderRadius: 5, fontWeight: 600 }}>
+            ❄ {freezer.temp}
           </span>
         )}
+        <span style={{
+          fontSize: 10,
+          color: rented ? "#93c5fd" : "#6ee7b7",
+          background: rented ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)",
+          padding: "2px 6px", borderRadius: 5, fontWeight: 600,
+        }}>
+          {rented ? "Сдана" : "Свободна"}
+        </span>
       </div>
 
       {rented && freezer.tenant && (
-        <div className="text-xs text-[#667085] mt-1.5">👤 {freezer.tenant}</div>
-      )}
-      {rented && freezer.paidUntil && (
-        <div className="text-xs text-[#BA7517] mt-0.5">До: {fmtDate(freezer.paidUntil)}</div>
+        <div style={{ fontSize: 9.5, color: "var(--text2)", marginTop: 3, textAlign: "center", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {freezer.tenant}
+        </div>
       )}
     </div>
   );
@@ -456,7 +565,7 @@ export function FreezersTab() {
             Нет камер на балансе
           </div>
         ) : (
-          <div style={{ padding: "8px 12px 12px" }}>
+          <div style={{ padding: "8px 12px 12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {freezers.map((f) => (
               <FreezerCard key={f.id} freezer={f} onClick={() => setSelected(f)} />
             ))}
