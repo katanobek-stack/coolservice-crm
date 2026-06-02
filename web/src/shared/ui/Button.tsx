@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
@@ -6,23 +6,30 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
 }
 
-const VARIANTS = {
-  primary:   "bg-[#185FA5] hover:bg-[#1a6db8] text-white shadow-[0_4px_14px_rgba(24,95,165,.25)]",
-  secondary: "bg-[#E6F1FB] text-[#185FA5] hover:bg-[#d4e8f9]",
-  danger:    "bg-[#FBEAEA] text-[#A32D2D] hover:bg-red-100",
-  ghost:     "bg-transparent text-[#667085] hover:bg-gray-100",
+const VARIANT_STYLES: Record<string, CSSProperties> = {
+  primary:   { background: "var(--accent)",                color: "white" },
+  secondary: { background: "rgba(59,130,246,0.12)",        color: "var(--accent2)" },
+  danger:    { background: "rgba(239,68,68,0.12)",         color: "#f87171" },
+  ghost:     { background: "var(--bg3)",                   color: "var(--text2)", border: "1px solid var(--border)" },
 };
 
-const SIZES = {
-  sm: "px-3 py-1.5 text-sm rounded-xl",
-  md: "px-4 py-3 text-base rounded-[14px]",
-  lg: "w-full px-4 py-3.5 text-base rounded-[15px]",
+const SIZE_STYLES: Record<string, CSSProperties> = {
+  sm: { padding: "5px 12px",  fontSize: 12, borderRadius: 8 },
+  md: { padding: "7px 14px",  fontSize: 13, borderRadius: 8 },
+  lg: { padding: "10px 16px", fontSize: 14, borderRadius: 10, width: "100%" },
 };
 
-export function Button({ variant = "primary", size = "md", className = "", children, ...props }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", style, children, ...props }: ButtonProps) {
   return (
     <button
-      className={`font-semibold cursor-pointer border-none transition-all active:scale-[.97] ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+        fontFamily: "Manrope, sans-serif", fontWeight: 600,
+        cursor: "pointer", border: "none", transition: "all 0.18s",
+        ...VARIANT_STYLES[variant],
+        ...SIZE_STYLES[size],
+        ...style,
+      }}
       {...props}
     >
       {children}

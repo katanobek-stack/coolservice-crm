@@ -104,35 +104,40 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
       </div>
 
       {query.trim().length > 0 && query.trim().length < 2 && (
-        <div className="text-center text-sm text-[#98A2B3] py-4">
+        <div style={{ textAlign: "center", fontSize: 13, color: "var(--text3)", padding: "16px 0" }}>
           Введите минимум 2 символа
         </div>
       )}
 
       {query.trim().length >= 2 && results.length === 0 && (
-        <div className="text-center text-sm text-[#98A2B3] py-8">
+        <div style={{ textAlign: "center", fontSize: 13, color: "var(--text3)", padding: "32px 0" }}>
           Ничего не найдено
         </div>
       )}
 
-      <div className="space-y-2">
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {results.map((r, i) => (
           <div
             key={i}
-            className="bg-[#F7F9FC] rounded-xl px-3 py-3 border border-[#E2E8F0] hover:bg-[#E6F1FB] transition-all cursor-pointer"
+            style={{
+              background: "var(--bg3)", borderRadius: 10, padding: "10px 14px",
+              border: "1px solid var(--border)", cursor: "pointer", transition: "all 0.15s",
+            }}
             onClick={onClose}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.background = "rgba(59,130,246,0.06)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg3)"; }}
           >
-            <div className="flex items-start gap-2">
-              <span className="text-base flex-shrink-0">{icons[r.type]}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-[#172033]">{r.title}</span>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{icons[r.type]}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{r.title}</span>
                   {r.badge && (
                     <Badge variant={r.badgeVariant ?? "gray"}>{r.badge}</Badge>
                   )}
                 </div>
                 {r.sub && (
-                  <div className="text-xs text-[#667085] mt-0.5">{r.sub}</div>
+                  <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{r.sub}</div>
                 )}
               </div>
             </div>
@@ -141,7 +146,7 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
       </div>
 
       {query.trim().length < 2 && (
-        <div className="text-center text-xs text-[#98A2B3] py-8">
+        <div style={{ textAlign: "center", fontSize: 12, color: "var(--text3)", padding: "24px 0" }}>
           Поиск по клиентам, авто и ремонтам
         </div>
       )}
