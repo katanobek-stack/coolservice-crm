@@ -630,6 +630,115 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   to   { transform: scaleX(1); transform-origin: left; }
 }
 
+/* ═══ REVENUE BAR CHART ═══ */
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 110px;
+  padding: 24px 20px 18px;
+  position: relative;
+}
+
+.bar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  opacity: 0.55;
+  transition: opacity 0.2s;
+  animation: barGrow 0.8s ease both;
+  min-height: 4px;
+}
+
+.bar:hover { opacity: 1; }
+.bar.active { opacity: 1; background: var(--cyan); }
+
+.bar-label {
+  font-size: 9px;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.bar-value {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--accent2);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.bar.active + .bar-value,
+.bar-wrap:hover .bar-value { color: var(--cyan); }
+
+/* ═══ MECHANIC LOAD ═══ */
+.mechanic-list {
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mechanic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+  animation: fadeUp 0.4s ease both;
+}
+
+.mechanic-row:hover { background: var(--bg3); }
+
+.mech-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.mech-info { flex: 1; min-width: 0; }
+.mech-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.mech-tasks { font-size: 11px; color: var(--text3); }
+
+.progress-bar {
+  width: 80px;
+  height: 4px;
+  background: var(--bg3);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  animation: progressGrow 1s ease 0.6s both;
+}
+
 /* ═══ SCROLLBAR ═══ */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

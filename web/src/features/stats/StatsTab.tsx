@@ -57,18 +57,31 @@ function QuickAction({ icon, label, onClick }: { icon: string; label: string; on
 
 // ─── Revenue chart (CSS bars) ─────────────────────────────────────────────────
 
-function RevenueChart({ monthData }: { monthData: { label: string; rev: number }[] }) {
-  const maxRev = Math.max(...monthData.map((m) => m.rev), 1);
+function fmtK(n: number): string {
+  if (n === 0) return "";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}М`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}К`;
+  return String(n);
+}
+
+function RevenueChart({ monthData }: { monthData: { label: string; rev: number; cnt: number }[] }) {
+  const maxRev  = Math.max(...monthData.map((m) => m.rev), 1);
+  const hasData = monthData.some((m) => m.rev > 0);
   return (
     <div className="chart-bars">
       {monthData.map((m, i) => {
         const isLast = i === monthData.length - 1;
-        const pct    = Math.max(5, (m.rev / maxRev) * 100);
+        const pct    = m.rev > 0 ? Math.max(8, (m.rev / maxRev) * 100) : 3;
         return (
           <div key={i} className="bar-wrap">
+            {m.rev > 0 && (
+              <span className="bar-value" style={isLast ? { color: "var(--cyan)" } : undefined}>
+                {fmtK(m.rev)}
+              </span>
+            )}
             <div
-              className={`bar ${isLast ? "active" : ""}`}
-              style={{ height: `${pct}%`, animationDelay: `${0.5 + i * 0.06}s` }}
+              className={`bar ${isLast && hasData ? "active" : ""}`}
+              style={{ height: `${pct}%`, animationDelay: `${0.5 + i * 0.06}s`, opacity: m.rev > 0 ? undefined : 0.2 }}
             />
             <span className="bar-label" style={isLast ? { color: "var(--cyan)" } : undefined}>
               {m.label}

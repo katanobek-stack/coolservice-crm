@@ -221,157 +221,275 @@ export function PnlTab() {
     await saveFinance({ purchases: purchases.filter((p) => p.id !== id) });
   }
 
-  return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-lg font-bold text-[#172033]">P&amp;L</div>
-        <button
-          type="button"
-          onClick={() => setShowExpenses(true)}
-          className="text-xs text-[#667085] bg-[#F2F4F7] px-3 py-1.5 rounded-xl border border-[#E2E8F0] cursor-pointer"
-        >
-          ⚙️ Расходы
-        </button>
-      </div>
-      <div className="text-xs text-[#667085] mb-4">Текущий месяц: {MONTH_NAMES_FULL[now.getMonth()]} {now.getFullYear()}</div>
+  const CURMONTH_LABEL = `${MONTH_NAMES_FULL[now.getMonth()]} ${now.getFullYear()}`;
 
-      {/* Current month P&L */}
-      <div className="grid grid-cols-2 gap-2.5 mb-4">
-        <div className="bg-white rounded-[18px] p-4 border border-[#E2E8F0] shadow-sm">
-          <div className="text-xl font-bold text-[#3B6D11]">{fmtMoney(curIncome)}</div>
-          <div className="text-xs text-[#667085]">Доходы</div>
-          <div className="text-[10px] text-[#98A2B3] mt-0.5">
-            Ремонты {fmtMoney(curMonthRev)} + Аренда {fmtMoney(rentalIncome)}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* ── KPI: Доходы / Расходы / Прибыль ─────────────────────────────── */}
+      <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
+        <div className="kpi-card green">
+          <i className="ti ti-trending-up kpi-icon" />
+          <div className="kpi-label">Доходы / {MONTH_NAMES[now.getMonth()]}</div>
+          <div className="kpi-value" style={{ color: "#4ade80" }}>{fmtMoney(curIncome)}</div>
+          <div className="kpi-delta muted">
+            Рем. {fmtMoney(curMonthRev)} + Аренда {fmtMoney(rentalIncome)}
           </div>
         </div>
-        <div className="bg-white rounded-[18px] p-4 border border-[#E2E8F0] shadow-sm">
-          <div className="text-xl font-bold text-[#A32D2D]">{fmtMoney(totalExpenses + curPurTotal)}</div>
-          <div className="text-xs text-[#667085]">Расходы</div>
-          <div className="text-[10px] text-[#98A2B3] mt-0.5">Пост. + закупки</div>
+        <div className="kpi-card" style={{ borderTop: "2px solid var(--red)" }}>
+          <i className="ti ti-trending-down kpi-icon" />
+          <div className="kpi-label">Расходы</div>
+          <div className="kpi-value" style={{ color: "#f87171" }}>{fmtMoney(totalExpenses + curPurTotal)}</div>
+          <div className="kpi-delta muted">Пост. + закупки</div>
         </div>
-        <div className="col-span-2 bg-white rounded-[18px] p-4 border border-[#E2E8F0] shadow-sm">
-          <div className={`text-2xl font-bold ${curProfit >= 0 ? "text-[#3B6D11]" : "text-[#A32D2D]"}`}>
+        <div className="kpi-card blue" style={{ gridColumn: "span 2" }}>
+          <i className={`ti ${curProfit >= 0 ? "ti-trophy" : "ti-alert-circle"} kpi-icon`} />
+          <div className="kpi-label">Прибыль / {CURMONTH_LABEL}</div>
+          <div className="kpi-value" style={{ color: curProfit >= 0 ? "#4ade80" : "#f87171" }}>
             {curProfit >= 0 ? "+" : ""}{fmtMoney(curProfit)}
           </div>
-          <div className="text-xs text-[#667085]">Прибыль</div>
+          <button
+            type="button"
+            onClick={() => setShowExpenses(true)}
+            style={{
+              marginTop: 6, padding: "4px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+              background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text2)",
+              cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
+            }}
+          >
+            <i className="ti ti-settings" style={{ fontSize: 12 }} /> Настроить расходы
+          </button>
         </div>
       </div>
 
-      {/* Permanent expenses breakdown */}
-      {(finance.boxes?.length || finance.salaries?.length) && (
-        <SectionCard title="Постоянные расходы" icon="📋">
-          {(finance.boxes ?? []).filter((b) => b.cost > 0).map((b) => (
-            <div key={b.id} className="flex justify-between text-sm mb-1.5">
-              <span className="text-[#344054]">🏠 {b.name || "Бокс"}</span>
-              <span className="font-semibold text-[#A32D2D]">{fmtMoney(b.cost)}/мес</span>
+      {/* ── Закупки и материалы ──────────────────────────────────────────── */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
+        <div className="section-header" style={{ background: "rgba(139,92,246,0.06)" }}>
+          <i className="ti ti-shopping-cart" style={{ fontSize: 17, color: "#a78bfa" }} />
+          <span className="section-title">Закупки и материалы</span>
+          <span className="section-count">{CURMONTH_LABEL}</span>
+          {curPurTotal > 0 && (
+            <div className="section-actions">
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace" }}>
+                {fmtMoney(curPurTotal)}
+              </span>
             </div>
-          ))}
-          {(finance.salaries ?? []).filter((s) => s.salary > 0).map((s) => (
-            <div key={s.uid} className="flex justify-between text-sm mb-1.5">
-              <span className="text-[#344054]">👤 {s.name || "Сотрудник"}</span>
-              <span className="font-semibold text-[#A32D2D]">{fmtMoney(s.salary)}/мес</span>
-            </div>
-          ))}
-          <div className="border-t border-[#E2E8F0] mt-2 pt-2 flex justify-between text-sm font-bold">
-            <span>Итого</span>
-            <span className="text-[#A32D2D]">{fmtMoney(boxCost + salCost)}/мес</span>
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Electricity */}
-      <SectionCard title="Электричество" icon="⚡">
-        <div className="flex gap-2 mb-3">
-          <select
-            value={elecMK}
-            onChange={(e) => setElecMK(e.target.value)}
-            className="flex-1 px-3 py-2 rounded-xl border border-[#E2E8F0] text-sm bg-white text-[#172033] outline-none"
-          >
-            {Array.from({ length: 6 }, (_, i) => {
-              const d  = new Date(now.getFullYear(), now.getMonth()-i, 1);
-              const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-              return <option key={mk} value={mk}>{MONTH_NAMES[d.getMonth()]} {d.getFullYear()}</option>;
-            })}
-          </select>
-          <Input
-            type="number"
-            placeholder="Сумма ₽"
-            value={elecInput}
-            onChange={(e) => setElecInput(e.target.value)}
-            className="w-28 !min-h-0 !py-2"
-          />
-          <Button size="sm" onClick={() => void saveElecBill()} disabled={savingElec}>💾</Button>
+          )}
         </div>
-        {/* Show saved bills */}
-        {Object.entries(elecBills).filter(([, v]) => v > 0).sort(([a],[b]) => b.localeCompare(a)).slice(0, 4).map(([mk, v]) => (
-          <div key={mk} className="flex justify-between text-xs text-[#667085] mb-1">
-            <span>{mkLabel(mk)}</span>
-            <span className="font-semibold text-[#A32D2D]">{fmtMoney(v as number)}</span>
-          </div>
-        ))}
-      </SectionCard>
 
-      {/* Purchases / materials */}
-      <SectionCard title={`Закупки и материалы (${curMK.slice(0,7)})`} icon="🛒">
-        <div className="flex gap-2 mb-3 flex-wrap">
-          <Input
+        {/* Add form */}
+        <div style={{ display: "flex", gap: 8, padding: "12px 16px", flexWrap: "wrap" as const, borderBottom: "1px solid var(--border)" }}>
+          <input
             type="number"
             placeholder="Сумма ₽"
             value={newPurAmt}
             onChange={(e) => setNewPurAmt(e.target.value)}
-            className="w-28 !min-h-0 !py-2"
+            style={{
+              width: 120, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+              outline: "none", fontFamily: "JetBrains Mono, monospace",
+            }}
+            onKeyDown={(e) => e.key === "Enter" && void addPurchase()}
           />
-          <Input
-            placeholder="Что закупили"
+          <input
+            type="text"
+            placeholder="Что закупили..."
             value={newPurCmt}
             onChange={(e) => setNewPurCmt(e.target.value)}
-            className="flex-1 !min-h-0 !py-2"
+            style={{
+              flex: 1, minWidth: 140, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+              outline: "none",
+            }}
+            onKeyDown={(e) => e.key === "Enter" && void addPurchase()}
           />
-          <Button size="sm" onClick={() => void addPurchase()} disabled={savingPur}>+ Добавить</Button>
+          <button
+            type="button"
+            onClick={() => void addPurchase()}
+            disabled={savingPur}
+            style={{
+              padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+              background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.3)",
+              color: "#a78bfa", cursor: savingPur ? "not-allowed" : "pointer",
+            }}
+          >
+            {savingPur ? "..." : "+ Добавить"}
+          </button>
         </div>
-        {curPurchases.length > 0 && (
-          <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {[...curPurchases].sort((a,b) => b.addedAt.localeCompare(a.addedAt)).map((p) => (
-              <div key={p.id} className="flex items-center gap-2 bg-[#F7F9FC] rounded-xl px-3 py-2 border border-[#E2E8F0]">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-[#172033] truncate">{p.comment}</div>
-                  <div className="text-[10px] text-[#98A2B3]">{fmtDate(p.date)}</div>
+
+        {/* Purchases list */}
+        {curPurchases.length === 0 ? (
+          <div style={{ padding: "20px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет закупок в этом месяце
+          </div>
+        ) : (
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {[...curPurchases].sort((a,b) => b.addedAt.localeCompare(a.addedAt)).map((p, i) => (
+              <div
+                key={p.id}
+                className="tr-animate"
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "11px 16px", borderBottom: "1px solid var(--border)",
+                  animationDelay: `${i * 0.06}s`,
+                }}
+              >
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                  background: "rgba(139,92,246,0.12)", color: "#a78bfa",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+                }}>
+                  🛒
                 </div>
-                <span className="text-xs font-bold text-purple-600 whitespace-nowrap">{fmtMoney(p.amount)}</span>
-                <button type="button" onClick={() => void deletePurchase(p.id)}
-                  className="text-[#98A2B3] text-sm cursor-pointer bg-transparent border-none">×</button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.comment}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>
+                    {fmtDate(p.date)}{p.addedByName ? ` · ${p.addedByName}` : ""}
+                  </div>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                  {fmtMoney(p.amount)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void deletePurchase(p.id)}
+                  style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text3)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {curPurTotal > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderTop: "1px solid var(--border2)" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого закупки</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace" }}>
+                  {fmtMoney(curPurTotal)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Постоянные расходы ──────────────────────────────────────────── */}
+      {((finance.boxes ?? []).some((b) => b.cost > 0) || (finance.salaries ?? []).some((s) => s.salary > 0)) && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.3s both" }}>
+          <div className="section-header">
+            <i className="ti ti-receipt" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Постоянные расходы</span>
+            <span className="section-count">{fmtMoney(boxCost + salCost)}/мес</span>
+          </div>
+          <div style={{ padding: "8px 16px 12px" }}>
+            {(finance.boxes ?? []).filter((b) => b.cost > 0).map((b) => (
+              <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 13.5, color: "var(--text)" }}>🏠 {b.name || "Бокс"}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(b.cost)}/мес</span>
+              </div>
+            ))}
+            {(finance.salaries ?? []).filter((s) => s.salary > 0).map((s) => (
+              <div key={s.uid} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 13.5, color: "var(--text)" }}>👤 {s.name || "Сотрудник"}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(s.salary)}/мес</span>
               </div>
             ))}
           </div>
-        )}
-        {curPurTotal > 0 && (
-          <div className="border-t border-[#E2E8F0] mt-2 pt-2 flex justify-between text-sm font-bold">
-            <span>Итого</span>
-            <span className="text-purple-600">{fmtMoney(curPurTotal)}</span>
-          </div>
-        )}
-      </SectionCard>
+        </div>
+      )}
 
-      {/* Monthly breakdown */}
-      <SectionCard title="Выручка по месяцам" icon="📊">
+      {/* ── Электричество ──────────────────────────────────────────────── */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.35s both" }}>
+        <div className="section-header">
+          <i className="ti ti-bolt" style={{ fontSize: 17, color: "var(--yellow)" }} />
+          <span className="section-title">Электричество</span>
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" as const }}>
+            <select
+              value={elecMK}
+              onChange={(e) => setElecMK(e.target.value)}
+              style={{
+                flex: 1, minWidth: 120, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+                background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+                outline: "none", cursor: "pointer",
+              }}
+            >
+              {Array.from({ length: 6 }, (_, i) => {
+                const d  = new Date(now.getFullYear(), now.getMonth()-i, 1);
+                const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+                return <option key={mk} value={mk}>{MONTH_NAMES[d.getMonth()]} {d.getFullYear()}</option>;
+              })}
+            </select>
+            <input
+              type="number"
+              placeholder="Сумма ₽"
+              value={elecInput}
+              onChange={(e) => setElecInput(e.target.value)}
+              style={{
+                width: 120, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+                background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+                outline: "none", fontFamily: "JetBrains Mono, monospace",
+              }}
+            />
+            <Button size="sm" onClick={() => void saveElecBill()} disabled={savingElec}>💾</Button>
+          </div>
+          {Object.entries(elecBills).filter(([, v]) => v > 0).sort(([a],[b]) => b.localeCompare(a)).slice(0, 4).map(([mk, v]) => (
+            <div key={mk} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: 13, color: "var(--text2)" }}>{mkLabel(mk)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(v as number)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Выручка по месяцам ──────────────────────────────────────────── */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
+        <div className="section-header">
+          <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">Выручка по месяцам</span>
+          <div className="section-actions">
+            <span style={{ fontSize: 12, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+              {fmtMoney(totalRevenue)}
+            </span>
+          </div>
+        </div>
         {monthStats.filter((m) => m.revenue > 0).length === 0 ? (
-          <div className="text-center py-4 text-sm text-[#98A2B3]">Нет данных</div>
+          <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет данных — закрывайте наряды через «Закрыть наряд»
+          </div>
         ) : (
-          monthStats.filter((m) => m.revenue > 0).map((m) => (
-            <div key={m.month} className="flex items-center justify-between py-2 border-b border-[#E2E8F0] last:border-0">
-              <div>
-                <div className="text-sm font-semibold text-[#172033]">{m.label}</div>
-                <div className="text-xs text-[#667085]">{m.repairs} ремонтов</div>
+          monthStats.filter((m) => m.revenue > 0).map((m, i, arr) => (
+            <div
+              key={m.month}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "11px 20px",
+                borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{m.label}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                  <i className="ti ti-tools" style={{ fontSize: 10 }} /> {m.repairs} ремонтов
+                </div>
               </div>
-              <span className="text-base font-bold text-[#3B6D11]">{fmtMoney(m.revenue)}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+                {fmtMoney(m.revenue)}
+              </span>
             </div>
           ))
         )}
-        <div className="border-t border-[#E2E8F0] mt-2 pt-2 flex justify-between text-sm font-bold">
-          <span>Итого выручка</span>
-          <span className="text-[#3B6D11]">{fmtMoney(totalRevenue)}</span>
+        <div style={{
+          display: "flex", justifyContent: "space-between", padding: "10px 20px",
+          borderTop: "1px solid var(--border2)", background: "rgba(0,0,0,0.1)",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Всего выручка</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+            {fmtMoney(totalRevenue)}
+          </span>
         </div>
-      </SectionCard>
+      </div>
 
       {showExpenses && (
         <ExpensesModal finance={finance} onClose={() => setShowExpenses(false)} />

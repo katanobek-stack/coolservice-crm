@@ -12,11 +12,18 @@ import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
 import type { RepairTask, Repair, Client } from "../../shared/types/client";
 
-function SectionTitle({ text }: { text: string }) {
+function SectionTitle({ text, count }: { text: string; count?: number }) {
   return (
-    <div className="flex items-center gap-2 mt-4 mb-2 px-0.5">
-      <span className="w-0.5 h-3.5 rounded-full bg-gradient-to-b from-[#185FA5] to-[#7CB7EA] flex-shrink-0" />
-      <span className="text-xs font-bold text-[#667085] uppercase tracking-wider">{text}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 0 10px", padding: "0 2px" }}>
+      <span style={{ width: 3, height: 18, borderRadius: 2, background: "var(--accent)", flexShrink: 0 }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.8px" }}>
+        {text}
+      </span>
+      {count !== undefined && (
+        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 10, background: "rgba(59,130,246,0.15)", color: "var(--accent2)", fontFamily: "JetBrains Mono, monospace" }}>
+          {count}
+        </span>
+      )}
     </div>
   );
 }
@@ -697,29 +704,165 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
   tasks:   RepairTask[];
   canAdd:  boolean;
 }) {
-  const vehicle         = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
-  const [showAdd, setShowAdd] = useState(false);
+  const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [showClose, setShowClose] = useState(false);
+  const [closeSum,  setCloseSum]  = useState(repair.cost ?? "");
+  const [closing,   setClosing]   = useState(false);
+
+  const doneTasks  = tasks.filter((t) => t.status === "done").length;
+  const totalTasks = tasks.length;
+  const allDone    = totalTasks > 0 && doneTasks === totalTasks;
+
+  async function closeRepair() {
+    if (!closeSum.trim()) return;
+    setClosing(true);
+    const repairs = (client.repairs ?? []).map((r) =>
+      r.id !== repair.id ? r : {
+        ...r,
+        cost: closeSum.trim(),
+        closedByManager: true,
+        status: "done" as const,
+      }
+    );
+    await updateClientArray(client.id, "repairs", repairs);
+    setClosing(false);
+    setShowClose(false);
+  }
 
   return (
-    <div className="bg-white rounded-[18px] border border-[#E2E8F0] p-3 mb-2.5 shadow-sm">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xs font-bold text-[#172033] flex-1">{client.name}</span>
-        {vehicle?.plate && (
-          <span className="text-xs bg-[#F2F4F7] text-[#344054] px-2 py-0.5 rounded font-mono">{vehicle.plate}</span>
-        )}
-        {repair.date && <span className="text-xs text-[#98A2B3]">{fmtDate(repair.date)}</span>}
+    <div style={{
+      background: "var(--bg2)", border: "1px solid var(--border)",
+      borderRadius: 14, overflow: "hidden", marginBottom: 10,
+      borderLeft: "3px solid var(--accent)",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 10px" }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+          background: "rgba(59,130,246,0.15)", color: "var(--accent2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 12, fontWeight: 700,
+        }}>
+          {client.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{client.name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
+            {vehicle?.plate && (
+              <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", background: "var(--bg3)", color: "var(--text2)", padding: "1px 6px", borderRadius: 5 }}>
+                {vehicle.plate}
+              </span>
+            )}
+            {repair.description && (
+              <span style={{ fontSize: 11.5, color: "var(--text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                {repair.description}
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {repair.date && (
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+          )}
+          {totalTasks > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
+              background: allDone ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
+              color: allDone ? "#4ade80" : "#fbbf24",
+              fontFamily: "JetBrains Mono, monospace",
+            }}>
+              {doneTasks}/{totalTasks}
+            </span>
+          )}
+        </div>
       </div>
 
-      {tasks.map((t) => <RepairTaskRow key={t.id} task={t} client={client} repair={repair} />)}
+      {/* Tasks */}
+      {tasks.length > 0 && (
+        <div style={{ padding: "0 10px 6px" }}>
+          {tasks.map((t) => <RepairTaskRow key={t.id} task={t} client={client} repair={repair} />)}
+        </div>
+      )}
 
+      {/* Footer actions */}
       {canAdd && (
-        <button
-          type="button"
-          onClick={() => setShowAdd(true)}
-          className="mt-1.5 w-full text-xs text-[#185FA5] bg-[#E6F1FB] px-3 py-1.5 rounded-xl border border-[#185FA5]/10 cursor-pointer font-semibold"
-        >
-          + Задача
-        </button>
+        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column" as const, gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: "var(--bg3)", border: "1px solid var(--border)",
+              color: "var(--text2)", cursor: "pointer", alignSelf: "flex-start",
+            }}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Задача
+          </button>
+
+          {/* Close repair */}
+          {!showClose ? (
+            <button
+              type="button"
+              onClick={() => setShowClose(true)}
+              style={{
+                padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)",
+                color: "#4ade80", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <i className="ti ti-circle-check" style={{ fontSize: 15 }} />
+              Закрыть наряд
+            </button>
+          ) : (
+            <div style={{
+              background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
+              borderRadius: 10, padding: "10px 12px",
+            }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#4ade80", marginBottom: 8 }}>
+                <i className="ti ti-currency-ruble" style={{ fontSize: 13 }} /> Закрыть заказ-наряд
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="number"
+                  placeholder="Сумма ₽"
+                  value={closeSum}
+                  onChange={(e) => setCloseSum(e.target.value)}
+                  style={{
+                    width: 130, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 700,
+                    background: "var(--bg3)", border: "1px solid rgba(34,197,94,0.3)", color: "var(--text)",
+                    outline: "none", fontFamily: "JetBrains Mono, monospace",
+                  }}
+                  autoFocus
+                />
+                <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
+                <button
+                  type="button"
+                  onClick={() => void closeRepair()}
+                  disabled={closing || !closeSum.trim()}
+                  style={{
+                    marginLeft: "auto", padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                    background: closing ? "rgba(34,197,94,0.2)" : "var(--green)", border: "none",
+                    color: "white", cursor: closing ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {closing ? "..." : "✓ Закрыть"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowClose(false)}
+                  style={{
+                    padding: "8px 10px", borderRadius: 8, fontSize: 12,
+                    background: "var(--bg3)", border: "1px solid var(--border)",
+                    color: "var(--text3)", cursor: "pointer",
+                  }}
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {showAdd && <AddRepairTaskModal client={client} repair={repair} onClose={() => setShowAdd(false)} />}
@@ -763,51 +906,85 @@ export function MyTasksTab() {
   const hasAnything = myTasks.length || otherTasks.length || repairGroups.length;
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-lg font-bold text-[#172033]">Заявки</div>
-        {isManagerOrAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="text-xs text-[#185FA5] bg-[#E6F1FB] px-3 py-1.5 rounded-xl border border-[#185FA5]/10 cursor-pointer font-semibold"
-          >
-            + Задача
-          </button>
-        )}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {!hasAnything && (
-        <div className="text-center py-12 text-[#98A2B3] text-sm">Нет активных задач</div>
+      {/* ── Сервисные задачи ───────────────────────────────────────────────── */}
+      {(activeSvcTasks.length > 0 || isManagerOrAdmin) && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.15s both" }}>
+          <div className="section-header">
+            <i className="ti ti-list-check" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Сервисные задачи</span>
+            {activeSvcTasks.length > 0 && (
+              <span className="section-count">{activeSvcTasks.length} активных</span>
+            )}
+            {isManagerOrAdmin && (
+              <div className="section-actions">
+                <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
+                  <i className="ti ti-plus" /> Задача
+                </button>
+              </div>
+            )}
+          </div>
+
+          {activeSvcTasks.length === 0 ? (
+            <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+              Нет активных задач
+            </div>
+          ) : (
+            <div style={{ padding: "8px 12px 12px" }}>
+              {myTasks.length > 0 && (
+                <>
+                  <SectionTitle text="Мои задачи" count={myTasks.length} />
+                  {myTasks.map((t) => <ServiceTaskCard key={t.id} task={t} />)}
+                </>
+              )}
+              {otherTasks.length > 0 && (
+                <>
+                  <SectionTitle text="Задачи сотрудников" count={otherTasks.length} />
+                  {otherTasks.map((t) => <ServiceTaskCard key={t.id} task={t} />)}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {myTasks.length > 0 && (
-        <>
-          <SectionTitle text={`Мои задачи (${myTasks.length})`} />
-          {myTasks.map((t) => <ServiceTaskCard key={t.id} task={t} />)}
-        </>
+      {/* ── Ремонты в работе ──────────────────────────────────────────────── */}
+      {(repairGroups.length > 0 || (!isManagerOrAdmin && !activeSvcTasks.length)) && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.25s both" }}>
+          <div className="section-header">
+            <i className="ti ti-tools" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Ремонты в работе</span>
+            {repairGroups.length > 0 && (
+              <span className="section-count">{repairGroups.length} нарядов</span>
+            )}
+          </div>
+
+          {repairGroups.length === 0 ? (
+            <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+              Нет ремонтов в работе
+            </div>
+          ) : (
+            <div style={{ padding: "8px 12px 12px" }}>
+              {repairGroups.map(({ client, repair, tasks: ts }) => (
+                <RepairGroup
+                  key={`${client.id}-${repair.id}`}
+                  client={client}
+                  repair={repair}
+                  tasks={ts}
+                  canAdd={isManagerOrAdmin}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
-      {otherTasks.length > 0 && (
-        <>
-          <SectionTitle text={`Задачи сотрудников (${otherTasks.length})`} />
-          {otherTasks.map((t) => <ServiceTaskCard key={t.id} task={t} />)}
-        </>
-      )}
-
-      {repairGroups.length > 0 && (
-        <>
-          <SectionTitle text={`Ремонты в работе (${repairGroups.length})`} />
-          {repairGroups.map(({ client, repair, tasks: ts }) => (
-            <RepairGroup
-              key={`${client.id}-${repair.id}`}
-              client={client}
-              repair={repair}
-              tasks={ts}
-              canAdd={isManagerOrAdmin}
-            />
-          ))}
-        </>
+      {!hasAnything && !isManagerOrAdmin && (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text3)", fontSize: 13 }}>
+          <i className="ti ti-check" style={{ fontSize: 32, display: "block", marginBottom: 8 }} />
+          Нет активных задач
+        </div>
       )}
 
       {showAdd && <AddServiceTaskModal onClose={() => setShowAdd(false)} />}
