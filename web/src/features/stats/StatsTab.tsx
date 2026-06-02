@@ -256,8 +256,9 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { clients, tasks, staff } = useData();
   const { myProfile } = useAuth();
-  const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin";
+  const role           = myProfile?.role ?? "mechanic";
+  const isAdmin        = role === "admin";
+  const showFinance    = role !== "mechanic";
 
   const [showAllActive, setShowAllActive] = useState(false);
 
@@ -397,12 +398,14 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           delta={activeTasks > 0 ? `+${activeTasks} задач` : undefined}
           deltaUp={activeTasks > 0}
         />
-        <KpiCard
-          label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#4ade80"
-          value={curMonthRev > 0 ? fmtMoney(curMonthRev) : "—"}
-          delta={revDiff !== null ? `${revDiff >= 0 ? "+" : ""}${revDiff}% к пр. мес` : undefined}
-          deltaUp={revDiff !== null ? revDiff >= 0 : undefined}
-        />
+        {showFinance && (
+          <KpiCard
+            label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#4ade80"
+            value={curMonthRev > 0 ? fmtMoney(curMonthRev) : "—"}
+            delta={revDiff !== null ? `${revDiff >= 0 ? "+" : ""}${revDiff}% к пр. мес` : undefined}
+            deltaUp={revDiff !== null ? revDiff >= 0 : undefined}
+          />
+        )}
         <KpiCard
           label="Закрыто сегодня" icon="ti-clock" accent="yellow" color="#fbbf24"
           value={doneToday}
@@ -443,14 +446,14 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
               cost={r.cost}
               status="in_progress"
               plate={r.vehicle?.plate}
-              isAdmin={isAdmin}
+              isAdmin={showFinance}
             />
           ))
         )}
       </Section>
 
-      {/* Admin: Revenue chart + mechanics */}
-      {isAdmin && (
+      {/* Finance: Revenue chart + mechanics */}
+      {showFinance && (
         <div className="bottom-grid">
           {/* Revenue chart */}
           <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
@@ -502,8 +505,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </div>
       )}
 
-      {/* Admin: Top clients */}
-      {isAdmin && topClients.length > 0 && (
+      {/* Finance: Top clients */}
+      {showFinance && topClients.length > 0 && (
         <Section title="Топ клиентов по выручке" icon="ti-trophy" count={`${topClients.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {topClients.map((c) => (
@@ -520,8 +523,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </Section>
       )}
 
-      {/* Admin: Revenue by service type */}
-      {isAdmin && byServiceType.length > 0 && (
+      {/* Finance: Revenue by service type */}
+      {showFinance && byServiceType.length > 0 && (
         <Section title="Выручка по типам услуг" icon="ti-chart-pie" count={`${byServiceType.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {byServiceType.map((s) => (
@@ -538,8 +541,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </Section>
       )}
 
-      {/* Admin: Loyalty */}
-      {isAdmin && loyalty.total > 0 && (
+      {/* Finance: Loyalty */}
+      {showFinance && loyalty.total > 0 && (
         <Section title="Лояльность клиентов" icon="ti-heart">
           <div style={{ padding: "16px 20px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>

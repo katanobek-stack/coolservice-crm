@@ -13,7 +13,7 @@ import { PnlTab } from "../features/pnl/PnlTab";
 import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
 import { requestNotificationPermission, showBrowserNotification } from "../shared/utils/fcm";
-import type { StaffMember } from "../shared/types/staff";
+import type { StaffMember, StaffRole } from "../shared/types/staff";
 
 export type Tab =
   | "stats" | "mytasks" | "phys" | "legal"
@@ -23,12 +23,12 @@ export type Tab =
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
 interface TabDef {
-  id:         Tab;
-  label:      string;
-  icon:       string;        // Tabler icon class
-  emoji:      string;        // fallback / mobile
-  group:      "main" | "service" | "finance";
-  adminOnly?: boolean;
+  id:     Tab;
+  label:  string;
+  icon:   string;        // Tabler icon class
+  emoji:  string;        // fallback / mobile
+  group:  "main" | "service" | "finance";
+  roles?: StaffRole[];   // if defined, only these roles can see this tab
 }
 
 const TABS: TabDef[] = [
@@ -36,13 +36,17 @@ const TABS: TabDef[] = [
   { id: "mytasks",  label: "Заявки",    icon: "ti-clipboard-list",   emoji: "🔧", group: "main" },
   { id: "phys",     label: "Клиенты",   icon: "ti-users",            emoji: "👤", group: "main" },
   { id: "legal",    label: "Компании",  icon: "ti-building",         emoji: "🏢", group: "main" },
-  { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service" },
+  { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service", roles: ["manager", "admin"] },
   { id: "freezers", label: "Склад",     icon: "ti-package",          emoji: "📦", group: "service" },
-  { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance" },
-  { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", adminOnly: true },
-  { id: "staff",    label: "Персонал",  icon: "ti-id-badge",         emoji: "👥", group: "finance", adminOnly: true },
-  { id: "backup",   label: "Бэкап",     icon: "ti-database-export",  emoji: "💾", group: "finance", adminOnly: true },
+  { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance", roles: ["manager", "admin"] },
+  { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", roles: ["manager", "admin"] },
+  { id: "staff",    label: "Персонал",  icon: "ti-id-badge",         emoji: "👥", group: "finance", roles: ["admin"] },
+  { id: "backup",   label: "Бэкап",     icon: "ti-database-export",  emoji: "💾", group: "finance", roles: ["admin"] },
 ];
+
+function canSeeTab(t: TabDef, role: StaffRole): boolean {
+  return !t.roles || t.roles.includes(role);
+}
 
 const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   stats:    { title: "Дашборд",   sub: "главные показатели" },
@@ -105,13 +109,12 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
   totalClients:  number;
   freezersCount: number;
 }) {
-  const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin";
+  const role = myProfile?.role ?? "mechanic";
 
   const groups: Array<{ key: string; label: string; tabs: TabDef[] }> = [
-    { key: "main",    label: "Главное",  tabs: TABS.filter((t) => t.group === "main"    && (!t.adminOnly || isAdmin)) },
-    { key: "service", label: "Сервис",   tabs: TABS.filter((t) => t.group === "service"  && (!t.adminOnly || isAdmin)) },
-    { key: "finance", label: "Финансы",  tabs: TABS.filter((t) => t.group === "finance"  && (!t.adminOnly || isAdmin)) },
+    { key: "main",    label: "Главное",  tabs: TABS.filter((t) => t.group === "main"    && canSeeTab(t, role)) },
+    { key: "service", label: "Сервис",   tabs: TABS.filter((t) => t.group === "service" && canSeeTab(t, role)) },
+    { key: "finance", label: "Финансы",  tabs: TABS.filter((t) => t.group === "finance" && canSeeTab(t, role)) },
   ].filter((g) => g.tabs.length > 0);
 
   const initials = (myProfile?.name ?? myProfile?.email ?? "?")
@@ -214,19 +217,20 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TABS: TabDef[] = TABS.filter((t) =>
-  ["stats", "mytasks", "phys", "freezers", "done"].includes(t.id),
-);
+const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "freezers", "done"];
 
-function MobileNav({ tab, onTab, activeMine, isAdmin }: {
+function MobileNav({ tab, onTab, activeMine, role, onSignOut }: {
   tab:        Tab;
   onTab:      (t: Tab) => void;
   activeMine: number;
-  isAdmin:    boolean;
+  role:       StaffRole;
+  onSignOut:  () => void;
 }) {
+  const visibleTabs = TABS.filter((t) => MOBILE_TAB_IDS.includes(t.id) && canSeeTab(t, role));
+
   return (
     <nav className="mobile-nav">
-      {MOBILE_TABS.map((t) => {
+      {visibleTabs.map((t) => {
         const isActive  = tab === t.id;
         const showBadge = t.id === "mytasks" && activeMine > 0;
         return (
@@ -252,6 +256,15 @@ function MobileNav({ tab, onTab, activeMine, isAdmin }: {
           </button>
         );
       })}
+      <button
+        type="button"
+        className="mobile-nav-btn"
+        onClick={onSignOut}
+        style={{ color: "var(--text3)" }}
+      >
+        <i className="ti ti-logout" />
+        Выйти
+      </button>
     </nav>
   );
 }
@@ -267,6 +280,12 @@ function Shell() {
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin";
   const uid     = myProfile?.id ?? "";
+
+  // Redirect to stats if current tab is not accessible for this role
+  useEffect(() => {
+    const t = TABS.find((t) => t.id === tab);
+    if (t && !canSeeTab(t, role)) setTab("stats");
+  }, [role, tab]);
 
   const activeMine = tasks.filter(
     (t) =>
@@ -288,12 +307,12 @@ function Shell() {
       case "mytasks":  return <MyTasksTab />;
       case "phys":     return <ClientsTab type="phys" />;
       case "legal":    return <ClientsTab type="legal" />;
-      case "calendar": return <CalendarTab />;
+      case "calendar": return role !== "mechanic" ? <CalendarTab />  : null;
       case "freezers": return <FreezersTab />;
-      case "done":     return <DoneTab />;
-      case "pnl":      return isAdmin ? <PnlTab />    : null;
-      case "staff":    return isAdmin ? <StaffTab />  : null;
-      case "backup":   return isAdmin ? <BackupTab /> : null;
+      case "done":     return role !== "mechanic" ? <DoneTab />      : null;
+      case "pnl":      return role !== "mechanic" ? <PnlTab />       : null;
+      case "staff":    return isAdmin             ? <StaffTab />     : null;
+      case "backup":   return isAdmin             ? <BackupTab />    : null;
       default:         return null;
     }
   }
@@ -330,7 +349,7 @@ function Shell() {
         </div>
 
         {/* Mobile bottom nav */}
-        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} isAdmin={isAdmin} />
+        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} role={role} onSignOut={() => void signOutUser()} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
