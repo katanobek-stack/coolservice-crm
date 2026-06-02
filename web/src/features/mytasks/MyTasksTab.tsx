@@ -104,8 +104,13 @@ function AddServiceTaskModal({ onClose }: { onClose: () => void }) {
             key={t}
             type="button"
             onClick={() => setTaskType(t)}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold border cursor-pointer transition-all
-              ${taskType === t ? "bg-[#185FA5] text-white border-[#185FA5]" : "bg-white text-[#667085] border-[#E2E8F0]"}`}
+            style={{
+              flex: 1, padding: "8px 12px", borderRadius: 10, fontSize: 13,
+              fontWeight: 600, cursor: "pointer", transition: "all 0.18s",
+              border: taskType === t ? "1px solid var(--accent)" : "1px solid var(--border2)",
+              background: taskType === t ? "var(--accent)" : "var(--bg3)",
+              color: taskType === t ? "white" : "var(--text2)",
+            }}
           >
             {t === "task" ? "Задача" : "Проект"}
           </button>
@@ -177,8 +182,15 @@ function AddRepairTaskModal({ client, repair, onClose }: {
             key={String(isF)}
             type="button"
             onClick={() => setIsFreon(isF)}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold border cursor-pointer transition-all
-              ${isFreon === isF ? (isF ? "bg-cyan-500 text-white border-cyan-500" : "bg-[#185FA5] text-white border-[#185FA5]") : "bg-white text-[#667085] border-[#E2E8F0]"}`}
+            style={{
+              flex: 1, padding: "8px 12px", borderRadius: 10, fontSize: 13,
+              fontWeight: 600, cursor: "pointer", transition: "all 0.18s",
+              border: isFreon === isF
+                ? `1px solid ${isF ? "var(--cyan)" : "var(--accent)"}`
+                : "1px solid var(--border2)",
+              background: isFreon === isF ? (isF ? "var(--cyan)" : "var(--accent)") : "var(--bg3)",
+              color: isFreon === isF ? "white" : "var(--text2)",
+            }}
           >
             {isF ? "❄️ Заправка фреоном" : "🔧 Обычная задача"}
           </button>
@@ -406,7 +418,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
   return (
     <div
       className={`bg-white rounded-[18px] border border-l-4 p-4 mb-2.5 shadow-sm transition-opacity ${isDone ? "opacity-60" : ""}`}
-      style={{ borderLeftColor: isProject ? "#854F0B" : isDone ? "#3B6D11" : "#185FA5" }}
+      style={{ borderLeftColor: isProject ? "var(--yellow)" : isDone ? "var(--green)" : "var(--accent)" }}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-1">

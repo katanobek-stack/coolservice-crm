@@ -177,7 +177,7 @@ function ApptCard({
       className={`bg-white rounded-[18px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2.5 shadow-sm transition-opacity ${
         faded ? "opacity-50" : ""
       }`}
-      style={{ borderLeftColor: faded ? "#E2E8F0" : "#BA7517" }}
+      style={{ borderLeftColor: faded ? "var(--border)" : "var(--yellow)" }}
     >
       <div className="flex items-start justify-between gap-2">
         <div>

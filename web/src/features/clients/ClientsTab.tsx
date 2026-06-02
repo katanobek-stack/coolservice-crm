@@ -364,7 +364,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
   return (
     <div
       className={`bg-white rounded-[16px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2.5 shadow-sm ${isCancelled ? "opacity-50" : ""}`}
-      style={{ borderLeftColor: status === "done" ? "#3B6D11" : isCancelled ? "#98A2B3" : "#185FA5" }}
+      style={{ borderLeftColor: status === "done" ? "var(--green)" : isCancelled ? "var(--text3)" : "var(--accent)" }}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -668,7 +668,7 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
   return (
     <div
       className="bg-white rounded-[18px] border-l-4 border border-[#E2E8F0] p-4 mb-2.5 cursor-pointer shadow-sm active:scale-[.99] transition-all"
-      style={{ borderLeftColor: activeRepairs > 0 ? "#185FA5" : "#E2E8F0" }}
+      style={{ borderLeftColor: activeRepairs > 0 ? "var(--accent)" : "var(--border)" }}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-2 mb-1">

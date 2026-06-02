@@ -634,3 +634,60 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ═══════════════════════════════════════════════════════
+   DARK-THEME OVERRIDES — legacy Tailwind light classes
+   All feature tabs use these Tailwind utilities; we remap
+   them to dark CSS variables so no individual rewrites needed.
+   ═══════════════════════════════════════════════════════ */
+
+/* Backgrounds */
+.bg-white                        { background: var(--bg2)                      !important; }
+.bg-\[\#F7F9FC\]                 { background: var(--bg3)                      !important; }
+.bg-\[\#F2F4F7\]                 { background: var(--bg3)                      !important; }
+.bg-\[\#E2E8F0\]                 { background: var(--bg3)                      !important; }
+.bg-\[\#E6F1FB\]                 { background: rgba(59,130,246,0.12)           !important; }
+.bg-\[\#EAF3DE\]                 { background: rgba(34,197,94,0.12)            !important; }
+.bg-\[\#FAEEDA\]                 { background: rgba(245,158,11,0.12)           !important; }
+.bg-\[\#FBEAEA\]                 { background: rgba(239,68,68,0.12)            !important; }
+.bg-\[\#185FA5\]                 { background: var(--accent)                   !important; }
+.bg-cyan-500                     { background: var(--cyan)                     !important; }
+.hover\:bg-\[\#E6F1FB\]:hover    { background: rgba(59,130,246,0.08)           !important; }
+.hover\:bg-\[\#d4e8f9\]:hover    { background: rgba(59,130,246,0.18)           !important; }
+.hover\:bg-gray-100:hover        { background: var(--bg3)                      !important; }
+
+/* Text colors */
+.text-\[\#172033\]               { color: var(--text)                          !important; }
+.text-\[\#344054\]               { color: var(--text)                          !important; }
+.text-\[\#0C447C\]               { color: var(--accent2)                       !important; }
+.text-\[\#667085\]               { color: var(--text2)                         !important; }
+.text-\[\#98A2B3\]               { color: var(--text3)                         !important; }
+.text-\[\#8A96A8\]               { color: var(--text3)                         !important; }
+.text-\[\#185FA5\]               { color: var(--accent2)                       !important; }
+.text-\[\#27500A\]               { color: var(--green)                         !important; }
+.text-\[\#3B6D11\]               { color: #4ade80                              !important; }
+.text-\[\#BA7517\]               { color: #fbbf24                              !important; }
+.text-\[\#854F0B\]               { color: #fbbf24                              !important; }
+.text-\[\#A32D2D\]               { color: #f87171                              !important; }
+.text-cyan-700                   { color: #22d3ee                              !important; }
+
+/* Borders */
+.border-\[\#E2E8F0\]             { border-color: var(--border2)                !important; }
+.border-\[\#185FA5\]             { border-color: var(--accent)                 !important; }
+.border-\[\#3B6D11\]\/20         { border-color: rgba(34,197,94,0.25)          !important; }
+.border-\[\#BA7517\]\/20         { border-color: rgba(245,158,11,0.25)         !important; }
+.border-\[\#BA7517\]\/30         { border-color: rgba(245,158,11,0.30)         !important; }
+.border-\[\#3B6D11\]\/30         { border-color: rgba(34,197,94,0.30)          !important; }
+.border-cyan-500                 { border-color: var(--cyan)                   !important; }
+.border-red-100                  { border-color: rgba(239,68,68,0.2)           !important; }
+
+/* Shadows → subtle dark shadows */
+.shadow-sm                       { box-shadow: 0 1px 6px rgba(0,0,0,0.35)     !important; }
+.shadow-\[0_-20px_60px_rgba\(15\,23\,42\,\.20\)\] {
+                                   box-shadow: 0 -20px 60px rgba(0,0,0,0.5)   !important; }
+
+/* Progress bar track */
+.bg-\[\#E2E8F0\]                 { background: var(--bg3)                      !important; }
+
+/* Select options need dark bg in dark browser */
+select option                    { background: var(--bg3); color: var(--text); }

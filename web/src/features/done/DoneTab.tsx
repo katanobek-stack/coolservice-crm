@@ -30,7 +30,7 @@ function RepairRow({ repair, clientName, plate, isAdmin }: {
   return (
     <div
       className={`bg-white rounded-[16px] border-l-4 border border-[#E2E8F0] p-3.5 mb-2 shadow-sm ${isCancelled ? "opacity-50" : ""}`}
-      style={{ borderLeftColor: isCancelled ? "#98A2B3" : "#3B6D11" }}
+      style={{ borderLeftColor: isCancelled ? "var(--text3)" : "var(--green)" }}
     >
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="font-semibold text-[#172033] text-sm">{clientName}</div>
@@ -89,7 +89,7 @@ function MonthBlock({ mk, repairs, tasks, isAdmin }: {
           ))}
           {tasks.map((t) => (
             <div key={t.id} className="bg-white rounded-[16px] border-l-4 border-[#E2E8F0] border p-3 mb-2 shadow-sm"
-              style={{ borderLeftColor: t.taskType === "project" ? "#854F0B" : "#185FA5" }}>
+              style={{ borderLeftColor: t.taskType === "project" ? "var(--yellow)" : "var(--accent)" }}>
               <div className="flex items-center gap-2 mb-0.5">
                 {t.taskType === "project" && (
                   <span className="text-[10px] font-bold text-[#854F0B] bg-[#FAEEDA] px-2 py-0.5 rounded-full">Проект</span>
