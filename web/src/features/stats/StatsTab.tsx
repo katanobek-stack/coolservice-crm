@@ -5,7 +5,13 @@ import { repairStatus, taskStatus, SERVICE_TYPES } from "../../shared/utils/repa
 import { fmtMoney, fmtDate } from "../../shared/utils/format";
 import type { Tab } from "../../app/AppShell";
 
-const MONTH_NAMES = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+const MONTH_NAMES      = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+const MONTH_NAMES_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+function freonMonthLabel(mk: string): string {
+  const [y, m] = mk.split("-");
+  return `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+}
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +93,40 @@ function RevenueChart({ monthData }: { monthData: { label: string; rev: number; 
             <span className="bar-label" style={isLast ? { color: "var(--cyan)" } : undefined}>
               {m.label}
             </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Freon month chart (CSS bars, cyan palette) ───────────────────────────────
+
+function FreonMonthChart({ months }: { months: { key: string; total: number }[] }) {
+  const displayed = months.slice().reverse().slice(-6);
+  const maxKg     = Math.max(...displayed.map((m) => m.total), 1);
+  return (
+    <div className="chart-bars">
+      {displayed.map((m, i) => {
+        const label = MONTH_NAMES[parseInt(m.key.split("-")[1]) - 1];
+        const pct   = m.total > 0 ? Math.max(8, (m.total / maxKg) * 100) : 3;
+        return (
+          <div key={m.key} className="bar-wrap">
+            {m.total > 0 && (
+              <span className="bar-value" style={{ color: "#22d3ee" }}>
+                {m.total.toFixed(1)}
+              </span>
+            )}
+            <div
+              className="bar"
+              style={{
+                height: `${pct}%`,
+                animationDelay: `${0.3 + i * 0.06}s`,
+                background: "linear-gradient(180deg, #22d3ee, #0891b2)",
+                opacity: m.total > 0 ? undefined : 0.2,
+              }}
+            />
+            <span className="bar-label">{label}</span>
           </div>
         );
       })}
@@ -381,6 +421,52 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     return { total, repeats, pct: total > 0 ? Math.round((repeats/total)*100) : 0 };
   }, [clients]);
 
+  // ── Freon consumption report ──────────────────────────────────────────────
+  const freonData = useMemo(() => {
+    const byType:  Record<string, number>                 = {};
+    const byMonth: Record<string, Record<string, number>> = {};
+    let total = 0;
+
+    allRepairs.forEach((r) => {
+      let amt = parseFloat(r.freonAmount ?? "") || 0;
+      if (amt <= 0) {
+        (r.tasks ?? []).forEach((t) => {
+          if (t.freonTask && t.freonKg) {
+            const kg = parseFloat(t.freonKg) || 0;
+            if (kg > 0) amt = kg;
+          }
+        });
+      }
+      if (amt <= 0) return;
+
+      const typ = r.freonType || "Не указан";
+      total += amt;
+      byType[typ] = (byType[typ] ?? 0) + amt;
+
+      if (r.date) {
+        const mk = r.date.substring(0, 7);
+        if (!byMonth[mk]) byMonth[mk] = {};
+        byMonth[mk][typ] = (byMonth[mk][typ] ?? 0) + amt;
+      }
+    });
+
+    const types = Object.entries(byType)
+      .sort(([, a], [, b]) => b - a)
+      .map(([type, kg]) => ({ type, kg }));
+
+    const months = Object.entries(byMonth)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, data]) => ({
+        key,
+        total: Object.values(data).reduce((s, v) => s + v, 0),
+        types: Object.entries(data)
+          .sort(([, a], [, b]) => b - a)
+          .map(([type, kg]) => ({ type, kg })),
+      }));
+
+    return { total, types, months };
+  }, [allRepairs]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
@@ -574,6 +660,66 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
               Чем выше % — тем сильнее клиентская база
             </div>
           </div>
+        </Section>
+      )}
+
+      {/* Finance: Freon consumption */}
+      {showFinance && freonData.total > 0 && (
+        <Section
+          title="Расход фреона"
+          icon="ti-snowflake"
+          count={`${freonData.total.toFixed(1)} кг`}
+        >
+          {/* Bar chart by month */}
+          {freonData.months.length > 0 && (
+            <div>
+              <div style={{ padding: "12px 20px 4px", fontSize: 10, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+                По месяцам
+              </div>
+              <FreonMonthChart months={freonData.months} />
+            </div>
+          )}
+
+          {/* Total by type */}
+          <div style={{ padding: "12px 20px 4px", fontSize: 10, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", borderTop: freonData.months.length > 0 ? "1px solid var(--border)" : undefined }}>
+            Итого по типам фреона
+          </div>
+          <div style={{ padding: "4px 20px 12px" }}>
+            {freonData.types.map((t) => (
+              <BarRow
+                key={t.type}
+                label={`❄️ ${t.type}`}
+                value={t.kg}
+                maxValue={freonData.types[0].kg}
+                valueLabel={`${t.kg.toFixed(1)} кг`}
+              />
+            ))}
+          </div>
+
+          {/* Monthly breakdown table */}
+          {freonData.months.length > 0 && (
+            <>
+              <div style={{ padding: "4px 20px 8px", fontSize: 10, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", borderTop: "1px solid var(--border)" }}>
+                Детализация по месяцам
+              </div>
+              <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                {freonData.months.map((m) => (
+                  <div key={m.key} style={{ background: "var(--bg3)", borderRadius: 10, padding: "8px 12px", border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: m.types.length > 1 ? 4 : 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{freonMonthLabel(m.key)}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>{m.total.toFixed(1)} кг</span>
+                    </div>
+                    {m.types.length > 1 && m.types.map((t) => (
+                      <div key={t.type} style={{ display: "flex", justifyContent: "space-between", padding: "2px 6px", fontSize: 11 }}>
+                        <span style={{ color: "var(--text3)" }}>❄️ {t.type}</span>
+                        <span style={{ color: "#67e8f9" }}>{t.kg.toFixed(1)} кг</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </Section>
       )}
 
