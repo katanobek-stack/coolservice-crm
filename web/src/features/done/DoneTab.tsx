@@ -534,7 +534,7 @@ function MonthBlock({ mk, items, tasks, isAdmin }: {
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function DoneTab() {
-  const { clients, tasks, staff } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance } = useData();
   const { myProfile }             = useAuth();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
   const [search, setSearch] = useState("");
@@ -636,49 +636,29 @@ export function DoneTab() {
     return Array.from(months).sort((a, b) => b.localeCompare(a));
   }, [closedItems]);
 
-  function exportRepairsExcel() {
-    const monthItems = closedItems.filter((i) => i.mk === exportMK);
-    const [y, m]     = exportMK.split("-");
-    const mLabel     = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+  function exportMonthExcel() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finance = rawFinance as any;
+    const monthItems = closedItems.filter((i) => i.mk === exportMK && i.repair.closedByManager);
+    const [, m]      = exportMK.split("-");
+    const mLabel     = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${exportMK.slice(0, 4)}`;
 
-    const totalCost = monthItems.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0);
-
-    // Freon summary across repair + tasks
-    const freonMap: Record<string, number> = {};
-    const addFreon = (type: string | undefined, amtStr: string | undefined) => {
+    // ── Лист 1: Ремонты ────────────────────────────────────────────────────────
+    const addFreon = (map: Record<string, number>, type?: string, amt?: string) => {
       if (!type) return;
-      freonMap[type] = (freonMap[type] ?? 0) + (parseFloat(amtStr ?? "0") || 0);
+      map[type] = (map[type] ?? 0) + (parseFloat(amt ?? "0") || 0);
     };
+    const freonMap: Record<string, number> = {};
     monthItems.forEach((i) => {
-      addFreon(i.repair.freonType, i.repair.freonAmount);
-      (i.repair.tasks ?? []).forEach((t) => addFreon(t.freonType, t.freonKg));
+      addFreon(freonMap, i.repair.freonType, i.repair.freonAmount);
+      (i.repair.tasks ?? []).forEach((t) => addFreon(freonMap, t.freonType, t.freonKg));
     });
-    const totalFreonKg = Object.values(freonMap).reduce((s, v) => s + v, 0);
 
-    // Sheet 1 — Summary
+    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sum: any[][] = [
-      [`РЕМОНТЫ ЗА ${mLabel.toUpperCase()}`],
-      [],
-      ["Всего ремонтов:", monthItems.length],
-      ["Итого выручка, ₽:", totalCost],
-    ];
-    if (Object.keys(freonMap).length > 0) {
-      sum.push([], ["ФРЕОН"]);
-      Object.entries(freonMap).forEach(([type, kg]) => sum.push([type, `${kg.toFixed(1)} кг`]));
-      sum.push(["Итого фреон:", `${totalFreonKg.toFixed(1)} кг`]);
-    }
-    const ws1 = XLSX.utils.aoa_to_sheet(sum);
-    ws1["!cols"] = [{ wch: 28 }, { wch: 20 }];
-
-    // Sheet 2 — Repairs detail
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows: any[][] = monthItems.map((i) => {
-      const freonType = i.repair.freonType
-        ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType
-        ?? "";
-      const freonAmt = i.repair.freonAmount
-        ?? String((i.repair.tasks ?? []).find((t) => t.freonKg)?.freonKg ?? "");
+    const repRows: any[][] = monthItems.map((i) => {
+      const freonType = i.repair.freonType ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType ?? "";
+      const freonAmt  = i.repair.freonAmount ?? String((i.repair.tasks ?? []).find((t) => t.freonKg)?.freonKg ?? "");
       return [
         i.client.name,
         i.client.phone ?? "",
@@ -693,16 +673,77 @@ export function DoneTab() {
         i.repair.description ?? "",
       ];
     });
-    if (monthItems.length > 0) rows.push(["", "", "", "", "", "", "", "", "ИТОГО:", totalCost, ""]);
+    const totalRevenue = monthItems.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0);
+    if (monthItems.length > 0) repRows.push(["", "", "", "", "", "", "", "", "ИТОГО:", totalRevenue, ""]);
 
-    const headers = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
-    const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws2["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:22},{wch:10},{wch:10},{wch:12},{wch:30}];
+    const ws1 = XLSX.utils.aoa_to_sheet([repHeaders, ...repRows]);
+    ws1["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:22},{wch:10},{wch:10},{wch:12},{wch:30}];
+
+    // ── Лист 2: Расходы ────────────────────────────────────────────────────────
+    const elecBills  = (finance.elecBills  ?? {}) as Record<string, number>;
+    const purchases  = (finance.purchases  ?? []) as Array<{ id: string; date: string; addedAt: string; amount: number; comment: string }>;
+    const boxes      = (finance.boxes      ?? []) as Array<{ id: string; name: string; cost: number }>;
+    const salaries   = (finance.salaries   ?? []) as Array<{ uid: string; name: string; salary: number }>;
+
+    const elecCost   = parseFloat(String(elecBills[exportMK] ?? 0)) || 0;
+    const boxCost    = boxes.reduce((s, b) => s + (parseFloat(String(b.cost)) || 0), 0);
+    const salCost    = salaries.reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+    const mkPurchases = purchases.filter((p) => p.date?.slice(0, 7) === exportMK);
+    const purTotal   = mkPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
+    const rentalInc  = freezers
+      .filter((f) => (f as { rented?: boolean }).rented || (f as { status?: string }).status === "rented")
+      .reduce((s, f) => s + (parseFloat(String((f as { rentAmount?: number }).rentAmount ?? 0)) || 0), 0);
+    const totalExp   = boxCost + salCost + elecCost + purTotal;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const expRows: any[][] = [["Статья расхода", "Сумма ₽"]];
+    boxes.filter((b) => b.cost > 0).forEach((b) => expRows.push([`Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0]));
+    salaries.filter((s) => s.salary > 0).forEach((s) => expRows.push([`Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0]));
+    if (elecCost > 0) expRows.push([`Электричество (${mLabel})`, elecCost]);
+    mkPurchases.forEach((p) => expRows.push([`Закупка: ${p.comment}`, parseFloat(String(p.amount)) || 0]));
+    expRows.push([], ["ИТОГО РАСХОДЫ", totalExp]);
+
+    const ws2 = XLSX.utils.aoa_to_sheet(expRows);
+    ws2["!cols"] = [{ wch: 35 }, { wch: 14 }];
+
+    // ── Лист 3: P&L ───────────────────────────────────────────────────────────
+    const totalInc = totalRevenue + rentalInc;
+    const profit   = totalInc - totalExp;
+    const totalFreonKg = Object.values(freonMap).reduce((s, v) => s + v, 0);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pnlRows: any[][] = [
+      [`P&L ЗА ${mLabel.toUpperCase()}`],
+      [],
+      ["═══ ДОХОДЫ ═══"],
+      ["Ремонты",      totalRevenue, "₽", `(${monthItems.length} нарядов)`],
+      ["Аренда камер", rentalInc,    "₽"],
+      ["ИТОГО ДОХОДЫ", totalInc,     "₽"],
+      [],
+      ["═══ РАСХОДЫ ═══"],
+      ...boxes.filter((b) => b.cost > 0).map((b) => [`  Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0, "₽"]),
+      ...salaries.filter((s) => s.salary > 0).map((s) => [`  Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0, "₽"]),
+      ...(elecCost > 0  ? [[`  Электричество`, elecCost, "₽"]] : []),
+      ...(purTotal > 0  ? [[`  Закупки и материалы`, purTotal, "₽"]] : []),
+      ["ИТОГО РАСХОДЫ", totalExp, "₽"],
+      [],
+      ["═══ ПРИБЫЛЬ ═══"],
+      ["Прибыль за месяц", profit, "₽"],
+    ];
+    if (totalFreonKg > 0) {
+      pnlRows.push([], ["═══ ФРЕОН ═══"]);
+      Object.entries(freonMap).forEach(([type, kg]) => pnlRows.push([`  ${type}`, `${kg.toFixed(1)} кг`]));
+      pnlRows.push(["  Итого", `${totalFreonKg.toFixed(1)} кг`]);
+    }
+
+    const ws3 = XLSX.utils.aoa_to_sheet(pnlRows);
+    ws3["!cols"] = [{ wch: 32 }, { wch: 14 }, { wch: 5 }, { wch: 20 }];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws1, "Итоги");
-    XLSX.utils.book_append_sheet(wb, ws2, "Ремонты");
-    XLSX.writeFile(wb, `РефСервисДВ_Ремонты_${exportMK}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws1, "Ремонты");
+    XLSX.utils.book_append_sheet(wb, ws2, "Расходы");
+    XLSX.utils.book_append_sheet(wb, ws3, "P&L");
+    XLSX.writeFile(wb, `РефСервисДВ_Отчёт_${exportMK}.xlsx`);
   }
 
   return (
@@ -760,7 +801,7 @@ export function DoneTab() {
             </select>
             <button
               type="button"
-              onClick={() => exportRepairsExcel()}
+              onClick={() => exportMonthExcel()}
               style={{
                 padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
                 background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)",
