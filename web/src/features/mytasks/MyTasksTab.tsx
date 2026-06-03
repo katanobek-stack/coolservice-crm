@@ -693,7 +693,9 @@ function RepairTaskRow({ task, client, repair }: {
               <Input
                 type="number" step="0.1" placeholder="0.0"
                 value={freonKg} onChange={(e) => setFreonKg(e.target.value)}
-                className="!min-h-0 !py-1 !px-2 !text-sm w-20 flex-shrink-0"
+                onBlur={() => void saveFreon(false)}
+                style={{ width: 100 }}
+                className="!min-h-0 !py-1 !px-2 !text-sm flex-shrink-0"
               />
               <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#67e8f9", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
                 💾

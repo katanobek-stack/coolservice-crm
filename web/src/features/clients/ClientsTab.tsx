@@ -353,30 +353,43 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
 
   async function handleSave() {
     setSaving(true);
-    let finalVehicleId = vehicleId;
-    let vehicles = client.vehicles ?? [];
-    if (!vehicleId && newPlate.trim()) {
-      const newV: Vehicle = { id: genId(), plate: newPlate.trim().toUpperCase() };
-      vehicles = [...vehicles, newV];
-      finalVehicleId = newV.id;
-      await updateClient(client.id, { vehicles });
+    try {
+      let finalVehicleId = vehicleId;
+      let vehicles = client.vehicles ?? [];
+      if (!vehicleId && newPlate.trim()) {
+        const newV: Vehicle = { id: genId(), plate: newPlate.trim().toUpperCase() };
+        vehicles = [...vehicles, newV];
+        finalVehicleId = newV.id;
+        await updateClient(client.id, { vehicles });
+      }
+      // Freon-задача создаётся автоматически при каждом новом ремонте
+      const tasks: RepairTask[] = [
+        { id: genId(), description: "Заправка фреона", assignees: [], doneBy: [], status: "in_progress", freonTask: true },
+        ...(taskDesc.trim()
+          ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" as const }]
+          : []),
+      ];
+      // Firestore rejects undefined values — only include defined fields
+      const repair: Repair = {
+        id: genId(),
+        serviceType,
+        description: desc.trim(),
+        date,
+        status: "in_progress",
+        photos: [],
+        tasks,
+        ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
+        ...(isAdmin && cost.trim() ? { cost: cost.trim() } : {}),
+        ...(freonType ? { freonType } : {}),
+        ...(freonAmt.trim() ? { freonAmount: freonAmt.trim() } : {}),
+      };
+      console.log("[AddRepairModal] saving repair:", repair);
+      await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
+      onClose();
+    } catch (err) {
+      console.error("[AddRepairModal] handleSave failed:", err);
+      setSaving(false);
     }
-    // Freon-задача создаётся автоматически при каждом новом ремонте
-    const tasks: RepairTask[] = [
-      { id: genId(), description: "Заправка фреона", assignees: [], doneBy: [], status: "in_progress", freonTask: true },
-      ...(taskDesc.trim()
-        ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" as const }]
-        : []),
-    ];
-    const repair: Repair = {
-      id: genId(), vehicleId: finalVehicleId || undefined, serviceType,
-      description: desc.trim(), date,
-      cost: isAdmin && cost.trim() ? cost.trim() : undefined,
-      status: "in_progress", freonType: freonType || undefined,
-      freonAmount: freonAmt.trim() || undefined, photos: [], tasks,
-    };
-    await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
-    onClose();
   }
 
   return (
