@@ -142,7 +142,7 @@ export function FloatingMicButton() {
     try {
       const cmd = await callClaude(transcript);
 
-      const repairTasks: RepairTask[] = cmd.tasks.map((t) => ({
+      const repairTasks: RepairTask[] = (cmd.tasks || []).map((t) => ({
         id: genId(),
         description: t.description || (t.type === "freon" ? "Заправка фреона R134a" : "Задача"),
         assignees: [],

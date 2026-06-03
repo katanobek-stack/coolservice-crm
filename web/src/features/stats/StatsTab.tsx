@@ -65,11 +65,12 @@ function fmtK(n: number): string {
 }
 
 function RevenueChart({ monthData }: { monthData: { label: string; rev: number; cnt: number }[] }) {
-  const maxRev  = Math.max(...monthData.map((m) => m.rev), 1);
-  const hasData = monthData.some((m) => m.rev > 0);
+  const safeMonthData = monthData || [];
+  const maxRev  = Math.max(...safeMonthData.map((m) => m.rev), 1);
+  const hasData = safeMonthData.some((m) => m.rev > 0);
   return (
     <div className="chart-bars">
-      {monthData.map((m, i) => {
+      {safeMonthData.map((m, i) => {
         const isLast = i === monthData.length - 1;
         const pct    = m.rev > 0 ? Math.max(8, (m.rev / maxRev) * 100) : 3;
         return (
@@ -436,7 +437,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             Нет заявок в работе
           </div>
         ) : (
-          visibleRepairs.map((r, i) => (
+          (visibleRepairs || []).map((r, i) => (
             <RepairCard
               key={r.id}
               idx={i}
@@ -490,7 +491,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                 <span className="section-count">нагрузка</span>
               </div>
               <div className="mechanic-list">
-                {mechanicStats.slice(0, 4).map((m, i) => (
+                {(mechanicStats || []).slice(0, 4).map((m, i) => (
                   <MechanicRow
                     key={m.name}
                     name={m.name}
@@ -509,7 +510,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       {showFinance && topClients.length > 0 && (
         <Section title="Топ клиентов по выручке" icon="ti-trophy" count={`${topClients.length}`}>
           <div style={{ padding: "16px 20px" }}>
-            {topClients.map((c) => (
+            {(topClients || []).map((c) => (
               <BarRow
                 key={c.name}
                 label={c.name}
@@ -527,7 +528,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       {showFinance && byServiceType.length > 0 && (
         <Section title="Выручка по типам услуг" icon="ti-chart-pie" count={`${byServiceType.length}`}>
           <div style={{ padding: "16px 20px" }}>
-            {byServiceType.map((s) => (
+            {(byServiceType || []).map((s) => (
               <BarRow
                 key={s.label}
                 label={`${s.emoji} ${s.label}`}
