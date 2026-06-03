@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment, type CSSProperties } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
@@ -9,9 +9,10 @@ import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
-import { PhotoGrid, InlinePhotoButton } from "../../shared/ui/PhotoUploader";
+import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { addClient, updateClient, deleteClient, updateClientArray } from "../../shared/firebase/firestore";
 import type { Appointment, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
+import { uploadPhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -121,33 +122,69 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
   );
 }
 
+// ─── Vehicle Types ────────────────────────────────────────────────────────────
+
+const VEHICLE_TYPES = [
+  { id: "refrigerator", label: "Рефрижератор", emoji: "🚛" },
+  { id: "ac",           label: "Кондиционер",  emoji: "❄️" },
+  { id: "other",        label: "Авто",          emoji: "🚗" },
+] as const;
+
+function vehicleTypeIcon(serviceType?: string): string {
+  if (serviceType === "refrigerator") return "🚛";
+  if (serviceType === "ac")           return "❄️";
+  return "🚗";
+}
+
 // ─── Vehicle Modal ────────────────────────────────────────────────────────────
 
 function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: Vehicle; onClose: () => void }) {
-  const [plate, setPlate] = useState(vehicle?.plate ?? "");
-  // Firebase хранит поле как brand (не model)
-  const [brand, setBrand] = useState(vehicle?.brand ?? vehicle?.model ?? "");
-  const [saving, setSaving] = useState(false);
+  const [plate,          setPlate]          = useState(vehicle?.plate ?? "");
+  const [brand,          setBrand]          = useState(vehicle?.brand ?? vehicle?.model ?? "");
+  const [serviceType,    setServiceType]    = useState(vehicle?.serviceType ?? "other");
+  const [photo,          setPhoto]          = useState(vehicle?.photo ?? "");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [saving,         setSaving]         = useState(false);
   const isEdit = !!vehicle;
+
+  const camRef = useRef<HTMLInputElement>(null);
+  const galRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const result = await uploadPhoto(file, "vehicles");
+      setPhoto(result.url ?? "");
+    } catch (err) {
+      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = "";
+    }
+  }
 
   async function handleSave() {
     if (!plate.trim()) return;
     setSaving(true);
     try {
-      const norm = plate.trim().toUpperCase();
+      const norm     = plate.trim().toUpperCase();
       const brandVal = brand.trim() || undefined;
       if (isEdit) {
         await updateClient(client.id, {
           vehicles: (client.vehicles ?? []).map((v): Vehicle => {
             if (v.id !== vehicle.id) return v;
-            const upd: Vehicle = { ...v, plate: norm };
+            const upd: Vehicle = { ...v, plate: norm, serviceType };
             if (brandVal) upd.brand = brandVal; else delete upd.brand;
+            if (photo)    upd.photo = photo;    else delete upd.photo;
             return upd;
           }),
         });
       } else {
-        const newV: Vehicle = { id: genId(), plate: norm };
+        const newV: Vehicle = { id: genId(), plate: norm, serviceType };
         if (brandVal) newV.brand = brandVal;
+        if (photo)    newV.photo = photo;
         await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), newV] });
       }
       onClose();
@@ -167,12 +204,89 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
     onClose();
   }
 
+  const btnStyle: CSSProperties = {
+    padding: "6px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer",
+    border: "1px solid var(--border2)", background: "var(--bg3)", color: "var(--text2)",
+    display: "flex", alignItems: "center", gap: 5,
+  };
+
   return (
     <Modal title={isEdit ? "Редактировать авто" : "Добавить авто"} onClose={onClose}>
-      <FormGroup label="Гос. номер"><Input placeholder="А123БВ 125" value={plate} onChange={(e) => setPlate(e.target.value)} style={{ fontFamily: "monospace", fontWeight: 700, textTransform: "uppercase" }} /></FormGroup>
-      <FormGroup label="Марка / модель"><Input placeholder="Toyota Dyna" value={brand} onChange={(e) => setBrand(e.target.value)} /></FormGroup>
-      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : isEdit ? "Сохранить" : "Добавить"}</Button>
-      {isEdit && (<div className="mt-3 pt-3 border-t border-[#E2E8F0]"><button type="button" onClick={() => void handleDelete()} className="text-xs text-red-400 cursor-pointer bg-transparent border-none">🗑 Удалить авто</button></div>)}
+
+      {/* Photo */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+          Фото авто
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {photo ? (
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <img src={photo} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", border: "1px solid var(--border)" }} />
+              <button
+                type="button"
+                onClick={() => setPhoto("")}
+                style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "var(--red)", border: "none", color: "white", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >×</button>
+            </div>
+          ) : (
+            <div style={{ width: 72, height: 72, borderRadius: 10, flexShrink: 0, background: "var(--bg3)", border: "1.5px dashed var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>
+              {vehicleTypeIcon(serviceType)}
+            </div>
+          )}
+          <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoFile} />
+          <input ref={galRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
+          {uploadingPhoto ? (
+            <span style={{ fontSize: 12, color: "var(--text3)" }}>⏳ Загрузка...</span>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button type="button" style={btnStyle} onClick={() => camRef.current?.click()}>📷 Камера</button>
+              <button type="button" style={btnStyle} onClick={() => galRef.current?.click()}>🖼️ Галерея</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Service type */}
+      <FormGroup label="Тип транспорта">
+        <div style={{ display: "flex", gap: 6 }}>
+          {VEHICLE_TYPES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setServiceType(t.id)}
+              style={{
+                flex: 1, padding: "8px 4px", borderRadius: 10, cursor: "pointer",
+                border: `1.5px solid ${serviceType === t.id ? "var(--accent)" : "var(--border2)"}`,
+                background: serviceType === t.id ? "rgba(59,130,246,0.15)" : "transparent",
+                color: serviceType === t.id ? "var(--accent2)" : "var(--text2)",
+                fontSize: 11, fontWeight: 600,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{t.emoji}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </FormGroup>
+
+      <FormGroup label="Гос. номер">
+        <Input placeholder="А123БВ 125" value={plate} onChange={(e) => setPlate(e.target.value)} style={{ fontFamily: "monospace", fontWeight: 700, textTransform: "uppercase" }} />
+      </FormGroup>
+      <FormGroup label="Марка / модель">
+        <Input placeholder="Toyota Dyna" value={brand} onChange={(e) => setBrand(e.target.value)} />
+      </FormGroup>
+
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving || uploadingPhoto}>
+        {saving ? "..." : isEdit ? "Сохранить" : "Добавить"}
+      </Button>
+      {isEdit && (
+        <div className="mt-3 pt-3 border-t border-[#E2E8F0]">
+          <button type="button" onClick={() => void handleDelete()} className="text-xs text-red-400 cursor-pointer bg-transparent border-none">
+            🗑 Удалить авто
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -469,7 +583,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
 
       {isAdmin && status === "in_progress" && (
         <div style={{ marginTop: 8 }}>
-          <InlinePhotoButton onUploaded={addPhotos} label="Фото к наряду" capture="environment" folder="repairs" />
+          <DualPhotoButton onUploaded={addPhotos} folder="repairs" />
         </div>
       )}
 
@@ -656,7 +770,7 @@ function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: ()
       {vehicle.photo ? (
         <img src={vehicle.photo} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
       ) : (
-        <span style={{ fontSize: 20, flexShrink: 0 }}>🚗</span>
+        <span style={{ fontSize: 22, flexShrink: 0 }}>{vehicleTypeIcon(vehicle.serviceType)}</span>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>

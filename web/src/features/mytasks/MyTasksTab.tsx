@@ -6,7 +6,7 @@ import { fmtDate, genId } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
-import { PhotoGrid, InlinePhotoButton } from "../../shared/ui/PhotoUploader";
+import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { updateClientArray, addServiceTask, updateServiceTask, deleteServiceTask } from "../../shared/firebase/firestore";
 import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
@@ -389,7 +389,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
               <button type="button" onClick={() => setShowComment(true)} style={{ fontSize: 10, color: "var(--text2)", background: "var(--bg2)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 5, cursor: "pointer" }}>
                 📝 {subtask.workComment ? "Изм." : "Отчёт"}
               </button>
-              <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
+              <DualPhotoButton onUploaded={addPhotos} />
               {isAdmin && (
                 <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 10, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "2px 7px", borderRadius: 5, cursor: "pointer" }}>
                   🗑
@@ -531,7 +531,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
           <button type="button" onClick={() => setShowComment(true)} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", padding: "4px 10px", borderRadius: 7, cursor: "pointer" }}>
             📝 {task.workComment ? "Изменить" : "Отчёт"}
           </button>
-          <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
+          <DualPhotoButton onUploaded={addPhotos} />
           {isProject && isAdmin && (
             <button type="button" onClick={() => setShowAddSubtask(true)} style={{ fontSize: 11, color: "#c4b5fd", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", padding: "4px 10px", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>
               + Подзадача
@@ -728,7 +728,7 @@ function RepairTaskRow({ task, client, repair }: {
                   📝 {task.workComment ? "Изменить" : "Отчёт"}
                 </button>
               )}
-              <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
+              <DualPhotoButton onUploaded={addPhotos} />
               {isAdmin && (
                 <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "3px 9px", borderRadius: 6, cursor: "pointer" }}>
                   🗑

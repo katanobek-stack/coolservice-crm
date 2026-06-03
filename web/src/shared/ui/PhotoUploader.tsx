@@ -50,6 +50,45 @@ export function PhotoGrid({ photos, onRemove, readOnly, onView }: {
   );
 }
 
+export function DualPhotoButton({
+  onUploaded,
+  folder = "photos",
+}: {
+  onUploaded: (photos: PhotoData[]) => Promise<void>;
+  folder?:    string;
+}) {
+  const camRef                     = useRef<HTMLInputElement>(null);
+  const galRef                     = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading]  = useState(false);
+
+  async function handle(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const result = await uploadPhotos(files, folder);
+      await onUploaded(result);
+    } catch (err) {
+      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  if (uploading) return <span style={{ fontSize: 12, color: "var(--text3)" }}>⏳ Загрузка...</span>;
+
+  const btnCss = "text-xs text-[#667085] bg-white px-2.5 py-1 rounded-lg border border-[#E2E8F0] cursor-pointer inline-flex items-center gap-1";
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handle} />
+      <input ref={galRef} type="file" accept="image/*" multiple className="hidden" onChange={handle} />
+      <button type="button" className={btnCss} onClick={() => camRef.current?.click()}>📷 Камера</button>
+      <button type="button" className={btnCss} onClick={() => galRef.current?.click()}>🖼️ Галерея</button>
+    </div>
+  );
+}
+
 export function InlinePhotoButton({
   onUploaded,
   folder = "photos",

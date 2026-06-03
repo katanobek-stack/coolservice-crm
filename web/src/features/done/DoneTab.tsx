@@ -531,6 +531,145 @@ function MonthBlock({ mk, items, tasks, isAdmin }: {
   );
 }
 
+// ─── Freon report section ─────────────────────────────────────────────────────
+
+function FreonSection({ clients }: { clients: Client[] }) {
+  const [open, setOpen] = useState(false);
+
+  const stats = useMemo(() => {
+    const byType:  Record<string, number>                    = {};
+    const byMonth: Record<string, Record<string, number>>    = {};
+    let total = 0;
+
+    clients.forEach((c) => {
+      (c.repairs ?? []).forEach((r) => {
+        const kg  = parseFloat(r.freonAmount ?? "0") || 0;
+        const typ = r.freonType;
+        if (kg <= 0 || !typ) return;
+        const mk = r.date?.slice(0, 7) ?? "0000-00";
+        byType[typ]  = (byType[typ]  ?? 0) + kg;
+        if (!byMonth[mk]) byMonth[mk] = {};
+        byMonth[mk][typ] = (byMonth[mk][typ] ?? 0) + kg;
+        total += kg;
+      });
+    });
+
+    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    const monthKeys   = Object.keys(byMonth).filter((mk) => mk !== "0000-00").sort((a, b) => b.localeCompare(a));
+    const allTypes    = typeEntries.map(([t]) => t);
+    const maxKg       = typeEntries[0]?.[1] ?? 1;
+    return { total, byType, byMonth, typeEntries, monthKeys, allTypes, maxKg };
+  }, [clients]);
+
+  if (stats.total === 0) return null;
+
+  return (
+    <div className="crm-section" style={{ animation: "fadeUp 0.5s ease 0.25s both" }}>
+      <div className="section-header" style={{ background: "rgba(6,182,212,0.06)" }}>
+        <i className="ti ti-snowflake" style={{ fontSize: 17, color: "#22d3ee" }} />
+        <span className="section-title">Расход фреона</span>
+        <div className="section-actions">
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+            {stats.total.toFixed(1)} кг
+          </span>
+        </div>
+      </div>
+
+      {/* Bar chart by type */}
+      <div style={{ padding: "12px 16px 4px" }}>
+        {stats.typeEntries.map(([typ, kg]) => (
+          <div key={typ} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#67e8f9" }}>❄️ {typ}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                {kg.toFixed(1)} кг
+              </span>
+            </div>
+            <div style={{ height: 7, background: "rgba(6,182,212,0.15)", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${(kg / stats.maxKg) * 100}%`,
+                background: "linear-gradient(90deg,#06b6d4,#67e8f9)",
+                borderRadius: 4,
+                transition: "width 0.4s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly table toggle */}
+      {stats.monthKeys.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 6,
+              padding: "9px 16px", borderTop: "1px solid var(--border)",
+              background: "transparent", border: "none", cursor: "pointer",
+              color: "var(--text3)", fontSize: 12, textAlign: "left",
+            }}
+          >
+            <span style={{ fontSize: 10, display: "inline-block", transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "none" }}>▶</span>
+            Расход по месяцам
+          </button>
+
+          {open && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "rgba(6,182,212,0.08)" }}>
+                    <th style={{ padding: "7px 16px", textAlign: "left", color: "var(--text3)", fontWeight: 600, whiteSpace: "nowrap" }}>Месяц</th>
+                    {stats.allTypes.map((t) => (
+                      <th key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#67e8f9", fontWeight: 600, whiteSpace: "nowrap" }}>❄️ {t}</th>
+                    ))}
+                    <th style={{ padding: "7px 10px", textAlign: "right", color: "#22d3ee", fontWeight: 700, whiteSpace: "nowrap" }}>Итого</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.monthKeys.map((mk) => {
+                    const mData  = stats.byMonth[mk];
+                    const mTotal = Object.values(mData).reduce((s, v) => s + v, 0);
+                    const [y, mo] = mk.split("-");
+                    const label  = mo ? `${MONTH_NAMES_FULL[parseInt(mo) - 1]} ${y}` : mk;
+                    return (
+                      <tr key={mk} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "7px 16px", color: "var(--text2)", whiteSpace: "nowrap" }}>{label}</td>
+                        {stats.allTypes.map((t) => (
+                          <td key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#67e8f9", fontFamily: "JetBrains Mono, monospace" }}>
+                            {mData[t] ? `${mData[t].toFixed(1)} кг` : "—"}
+                          </td>
+                        ))}
+                        <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                          {mTotal.toFixed(1)} кг
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: "2px solid rgba(6,182,212,0.3)", background: "rgba(6,182,212,0.06)" }}>
+                    <td style={{ padding: "7px 16px", fontWeight: 700, color: "#22d3ee" }}>Итого</td>
+                    {stats.allTypes.map((t) => (
+                      <td key={t} style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                        {stats.byType[t].toFixed(1)} кг
+                      </td>
+                    ))}
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 800, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                      {stats.total.toFixed(1)} кг
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function DoneTab() {
@@ -834,6 +973,9 @@ export function DoneTab() {
           </div>
         )}
       </div>
+
+      {/* Freon report */}
+      <FreonSection clients={clients} />
     </div>
   );
 }
