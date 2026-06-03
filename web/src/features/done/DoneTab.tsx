@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { repairStatus } from "../../shared/utils/repair";
@@ -538,6 +539,10 @@ export function DoneTab() {
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
   const [search, setSearch] = useState("");
 
+  const now   = new Date();
+  const curMK = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [exportMK, setExportMK] = useState(curMK);
+
   // Collect all non-in-progress repairs enriched with client/vehicle/assignees
   const allItems = useMemo<DoneItem[]>(() => {
     const result: DoneItem[] = [];
@@ -626,6 +631,80 @@ export function DoneTab() {
         .reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0)
     : 0;
 
+  const exportMonths = useMemo(() => {
+    const months = new Set(closedItems.map((i) => i.mk).filter((mk) => mk !== "0000-00"));
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  }, [closedItems]);
+
+  function exportRepairsExcel() {
+    const monthItems = closedItems.filter((i) => i.mk === exportMK);
+    const [y, m]     = exportMK.split("-");
+    const mLabel     = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+
+    const totalCost = monthItems.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0);
+
+    // Freon summary across repair + tasks
+    const freonMap: Record<string, number> = {};
+    const addFreon = (type: string | undefined, amtStr: string | undefined) => {
+      if (!type) return;
+      freonMap[type] = (freonMap[type] ?? 0) + (parseFloat(amtStr ?? "0") || 0);
+    };
+    monthItems.forEach((i) => {
+      addFreon(i.repair.freonType, i.repair.freonAmount);
+      (i.repair.tasks ?? []).forEach((t) => addFreon(t.freonType, t.freonKg));
+    });
+    const totalFreonKg = Object.values(freonMap).reduce((s, v) => s + v, 0);
+
+    // Sheet 1 — Summary
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sum: any[][] = [
+      [`РЕМОНТЫ ЗА ${mLabel.toUpperCase()}`],
+      [],
+      ["Всего ремонтов:", monthItems.length],
+      ["Итого выручка, ₽:", totalCost],
+    ];
+    if (Object.keys(freonMap).length > 0) {
+      sum.push([], ["ФРЕОН"]);
+      Object.entries(freonMap).forEach(([type, kg]) => sum.push([type, `${kg.toFixed(1)} кг`]));
+      sum.push(["Итого фреон:", `${totalFreonKg.toFixed(1)} кг`]);
+    }
+    const ws1 = XLSX.utils.aoa_to_sheet(sum);
+    ws1["!cols"] = [{ wch: 28 }, { wch: 20 }];
+
+    // Sheet 2 — Repairs detail
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[][] = monthItems.map((i) => {
+      const freonType = i.repair.freonType
+        ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType
+        ?? "";
+      const freonAmt = i.repair.freonAmount
+        ?? String((i.repair.tasks ?? []).find((t) => t.freonKg)?.freonKg ?? "");
+      return [
+        i.client.name,
+        i.client.phone ?? "",
+        i.vehicle?.brand ?? i.vehicle?.model ?? "",
+        i.vehicle?.plate ?? "",
+        i.repair.date ?? "",
+        i.repair.closedAt?.slice(0, 10) ?? "",
+        i.assigneeNames,
+        freonType,
+        freonAmt,
+        parseFloat(i.repair.cost ?? "0") || 0,
+        i.repair.description ?? "",
+      ];
+    });
+    if (monthItems.length > 0) rows.push(["", "", "", "", "", "", "", "", "ИТОГО:", totalCost, ""]);
+
+    const headers = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
+    const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws2["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:22},{wch:10},{wch:10},{wch:12},{wch:30}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, "Итоги");
+    XLSX.utils.book_append_sheet(wb, ws2, "Ремонты");
+    XLSX.writeFile(wb, `РефСервисДВ_Ремонты_${exportMK}.xlsx`);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
@@ -661,6 +740,37 @@ export function DoneTab() {
             </div>
           )}
         </div>
+
+        {/* Export toolbar */}
+        {isAdmin && exportMonths.length > 0 && (
+          <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={exportMK}
+              onChange={(e) => setExportMK(e.target.value)}
+              style={{
+                padding: "6px 10px", borderRadius: 8, fontSize: 13,
+                background: "var(--bg3)", border: "1px solid var(--border2)",
+                color: "var(--text)", outline: "none", cursor: "pointer",
+              }}
+            >
+              {exportMonths.map((mk) => {
+                const [y, mo] = mk.split("-");
+                return <option key={mk} value={mk}>{`${MONTH_NAMES_FULL[parseInt(mo) - 1]} ${y}`}</option>;
+              })}
+            </select>
+            <button
+              type="button"
+              onClick={() => exportRepairsExcel()}
+              style={{
+                padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)",
+                color: "#4ade80", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+              }}
+            >
+              <i className="ti ti-table-export" style={{ fontSize: 14 }} /> Скачать Excel
+            </button>
+          </div>
+        )}
 
         {/* Search */}
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>

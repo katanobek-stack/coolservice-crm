@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { repairStatus } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate, genId } from "../../shared/utils/format";
@@ -143,6 +144,7 @@ export function PnlTab() {
   const [newPurCmt,    setNewPurCmt]    = useState("");
   const [savingPur,    setSavingPur]    = useState(false);
   const [savingElec,   setSavingElec]   = useState(false);
+  const [exportMK,     setExportMK]     = useState(curMK);
 
   // ── Revenue ──────────────────────────────────────────────────────────────
   const allDone = useMemo(
@@ -222,6 +224,99 @@ export function PnlTab() {
   }
 
   const CURMONTH_LABEL = `${MONTH_NAMES_FULL[now.getMonth()]} ${now.getFullYear()}`;
+
+  function exportPnlExcel(mk: string) {
+    const [y, m] = mk.split("-");
+    const mLabel = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+
+    // Closed repairs for selected month
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const monthRepairs: any[] = [];
+    clients.forEach((c) => {
+      (c.repairs ?? []).filter((r) => r.closedByManager && r.date?.slice(0, 7) === mk).forEach((r) => {
+        const vehicle = (c.vehicles ?? []).find((v) => v.id === r.vehicleId);
+        monthRepairs.push({
+          clientName: c.name,
+          phone:      c.phone ?? "",
+          brand:      vehicle?.brand ?? vehicle?.model ?? "",
+          plate:      vehicle?.plate ?? "",
+          date:       r.date ?? "",
+          closedAt:   r.closedAt?.slice(0, 10) ?? "",
+          cost:       parseFloat(r.cost ?? "0") || 0,
+          desc:       r.description ?? "",
+          freonType:  r.freonType ?? (r.tasks ?? []).find((t) => t.freonType)?.freonType ?? "",
+          freonAmt:   r.freonAmount ?? String((r.tasks ?? []).find((t) => t.freonKg)?.freonKg ?? ""),
+        });
+      });
+    });
+    const monthRevenue  = monthRepairs.reduce((s: number, r: { cost: number }) => s + r.cost, 0);
+
+    // Expenses for selected month
+    const curBoxCost2  = (finance.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0);
+    const curSalCost2  = (finance.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+    const elecForMK    = parseFloat(String(elecBills[mk] ?? 0)) || 0;
+    const mkPurchases  = purchases.filter((p) => p.date?.slice(0, 7) === mk);
+    const mkPurTotal   = mkPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
+    const curRental    = freezers
+      .filter((f) => (f as { rented?: boolean; status?: string }).rented === true || (f as { status?: string }).status === "rented")
+      .reduce((s, f) => s + (parseFloat(String((f as { rentAmount?: number }).rentAmount ?? 0)) || 0), 0);
+
+    const totalExp  = curBoxCost2 + curSalCost2 + elecForMK + mkPurTotal;
+    const totalInc  = monthRevenue + curRental;
+    const profit    = totalInc - totalExp;
+
+    // Sheet 1 — P&L Summary
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sum: any[][] = [
+      [`P&L ОТЧЁТ ЗА ${mLabel.toUpperCase()}`],
+      [],
+      ["═══ ДОХОДЫ ═══"],
+      ["Ремонты",       monthRevenue, "₽", `(${monthRepairs.length} нарядов)`],
+      ["Аренда камер",  curRental,    "₽"],
+      ["ИТОГО ДОХОДЫ",  totalInc,     "₽"],
+      [],
+      ["═══ РАСХОДЫ ═══"],
+      ...(finance.boxes    ?? []).filter((b)  => b.cost    > 0).map((b)  => [`Аренда бокса: ${b.name    || "Бокс"}`,       parseFloat(String(b.cost))    || 0, "₽"]),
+      ...(finance.salaries ?? []).filter((s)  => s.salary  > 0).map((s)  => [`Зарплата: ${s.name         || "Сотрудник"}`, parseFloat(String(s.salary))  || 0, "₽"]),
+      ...(elecForMK > 0   ? [[`Электричество (${mLabel})`, elecForMK,   "₽"]] : []),
+      ...(mkPurTotal > 0  ? [["Закупки и материалы",        mkPurTotal,  "₽"]] : []),
+      ["ИТОГО РАСХОДЫ", totalExp, "₽"],
+      [],
+      ["═══ ПРИБЫЛЬ ═══"],
+      ["Прибыль за месяц", profit, "₽"],
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(sum);
+    ws1["!cols"] = [{ wch: 32 }, { wch: 14 }, { wch: 5 }, { wch: 20 }];
+
+    // Sheet 2 — Repairs detail
+    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const repRows: any[][] = monthRepairs.map((r) => [
+      r.clientName, r.phone, r.brand, r.plate, r.date, r.closedAt, r.freonType, r.freonAmt, r.cost, r.desc,
+    ]);
+    if (monthRepairs.length > 0) repRows.push(["", "", "", "", "", "", "", "ИТОГО:", monthRevenue, ""]);
+    const ws2 = XLSX.utils.aoa_to_sheet([repHeaders, ...repRows]);
+    ws2["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:10},{wch:10},{wch:12},{wch:30}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, "P&L Итоги");
+    XLSX.utils.book_append_sheet(wb, ws2, "Ремонты");
+
+    // Sheet 3 — Purchases (if any)
+    if (mkPurchases.length > 0) {
+      const purHeaders = ["Дата", "Описание", "Сумма ₽"];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const purRows: any[][] = [...mkPurchases]
+        .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+        .map((p) => [p.date ?? "", p.comment, parseFloat(String(p.amount)) || 0]);
+      purRows.push(["", "ИТОГО:", mkPurTotal]);
+      const ws3 = XLSX.utils.aoa_to_sheet([purHeaders, ...purRows]);
+      ws3["!cols"] = [{ wch: 12 }, { wch: 35 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws3, "Закупки");
+    }
+
+    XLSX.writeFile(wb, `РефСервисДВ_PnL_${mk}.xlsx`);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -453,6 +548,34 @@ export function PnlTab() {
               {fmtMoney(totalRevenue)}
             </span>
           </div>
+        </div>
+
+        {/* Export toolbar */}
+        <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <select
+            value={exportMK}
+            onChange={(e) => setExportMK(e.target.value)}
+            style={{
+              padding: "6px 10px", borderRadius: 8, fontSize: 13,
+              background: "var(--bg3)", border: "1px solid var(--border2)",
+              color: "var(--text)", outline: "none", cursor: "pointer",
+            }}
+          >
+            {monthStats.map((ms) => (
+              <option key={ms.month} value={ms.month}>{ms.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => exportPnlExcel(exportMK)}
+            style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+              background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)",
+              color: "#a78bfa", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+            }}
+          >
+            <i className="ti ti-table-export" style={{ fontSize: 14 }} /> Скачать Excel
+          </button>
         </div>
         {monthStats.filter((m) => m.revenue > 0).length === 0 ? (
           <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>

@@ -218,7 +218,7 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "freezers", "done"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "freezers", "done", "pnl"];
 
 function MobileNav({ tab, onTab, activeMine, role, onSignOut }: {
   tab:        Tab;
