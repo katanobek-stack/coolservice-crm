@@ -20,6 +20,7 @@ export interface RepairTask {
   workComment?: string;
   photos?: Photo[];
   freonTask?: boolean;
+  freonType?: string;
   freonKg?: string;
 }
 

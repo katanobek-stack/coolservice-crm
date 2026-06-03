@@ -217,6 +217,8 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
   );
 }
 
+const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
+
 // ─── Add Repair Modal ─────────────────────────────────────────────────────────
 
 function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
@@ -247,9 +249,13 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
       finalVehicleId = newV.id;
       await updateClient(client.id, { vehicles });
     }
-    const tasks: RepairTask[] = taskDesc.trim()
-      ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" }]
-      : [];
+    // Freon-задача создаётся автоматически при каждом новом ремонте
+    const tasks: RepairTask[] = [
+      { id: genId(), description: "Заправка фреона", assignees: [], doneBy: [], status: "in_progress", freonTask: true },
+      ...(taskDesc.trim()
+        ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" as const }]
+        : []),
+    ];
     const repair: Repair = {
       id: genId(), vehicleId: finalVehicleId || undefined, serviceType,
       description: desc.trim(), date,
@@ -399,6 +405,16 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
         r.id === repair.id ? { ...r, photos: [...(r.photos ?? []), ...photos] } : r));
   }
 
+  async function saveFreonType(taskId: string, freonType: string) {
+    await updateClientArray(client.id, "repairs",
+      (client.repairs ?? []).map((r) =>
+        r.id === repair.id
+          ? { ...r, tasks: (r.tasks ?? []).map((t) => t.id === taskId ? { ...t, freonType } : t) }
+          : r,
+      ),
+    );
+  }
+
   const borderLeft = status === "done" ? "var(--green)" : isCancelled ? "var(--text3)" : "var(--accent)";
 
   return (
@@ -462,11 +478,38 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
           {(repair.tasks ?? []).map((t) => {
             const ts = taskStatus(t);
             return (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
-                <span style={{ color: ts === "done" ? "#4ade80" : "#fbbf24" }}>{ts === "done" ? "✓" : "●"}</span>
-                <span style={{ color: "var(--text)", flex: 1 }}>{t.description}</span>
-                {t.freonKg && <span style={{ fontSize: 10, color: "#67e8f9" }}>❄️ {t.freonKg} кг</span>}
-                {t.workComment && <span style={{ fontSize: 10, color: "#c4b5fd" }}>📝</span>}
+              <div key={t.id} style={{ background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ color: ts === "done" ? "#4ade80" : "#fbbf24" }}>{ts === "done" ? "✓" : "●"}</span>
+                  <span style={{ color: "var(--text)", flex: 1 }}>{t.description}</span>
+                  {t.freonType && <span style={{ fontSize: 10, color: "#67e8f9", fontWeight: 700 }}>❄️ {t.freonType}</span>}
+                  {t.freonKg   && <span style={{ fontSize: 10, color: "#67e8f9" }}>{t.freonKg} кг</span>}
+                  {t.workComment && <span style={{ fontSize: 10, color: "#c4b5fd" }}>📝</span>}
+                </div>
+                {t.freonTask && ts !== "done" && (
+                  <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
+                    {FREON_BADGES.map((fr) => {
+                      const active = t.freonType === fr;
+                      return (
+                        <button
+                          key={fr}
+                          type="button"
+                          onClick={() => void saveFreonType(t.id, fr)}
+                          style={{
+                            padding: "2px 8px", borderRadius: 6,
+                            fontSize: 10, fontWeight: 700, cursor: "pointer",
+                            border: `1px solid ${active ? "#22d3ee" : "var(--border)"}`,
+                            background: active ? "rgba(6,182,212,0.2)" : "transparent",
+                            color: active ? "#22d3ee" : "var(--text3)",
+                            fontFamily: "Manrope, sans-serif",
+                          }}
+                        >
+                          {fr}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}

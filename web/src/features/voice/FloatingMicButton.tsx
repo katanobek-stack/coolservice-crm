@@ -42,6 +42,7 @@ interface VoiceCmd {
     vehicle?: { plate: string; brand?: string };
   };
   tasks: Array<{ description: string; type: "repair" | "freon" | "service" }>;
+  mechanic?: { name: string };
 }
 
 // ─── Util: strip undefined fields recursively (Firestore не принимает undefined) ──
@@ -64,21 +65,22 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 Из голосовой команды извлеки данные и верни ТОЛЬКО JSON без пояснений и форматирования.
 
 Пример формата:
-{"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}]}
+{"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}],"mechanic":{"name":"Сергей"}}
 
 Правила:
 - action "both" — создать клиента и задачи (используй по умолчанию)
 - action "create_client" — только клиент без задач
 - action "add_task" — клиент уже существует, добавить задачу
 - clientType "individual" — физлицо; "company" — юрлицо (ООО, ИП)
-- type "freon" — заправка/дозаправка фреона
 - type "repair" — ремонт, неисправность
 - type "service" — плановое ТО
 - phone — только цифры без пробелов и знаков
 - plate — кириллица+цифры без пробелов
 - Если задач нет — tasks:[]
 - Если нет телефона — не включай поле phone
-- Если нет авто — не включай поле vehicle`;
+- Если нет авто — не включай поле vehicle
+- Если упоминается имя механика/мастера ("назначь на ...", "... займётся") — извлеки в mechanic: {"name":"имя"}
+- Если механик не упомянут — не включай поле mechanic`;
 
 async function callClaude(text: string): Promise<VoiceCmd> {
   const key = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -125,7 +127,7 @@ const MAX_REC_MS = 60000;  // защита от забытой записи — 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function FloatingMicButton() {
-  const { clients } = useData();
+  const { clients, staff } = useData();
   const [state, setState]   = useState<MicState>("idle");
   const [toast, setToast]   = useState<{ msg: string; ok: boolean } | null>(null);
   const recRef      = useRef<ISpeechRec | null>(null);
@@ -163,14 +165,39 @@ export function FloatingMicButton() {
     try {
       const cmd = await callClaude(transcript);
 
-      const repairTasks: RepairTask[] = (cmd.tasks || []).map((t) => clean({
+      // Найти механика по имени из голосовой команды
+      const mechAssignees: string[] = [];
+      if (cmd.mechanic?.name) {
+        const n = cmd.mechanic.name.toLowerCase();
+        const found = staff.find((s) => {
+          const sn = (s.name ?? s.email ?? "").toLowerCase();
+          return sn.includes(n) || n.includes(sn.split(" ")[0]);
+        });
+        if (found) mechAssignees.push(found.id);
+      }
+
+      // Автоматическая freon-задача — всегда для каждого ремонта
+      const autoFreonTask: RepairTask = {
         id:          genId(),
-        description: t.description || (t.type === "freon" ? "Заправка фреона R134a" : "Задача"),
-        assignees:   [] as string[],
-        doneBy:      [] as string[],
-        status:      "in_progress" as const,
-        freonTask:   t.type === "freon" ? true : undefined,
-      }));
+        description: "Заправка фреона",
+        assignees:   mechAssignees,
+        doneBy:      [],
+        status:      "in_progress",
+        freonTask:   true,
+      };
+
+      // Остальные задачи из голосовой команды (freon не дублируем — уже добавлен выше)
+      const voiceTasks: RepairTask[] = (cmd.tasks || [])
+        .filter((t) => t.type !== "freon")
+        .map((t) => clean({
+          id:          genId(),
+          description: t.description || "Задача",
+          assignees:   mechAssignees,
+          doneBy:      [] as string[],
+          status:      "in_progress" as const,
+        }));
+
+      const repairTasks: RepairTask[] = [autoFreonTask, ...voiceTasks];
 
       const vId   = genId();
       const vData = cmd.client.vehicle;
@@ -232,7 +259,7 @@ export function FloatingMicButton() {
       setTimeout(() => setState("idle"), 3500);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients]);
+  }, [clients, staff]);
 
   function startRec() {
     if (!supported) {
