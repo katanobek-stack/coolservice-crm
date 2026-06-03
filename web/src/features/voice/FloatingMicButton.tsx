@@ -171,7 +171,7 @@ export function FloatingMicButton() {
         const n = cmd.mechanic.name.toLowerCase();
         const found = staff.find((s) => {
           const sn = (s.name ?? s.email ?? "").toLowerCase();
-          return sn.includes(n) || n.includes(sn.split(" ")[0]);
+          return sn.includes(n) || n.includes((sn || "").split(" ")[0]);
         });
         if (found) mechAssignees.push(found.id);
       }

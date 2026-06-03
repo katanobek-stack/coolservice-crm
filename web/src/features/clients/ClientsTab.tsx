@@ -893,12 +893,12 @@ const AVATAR_PALETTES = [
 ];
 
 function avatarPalette(name: string) {
-  const sum = name.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+  const sum = (name || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
   return AVATAR_PALETTES[sum % AVATAR_PALETTES.length];
 }
 
 function getInitials(name: string): string {
-  return name.split(" ").map((w) => w[0] ?? "").join("").toUpperCase().slice(0, 2) || "?";
+  return (name || "").split(" ").map((w) => w[0] ?? "").join("").toUpperCase().slice(0, 2) || "?";
 }
 
 const cardBase: CSSProperties = {
