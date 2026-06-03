@@ -13,6 +13,7 @@ import { PnlTab } from "../features/pnl/PnlTab";
 import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
 import { requestNotificationPermission, showBrowserNotification } from "../shared/utils/fcm";
+import { FloatingMicButton } from "../features/voice/FloatingMicButton";
 import type { StaffMember, StaffRole } from "../shared/types/staff";
 
 export type Tab =
@@ -353,6 +354,9 @@ function Shell() {
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
+
+      {/* Голосовой ИИ-агент */}
+      <FloatingMicButton />
     </>
   );
 }

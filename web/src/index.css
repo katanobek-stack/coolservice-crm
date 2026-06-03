@@ -635,6 +635,91 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   to   { transform: rotate(360deg); }
 }
 
+/* ═══ FLOATING MIC BUTTON (голосовой агент) ═══ */
+.mic-fab-wrap {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 767px) {
+  .mic-fab-wrap {
+    right: 16px;
+    bottom: 90px; /* выше mobile nav */
+  }
+}
+
+.mic-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+
+.mic-fab:active { transform: scale(0.91); }
+
+.mic-fab i {
+  font-size: 24px;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* пульсация при записи */
+.mic-fab--pulse {
+  animation: micPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.1); }
+}
+
+/* вращение иконки при обработке */
+.mic-fab--spin i {
+  animation: spin360 1s linear infinite;
+}
+
+@keyframes spin360 {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* toast уведомление */
+.mic-toast {
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 280px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  animation: fadeUp 0.25s ease;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mic-toast--err {
+  border-color: var(--red);
+}
+
 @keyframes pulseGreen {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.75); }
