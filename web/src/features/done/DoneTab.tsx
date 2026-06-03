@@ -7,6 +7,7 @@ import { fmtDate, fmtMoney } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
 import { Input } from "../../shared/ui/Input";
+import { PhotoGrid } from "../../shared/ui/PhotoUploader";
 import { updateClientArray } from "../../shared/firebase/firestore";
 import type { Repair, Client, Vehicle } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
@@ -322,19 +323,26 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
                   </div>
                   {/* Per-task photos */}
                   {taskPhotos.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
-                      {taskPhotos.map((p) => {
-                        const src = (p.url ?? p.data)!;
-                        return (
-                          <img
-                            key={p.id}
-                            src={src}
-                            alt=""
-                            onClick={() => setLightboxUrl(src)}
-                            style={{ width: 72, height: 72, borderRadius: 7, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
-                          />
-                        );
-                      })}
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                      {/* Mobile: compact thumbnails — не трогаем */}
+                      <div className="flex flex-wrap gap-1.5 md:hidden">
+                        {taskPhotos.map((p) => {
+                          const src = (p.url ?? p.data)!;
+                          return (
+                            <img
+                              key={p.id}
+                              src={src}
+                              alt=""
+                              onClick={() => setLightboxUrl(src)}
+                              style={{ width: 72, height: 72, borderRadius: 7, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                            />
+                          );
+                        })}
+                      </div>
+                      {/* Desktop: PhotoGrid — как в Заявках */}
+                      <div className="hidden md:block">
+                        <PhotoGrid photos={taskPhotos} readOnly onView={setLightboxUrl} />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -350,7 +358,8 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
             Фото наряда
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {/* Mobile: compact thumbnails — не трогаем */}
+          <div className="flex flex-wrap gap-2 md:hidden">
             {(repair.photos ?? []).map((p) => {
               const src = p.url ?? p.data;
               if (!src) return null;
@@ -364,6 +373,14 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
                 />
               );
             })}
+          </div>
+          {/* Desktop: PhotoGrid — как в Заявках */}
+          <div className="hidden md:block">
+            <PhotoGrid
+              photos={(repair.photos ?? []).filter((p) => p.url ?? p.data)}
+              readOnly
+              onView={setLightboxUrl}
+            />
           </div>
         </div>
       )}
