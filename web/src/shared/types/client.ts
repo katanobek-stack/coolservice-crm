@@ -41,6 +41,7 @@ export interface Repair {
   cost?: string;
   status?: "in_progress" | "done" | "cancelled";
   closedByManager?: boolean;
+  closedAt?: string;
   freonType?: string;
   freonAmount?: string;
   photos?: Photo[];
