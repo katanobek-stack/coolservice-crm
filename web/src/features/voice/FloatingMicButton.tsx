@@ -44,6 +44,20 @@ interface VoiceCmd {
   tasks: Array<{ description: string; type: "repair" | "freon" | "service" }>;
 }
 
+// ─── Util: strip undefined fields recursively (Firestore не принимает undefined) ──
+
+function clean<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(clean) as unknown as T;
+  if (v !== null && typeof v === "object") {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .filter(([, val]) => val !== undefined)
+        .map(([key, val]) => [key, clean(val)]),
+    ) as T;
+  }
+  return v;
+}
+
 // ─── Claude API ───────────────────────────────────────────────────────────────
 
 const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сервиса (Владивосток).
@@ -106,14 +120,19 @@ function taskWord(n: number) {
   return "задач";
 }
 
+const SILENCE_MS = 2000;   // остановить запись после 2с тишины
+const MAX_REC_MS = 30000;  // максимум 30 секунд записи
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function FloatingMicButton() {
   const { clients } = useData();
-  const [state, setState] = useState<MicState>("idle");
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const recRef  = useRef<ISpeechRec | null>(null);
-  const txtRef  = useRef("");
+  const [state, setState]   = useState<MicState>("idle");
+  const [toast, setToast]   = useState<{ msg: string; ok: boolean } | null>(null);
+  const recRef              = useRef<ISpeechRec | null>(null);
+  const txtRef              = useRef("");
+  const silenceTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const supported = typeof window !== "undefined" &&
     Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
@@ -121,6 +140,11 @@ export function FloatingMicButton() {
   function flash(msg: string, ok = true) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4500);
+  }
+
+  function clearTimers() {
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (maxTimerRef.current)     { clearTimeout(maxTimerRef.current);     maxTimerRef.current = null; }
   }
 
   function findClient(name: string, plate?: string) {
@@ -142,33 +166,33 @@ export function FloatingMicButton() {
     try {
       const cmd = await callClaude(transcript);
 
-      const repairTasks: RepairTask[] = (cmd.tasks || []).map((t) => ({
-        id: genId(),
+      const repairTasks: RepairTask[] = (cmd.tasks || []).map((t) => clean({
+        id:          genId(),
         description: t.description || (t.type === "freon" ? "Заправка фреона R134a" : "Задача"),
-        assignees: [],
-        doneBy: [],
-        status: "in_progress" as const,
-        ...(t.type === "freon" ? { freonTask: true } : {}),
+        assignees:   [] as string[],
+        doneBy:      [] as string[],
+        status:      "in_progress" as const,
+        freonTask:   t.type === "freon" ? true : undefined,
       }));
 
-      const vId = genId();
+      const vId   = genId();
       const vData = cmd.client.vehicle;
       const vehicle: Vehicle | null = vData
-        ? { id: vId, plate: vData.plate, brand: vData.brand }
+        ? clean({ id: vId, plate: vData.plate, brand: vData.brand })
         : null;
 
       const repair: Repair | null = repairTasks.length
-        ? {
-            id: genId(),
-            ...(vehicle ? { vehicleId: vId } : {}),
+        ? clean({
+            id:          genId(),
+            vehicleId:   vehicle ? vId : undefined,
             serviceType: "refrigerator" as const,
-            date: new Date().toISOString().slice(0, 10),
-            status: "in_progress" as const,
-            tasks: repairTasks,
-          }
+            date:        new Date().toISOString().slice(0, 10),
+            status:      "in_progress" as const,
+            tasks:       repairTasks,
+          })
         : null;
 
-      // Try to find existing client for "add_task"
+      // Найти существующего клиента для "add_task"
       if (cmd.action === "add_task") {
         const existing = findClient(cmd.client.name, vData?.plate);
         if (existing) {
@@ -178,24 +202,24 @@ export function FloatingMicButton() {
           if (vehicle && !vehicles.some((v) => v.plate === vehicle.plate)) {
             vehicles.push(vehicle);
           }
-          await updateClient(existing.id, { repairs, vehicles });
+          await updateClient(existing.id, clean({ repairs, vehicles }));
           setState("done");
           flash(`✅ Задача добавлена → ${existing.name}`);
           setTimeout(() => setState("idle"), 2000);
           return;
         }
-        // not found → fall through and create as new client
+        // не найден → создаём как нового клиента
       }
 
-      // Create new client (for "create_client", "both", or add_task with no match)
-      await addClient({
-        name: cmd.client.name,
-        clientType: cmd.clientType === "individual" ? "phys" : "legal",
-        ...(cmd.client.phone ? { phone: cmd.client.phone } : {}),
-        vehicles: vehicle ? [vehicle] : [],
-        repairs:  repair  ? [repair]  : [],
+      // Создать нового клиента
+      await addClient(clean({
+        name:        cmd.client.name,
+        clientType:  cmd.clientType === "individual" ? "phys" : "legal",
+        phone:       cmd.client.phone,
+        vehicles:    vehicle ? [vehicle] : [],
+        repairs:     repair  ? [repair]  : [],
         appointments: [],
-      });
+      }));
 
       const n = repairTasks.length;
       flash(n > 0
@@ -226,18 +250,32 @@ export function FloatingMicButton() {
 
     txtRef.current = "";
     const r = new SR();
-    r.lang            = "ru-RU";
-    r.continuous      = true;
-    r.interimResults  = true;
+    r.lang           = "ru-RU";
+    r.continuous     = true;
+    r.interimResults = false; // только финальные результаты
+
+    // Сброс таймера тишины при каждом новом слове
+    function resetSilence() {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        recRef.current?.stop();
+      }, SILENCE_MS);
+    }
 
     r.onresult = (e: SREvent) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + " ";
       txtRef.current = t.trim();
+      resetSilence(); // сдвигаем таймер тишины
     };
 
-    r.onend  = () => void processTranscript(txtRef.current);
+    r.onend = () => {
+      clearTimers();
+      void processTranscript(txtRef.current);
+    };
+
     r.onerror = (e) => {
+      clearTimers();
       const err = (e as Event & { error: string }).error;
       if (err === "no-speech" || err === "aborted") { setState("idle"); return; }
       setState("error");
@@ -248,10 +286,19 @@ export function FloatingMicButton() {
     recRef.current = r;
     r.start();
     setState("recording");
+
+    // Запускаем таймер тишины сразу — если не будет речи 2с, остановим
+    resetSilence();
+
+    // Жёсткий лимит 30 секунд
+    maxTimerRef.current = setTimeout(() => {
+      recRef.current?.stop();
+    }, MAX_REC_MS);
   }
 
   function stopRec() {
     if (state !== "recording") return;
+    clearTimers();
     recRef.current?.stop();
     recRef.current = null;
   }
