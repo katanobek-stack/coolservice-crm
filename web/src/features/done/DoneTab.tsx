@@ -380,6 +380,11 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
   const isCancelled = repairStatus(repair) === "cancelled";
+
+  function openDetail() {
+    console.log("[RepairCard] opening detail:", { repair, client, vehicle, assigneeNames, isAdmin });
+    setShowDetail(true);
+  }
   const costNum     = parseFloat(repair.cost ?? "0") || 0;
 
   const av       = avatarColor(client.id);
@@ -389,7 +394,7 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
   return (
     <>
       <div
-        onClick={() => setShowDetail(true)}
+        onClick={openDetail}
         style={{
           background:   "var(--bg2)",
           borderRadius: 16,

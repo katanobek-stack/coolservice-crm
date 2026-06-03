@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 
 interface ModalProps {
@@ -7,7 +8,7 @@ interface ModalProps {
 }
 
 export function Modal({ title, onClose, children }: ModalProps) {
-  return (
+  return createPortal(
     <div
       className="crm-modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -31,6 +32,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
