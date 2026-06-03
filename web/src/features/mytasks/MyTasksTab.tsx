@@ -8,6 +8,7 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { updateClientArray, addServiceTask, updateServiceTask, deleteServiceTask } from "../../shared/firebase/firestore";
+import { deletePhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
 import type { RepairTask, Repair, Client } from "../../shared/types/client";
@@ -605,6 +606,12 @@ function RepairTaskRow({ task, client, repair }: {
     await patchTask({ photos: [...(task.photos ?? []), ...photos] });
   }
 
+  async function removePhoto(photoId: string) {
+    const photo = (task.photos ?? []).find((p) => p.id === photoId);
+    if (photo?.path) await deletePhoto(photo.path);
+    await patchTask({ photos: (task.photos ?? []).filter((p) => p.id !== photoId) });
+  }
+
   async function handleDelete() {
     if (!isAdmin || !confirm("Удалить задачу?")) return;
     const repairs = (client.repairs ?? []).map((r) => {
@@ -720,7 +727,7 @@ function RepairTaskRow({ task, client, repair }: {
             </div>
           )}
 
-          <PhotoGrid photos={task.photos ?? []} readOnly onView={setLightbox} />
+          <PhotoGrid photos={task.photos ?? []} onRemove={(id) => void removePhoto(id)} onView={setLightbox} />
 
           {/* Actions */}
           {!isDone && (

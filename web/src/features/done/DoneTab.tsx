@@ -312,26 +312,52 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
         </div>
       )}
 
-      {/* Repair photos */}
-      {(repair.photos ?? []).length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
-            Фото · {(repair.photos ?? []).length}
+      {/* All photos: repair-level + task-level combined */}
+      {(() => {
+        const allPhotos = [
+          ...(repair.photos ?? []),
+          ...(repair.tasks ?? []).flatMap((t) => t.photos ?? []),
+        ];
+        if (!allPhotos.length) return null;
+        return (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
+              Фото · {allPhotos.length}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {allPhotos.map((p) => {
+                const src = p.url ?? p.data;
+                if (!src) return null;
+                return (
+                  <img
+                    key={p.id}
+                    src={src}
+                    alt=""
+                    onClick={() => setLightboxUrl(src)}
+                    style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                  />
+                );
+              })}
+            </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {(repair.photos ?? []).map((p) => {
-              const src = p.url ?? p.data;
-              if (!src) return null;
-              return (
-                <img
-                  key={p.id}
-                  src={src}
-                  alt=""
-                  onClick={() => setLightboxUrl(src)}
-                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
-                />
-              );
-            })}
+        );
+      })()}
+
+      {/* Featured cost block */}
+      {isAdmin && costNum > 0 && (
+        <div style={{
+          padding: "14px 16px",
+          background: "rgba(34,197,94,0.08)",
+          border: "1px solid rgba(34,197,94,0.25)",
+          borderRadius: 12,
+          textAlign: "center",
+          marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+            Итоговая сумма
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 900, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+            {fmtMoney(costNum)}
           </div>
         </div>
       )}
