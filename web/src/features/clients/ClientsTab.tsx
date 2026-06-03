@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, useRef, type CSSProperties } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
@@ -127,13 +127,11 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
 const VEHICLE_TYPES = [
   { id: "refrigerator", label: "Рефрижератор", emoji: "🚛" },
   { id: "ac",           label: "Кондиционер",  emoji: "❄️" },
-  { id: "other",        label: "Авто",          emoji: "🚗" },
 ] as const;
 
 function vehicleTypeIcon(serviceType?: string): string {
-  if (serviceType === "refrigerator") return "🚛";
-  if (serviceType === "ac")           return "❄️";
-  return "🚗";
+  if (serviceType === "ac") return "❄️";
+  return "🚛";
 }
 
 // ─── Vehicle Modal ────────────────────────────────────────────────────────────
@@ -141,7 +139,7 @@ function vehicleTypeIcon(serviceType?: string): string {
 function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: Vehicle; onClose: () => void }) {
   const [plate,          setPlate]          = useState(vehicle?.plate ?? "");
   const [brand,          setBrand]          = useState(vehicle?.brand ?? vehicle?.model ?? "");
-  const [serviceType,    setServiceType]    = useState(vehicle?.serviceType ?? "other");
+  const [serviceType,    setServiceType]    = useState(vehicle?.serviceType ?? "refrigerator");
   const [photo,          setPhoto]          = useState(vehicle?.photo ?? "");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving,         setSaving]         = useState(false);
@@ -756,6 +754,7 @@ function SectionHeader({ title, count, accent }: { title: string; count?: number
 }
 
 function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: () => void; onView?: () => void }) {
+  const [imgError, setImgError] = useState(false);
   const brand = vehicle.brand ?? vehicle.model;
   return (
     <div
@@ -767,8 +766,8 @@ function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: ()
         cursor: onView ? "pointer" : "default",
       }}
     >
-      {vehicle.photo ? (
-        <img src={vehicle.photo} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+      {vehicle.photo && !imgError ? (
+        <img src={vehicle.photo} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} onError={() => setImgError(true)} />
       ) : (
         <span style={{ fontSize: 22, flexShrink: 0 }}>{vehicleTypeIcon(vehicle.serviceType)}</span>
       )}
@@ -811,7 +810,11 @@ function VehiclePickerModal({ client, onPick, onClose }: {
                 transition: "border-color 0.15s, background 0.15s",
               }}
             >
-              <span style={{ fontSize: 24, flexShrink: 0 }}>🚗</span>
+              {v.photo ? (
+                <img src={v.photo} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+              ) : (
+                <span style={{ fontSize: 24, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
+              )}
               <div>
                 <div style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{v.plate}</div>
                 {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
@@ -892,7 +895,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
 
       {/* Vehicle summary */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 12px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
-        {!vehicle.photo && <span style={{ fontSize: 24 }}>🚗</span>}
+        {!vehicle.photo && <span style={{ fontSize: 24 }}>{vehicleTypeIcon(vehicle.serviceType)}</span>}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
           {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
@@ -935,14 +938,26 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                   <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 5 }}>{r.description}</div>
                 )}
 
-                {r.freonType && (
-                  <div style={{ fontSize: 11.5, color: "#67e8f9", marginBottom: 5 }}>
-                    ❄️ {r.freonType}{r.freonAmount ? ` · ${r.freonAmount} кг` : ""}
-                  </div>
-                )}
+                {/* Freon — repair level + task level */}
+                {(() => {
+                  const ft  = r.freonType  || (r.tasks ?? []).find((t) => t.freonTask && t.freonType)?.freonType  || "";
+                  const fkg = r.freonAmount || (r.tasks ?? []).find((t) => t.freonTask && t.freonKg)?.freonKg      || "";
+                  if (!ft && !fkg) return null;
+                  return (
+                    <div style={{ fontSize: 11.5, color: "#67e8f9", marginBottom: 5 }}>
+                      ❄️ {ft}{fkg ? ` · ${fkg} кг` : ""}
+                    </div>
+                  );
+                })()}
 
                 {names && (
                   <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 6 }}>👨‍🔧 {names}</div>
+                )}
+
+                {r.closedAt && (
+                  <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
+                    🔒 Закрыто: {fmtDate(r.closedAt)}
+                  </div>
                 )}
 
                 {/* Task list */}
@@ -960,6 +975,19 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Repair photos */}
+                {(r.photos ?? []).length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4, marginTop: 8 }}>
+                    {(r.photos ?? []).map((p) => {
+                      const src = p.url ?? p.data ?? "";
+                      if (!src) return null;
+                      return (
+                        <img key={p.id} src={src} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1223,30 +1251,23 @@ function PhysClientCard({ client, onClick }: { client: Client; onClick: () => vo
 
         {/* Vehicles */}
         {vehicles.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
             {vehicles.slice(0, 3).map((v) => {
               const brand = v.brand ?? v.model;
               return (
-                <Fragment key={v.id}>
-                  <span style={{
-                    fontSize: 10.5, fontFamily: "monospace", fontWeight: 700,
-                    color: "#93c5fd", background: "rgba(59,130,246,0.10)",
-                    border: "1px solid rgba(59,130,246,0.20)",
-                    padding: "2px 7px", borderRadius: 6,
-                  }}>
-                    🚗 {v.plate}
-                  </span>
-                  {brand && (
-                    <span style={{
-                      fontSize: 10.5, color: "var(--text2)",
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid var(--border)",
-                      padding: "2px 7px", borderRadius: 6,
-                    }}>
-                      {brand}
-                    </span>
+                <div key={v.id} style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.18)",
+                  borderRadius: 8, padding: "2px 7px 2px 3px",
+                }}>
+                  {v.photo ? (
+                    <img src={v.photo} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
+                  ) : (
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
                   )}
-                </Fragment>
+                  <span style={{ fontSize: 10.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{v.plate}</span>
+                  {brand && <span style={{ fontSize: 10, color: "var(--text3)" }}>{brand}</span>}
+                </div>
               );
             })}
           </div>

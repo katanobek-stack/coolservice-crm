@@ -3,7 +3,15 @@ import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { repairStatus, taskStatus, SERVICE_TYPES } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate } from "../../shared/utils/format";
+import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
+import type { Repair, Vehicle } from "../../shared/types/client";
+
+interface EnrichedRepair extends Repair {
+  clientId:   string;
+  clientName: string;
+  vehicle?:   Vehicle;
+}
 
 const MONTH_NAMES      = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const MONTH_NAMES_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -189,6 +197,136 @@ function MechanicRow({ name, active, total, idx }: { name: string; active: numbe
   );
 }
 
+// ─── Repair detail modal (opens from Stats repair card) ───────────────────────
+
+function RepairDetailModal({ repair, isAdmin, onClose }: {
+  repair:  EnrichedRepair;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
+  const { staff } = useData();
+
+  function assigneeNames(r: Repair): string {
+    const uids = new Set<string>();
+    (r.tasks ?? []).forEach((t) => (t.assignees ?? []).forEach((uid) => uids.add(uid)));
+    return Array.from(uids)
+      .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+      .filter(Boolean).join(", ");
+  }
+
+  const names    = assigneeNames(repair);
+  const freonType = repair.freonType  || (repair.tasks ?? []).find((t) => t.freonTask && t.freonType)?.freonType  || "";
+  const freonAmt  = repair.freonAmount || (repair.tasks ?? []).find((t) => t.freonTask && t.freonKg)?.freonKg      || "";
+  const cost      = parseFloat(repair.cost ?? "0") || 0;
+  const brand     = repair.vehicle?.brand ?? repair.vehicle?.model;
+  const st        = repairStatus(repair);
+  const statusLabel = st === "done" ? "Закрыто" : st === "cancelled" ? "Отказ" : "В работе";
+  const statusColor = st === "done" ? "#4ade80" : st === "cancelled" ? "var(--text3)" : "var(--accent2)";
+
+  return (
+    <Modal title={repair.clientName} onClose={onClose}>
+
+      {/* Vehicle photo */}
+      {repair.vehicle?.photo && (
+        <div style={{ marginBottom: 12, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <img src={repair.vehicle.photo} alt="" style={{ width: "100%", maxHeight: 160, objectFit: "cover", display: "block" }} />
+        </div>
+      )}
+
+      {/* Vehicle + status header */}
+      <div style={{ background: "var(--bg3)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, border: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <div>
+            {repair.vehicle?.plate && (
+              <span style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{repair.vehicle.plate}</span>
+            )}
+            {brand && <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 8 }}>{brand}</span>}
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 10, background: `${statusColor}22`, color: statusColor }}>
+            {statusLabel}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+          {repair.date && (
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>📅 Начало: <span style={{ color: "var(--text2)" }}>{fmtDate(repair.date)}</span></div>
+          )}
+          {repair.closedAt && (
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>🔒 Закрыто: <span style={{ color: "var(--text2)" }}>{fmtDate(repair.closedAt)}</span></div>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      {repair.description && (
+        <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 12, lineHeight: 1.5 }}>{repair.description}</div>
+      )}
+
+      {/* Freon */}
+      {(freonType || freonAmt) && (
+        <div style={{ fontSize: 12, color: "#67e8f9", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.18)", borderRadius: 8, padding: "6px 12px", marginBottom: 12, display: "inline-block" }}>
+          ❄️ {freonType}{freonAmt ? ` · ${freonAmt} кг` : ""}
+        </div>
+      )}
+
+      {/* Mechanics */}
+      {names && (
+        <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 12 }}>👨‍🔧 {names}</div>
+      )}
+
+      {/* Cost */}
+      {isAdmin && cost > 0 && (
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80", fontFamily: "monospace", marginBottom: 12 }}>
+          💰 {cost.toLocaleString("ru-RU")} ₽
+        </div>
+      )}
+
+      {/* Tasks */}
+      {(repair.tasks ?? []).length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 6 }}>Задачи</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {(repair.tasks ?? []).map((t) => (
+              <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
+                <span style={{ fontSize: 12, color: t.status === "done" ? "#4ade80" : "#fbbf24", flexShrink: 0, marginTop: 1 }}>
+                  {t.status === "done" ? "✓" : "●"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>{t.description}</span>
+                  {t.freonType && <span style={{ fontSize: 11, color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
+                  {t.freonKg   && <span style={{ fontSize: 11, color: "#67e8f9" }}> {t.freonKg} кг</span>}
+                  {(t.assignees ?? []).length > 0 && (
+                    <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+                      👤 {(t.assignees ?? []).map((uid) => staff.find((s) => s.id === uid)?.name ?? "").filter(Boolean).join(", ")}
+                    </div>
+                  )}
+                  {t.workComment && (
+                    <div style={{ fontSize: 10, color: "#c4b5fd", marginTop: 2 }}>📝 {t.workComment}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Repair photos */}
+      {(repair.photos ?? []).length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 6 }}>Фото</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5 }}>
+            {(repair.photos ?? []).map((p) => {
+              const src = p.url ?? p.data ?? "";
+              if (!src) return null;
+              return <img key={p.id} src={src} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />;
+            })}
+          </div>
+        </div>
+      )}
+
+    </Modal>
+  );
+}
+
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({ title, icon, count, actions, children }: {
@@ -301,7 +439,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const isAdmin        = role === "admin";
   const showFinance    = role !== "mechanic";
 
-  const [showAllActive, setShowAllActive] = useState(false);
+  const [showAllActive,  setShowAllActive]  = useState(false);
+  const [selectedRepair, setSelectedRepair] = useState<EnrichedRepair | null>(null);
 
   const now          = new Date();
   const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
@@ -524,17 +663,18 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           </div>
         ) : (
           (visibleRepairs || []).map((r, i) => (
-            <RepairCard
-              key={r.id}
-              idx={i}
-              clientName={r.clientName}
-              description={r.description}
-              date={r.date}
-              cost={r.cost}
-              status="in_progress"
-              plate={r.vehicle?.plate}
-              isAdmin={showFinance}
-            />
+            <div key={r.id} onClick={() => setSelectedRepair(r as EnrichedRepair)} style={{ cursor: "pointer" }}>
+              <RepairCard
+                idx={i}
+                clientName={r.clientName}
+                description={r.description}
+                date={r.date}
+                cost={r.cost}
+                status="in_progress"
+                plate={r.vehicle?.plate}
+                isAdmin={showFinance}
+              />
+            </div>
           ))
         )}
       </Section>
@@ -721,6 +861,14 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             </>
           )}
         </Section>
+      )}
+
+      {selectedRepair && (
+        <RepairDetailModal
+          repair={selectedRepair}
+          isAdmin={showFinance}
+          onClose={() => setSelectedRepair(null)}
+        />
       )}
 
     </div>
