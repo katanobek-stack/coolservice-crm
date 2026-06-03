@@ -12,6 +12,27 @@ import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
 import type { RepairTask, Repair, Client } from "../../shared/types/client";
 
+// ─── Avatar palette for repair cards ─────────────────────────────────────────
+
+const REPAIR_AVATAR_PALETTES = [
+  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#93c5fd" },
+  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#6ee7b7" },
+  { bg: "rgba(245,158,11,0.18)",  border: "rgba(245,158,11,0.38)",  text: "#fcd34d" },
+  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#c4b5fd" },
+  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#67e8f9" },
+  { bg: "rgba(249,115,22,0.18)",  border: "rgba(249,115,22,0.38)",  text: "#fdba74" },
+  { bg: "rgba(236,72,153,0.18)",  border: "rgba(236,72,153,0.38)",  text: "#f9a8d4" },
+];
+
+function repairAvatarPalette(name: string) {
+  const sum = (name || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+  return REPAIR_AVATAR_PALETTES[sum % REPAIR_AVATAR_PALETTES.length];
+}
+
+const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
+
+// ─── Section title ────────────────────────────────────────────────────────────
+
 function SectionTitle({ text, count }: { text: string; count?: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 0 10px", padding: "0 2px" }}>
@@ -80,11 +101,11 @@ function AddServiceTaskModal({ onClose }: { onClose: () => void }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
 
-  const [title,      setTitle]      = useState("");
-  const [desc,       setDesc]       = useState("");
-  const [taskType,   setTaskType]   = useState<"task" | "project">("task");
-  const [assignee,   setAssignee]   = useState(myProfile?.id ?? "");
-  const [saving,     setSaving]     = useState(false);
+  const [title,    setTitle]    = useState("");
+  const [desc,     setDesc]     = useState("");
+  const [taskType, setTaskType] = useState<"task" | "project">("task");
+  const [assignee, setAssignee] = useState(myProfile?.id ?? "");
+  const [saving,   setSaving]   = useState(false);
 
   async function handleSave() {
     const name = title.trim() || desc.trim();
@@ -104,7 +125,6 @@ function AddServiceTaskModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title={taskType === "project" ? "Новый проект" : "Новая задача"} onClose={onClose}>
-      {/* Type toggle */}
       <div className="flex gap-2 mb-4">
         {(["task", "project"] as const).map((t) => (
           <button
@@ -155,11 +175,11 @@ function AddRepairTaskModal({ client, repair, onClose }: {
 }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
-  const [desc,       setDesc]       = useState("");
-  const [assignee,   setAssignee]   = useState(myProfile?.id ?? "");
-  const [isFreon,    setIsFreon]    = useState(false);
-  const [freonType,  setFreonType]  = useState(repair.freonType ?? "");
-  const [saving,     setSaving]     = useState(false);
+  const [desc,      setDesc]      = useState("");
+  const [assignee,  setAssignee]  = useState(myProfile?.id ?? "");
+  const [isFreon,   setIsFreon]   = useState(false);
+  const [freonType, setFreonType] = useState(repair.freonType ?? "");
+  const [saving,    setSaving]    = useState(false);
 
   async function handleSave() {
     if (!desc.trim() && !isFreon) return;
@@ -298,7 +318,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
     .join(", ");
 
   async function toggle() {
-    const existing = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
+    const existing  = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
     const newDoneBy = myDone ? subtask.doneBy.filter((d) => d !== uid) : [...subtask.doneBy, uid];
     const allDone   = subtask.assignees.length > 0 && subtask.assignees.every((a) => newDoneBy.includes(a));
     const updated   = existing.map((s) =>
@@ -328,52 +348,59 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
   }
 
   return (
-    <div className={`bg-white rounded-xl p-2.5 border border-[#E2E8F0] ${isDone ? "opacity-60" : ""}`}>
-      <div className="flex items-start gap-2">
+    <div style={{
+      background: "var(--bg3)", borderRadius: 8,
+      padding: "8px 10px", marginBottom: 4,
+      border: "1px solid var(--border)",
+      opacity: isDone ? 0.6 : 1,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <button
           type="button"
           onClick={() => void toggle()}
-          className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-lg border text-xs font-bold flex items-center justify-center cursor-pointer
-            ${isDone ? "bg-[#EAF3DE] border-[#3B6D11]/30 text-[#3B6D11]" : "bg-[#FAEEDA] border-[#BA7517]/30 text-[#BA7517]"}`}
+          style={{
+            flexShrink: 0, marginTop: 2,
+            width: 18, height: 18, borderRadius: "50%",
+            border: `2px solid ${isDone ? "#4ade80" : "rgba(255,255,255,0.2)"}`,
+            background: isDone ? "rgba(34,197,94,0.15)" : "transparent",
+            color: isDone ? "#4ade80" : "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", fontSize: 10, fontWeight: 700,
+          }}
         >
-          {isDone ? "✓" : "●"}
+          {isDone && "✓"}
         </button>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs text-[#172033]">{subtask.description}</div>
-          {assigneeNames && <div className="text-[10px] text-[#667085]">👤 {assigneeNames}</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 12, color: isDone ? "var(--text3)" : "var(--text)",
+            textDecoration: isDone ? "line-through" : "none",
+          }}>
+            {subtask.description}
+          </div>
+          {assigneeNames && <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>👤 {assigneeNames}</div>}
           {subtask.workComment && (
-            <div className="mt-1 text-[10px] text-[#344054] bg-[#F7F9FC] rounded p-1 border border-[#E2E8F0]">
-              <span className="text-purple-400 font-semibold">Отчёт: </span>{subtask.workComment}
+            <div style={{ marginTop: 4, fontSize: 10, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 5, padding: "3px 7px" }}>
+              <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{subtask.workComment}
             </div>
           )}
           <PhotoGrid photos={subtask.photos ?? []} readOnly onView={setLightbox} />
           {!isDone && (
-            <div className="flex gap-1.5 mt-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setShowComment(true)}
-                className="text-[10px] text-[#667085] bg-[#F2F4F7] px-2 py-0.5 rounded border border-[#E2E8F0] cursor-pointer"
-              >
-                📝 {subtask.workComment ? "Изменить" : "Отчёт"}
+            <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => setShowComment(true)} style={{ fontSize: 10, color: "var(--text2)", background: "var(--bg2)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 5, cursor: "pointer" }}>
+                📝 {subtask.workComment ? "Изм." : "Отчёт"}
               </button>
               <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
               {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => void handleDelete()}
-                  className="text-[10px] text-red-400 bg-white px-2 py-0.5 rounded border border-red-100 cursor-pointer"
-                >
-                  × удалить
+                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 10, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "2px 7px", borderRadius: 5, cursor: "pointer" }}>
+                  🗑
                 </button>
               )}
             </div>
           )}
         </div>
       </div>
-      {showComment && (
-        <WorkCommentModal current={subtask.workComment} onSave={saveComment} onClose={() => setShowComment(false)} />
-      )}
-      {lightbox && <Lightbox url={lightbox} onClose={() => setLightbox(null)} />}
+      {showComment && <WorkCommentModal current={subtask.workComment} onSave={saveComment} onClose={() => setShowComment(false)} />}
+      {lightbox    && <Lightbox url={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
@@ -402,7 +429,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
     .join(", ");
 
   async function toggle() {
-    const doneBy = task.doneBy ?? [];
+    const doneBy    = task.doneBy ?? [];
     const newDoneBy = myDone ? doneBy.filter((d) => d !== uid) : [...doneBy, uid];
     const assignees = task.assignees ?? [];
     const allDone   = assignees.length > 0 && assignees.every((a) => newDoneBy.includes(a));
@@ -423,91 +450,90 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
   }
 
   return (
-    <div
-      className={`bg-white rounded-[18px] border border-l-4 p-4 mb-2.5 shadow-sm transition-opacity ${isDone ? "opacity-60" : ""}`}
-      style={{ borderLeftColor: isProject ? "var(--yellow)" : isDone ? "var(--green)" : "var(--accent)" }}
-    >
+    <div style={{
+      background: "var(--bg2)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${isProject ? "rgba(245,158,11,0.8)" : "rgba(139,92,246,0.8)"}`,
+      borderRadius: 12,
+      padding: "10px 12px",
+      marginBottom: 8,
+      opacity: isDone ? 0.6 : 1,
+    }}>
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {isProject && (
-              <span className="text-[10px] font-bold text-[#854F0B] bg-[#FAEEDA] px-2 py-0.5 rounded-full">Проект</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: "#fcd34d", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.25)", padding: "1px 6px", borderRadius: 5 }}>
+                ПРОЕКТ
+              </span>
             )}
-            <div className="text-sm font-semibold text-[#172033]">
+            <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? "var(--text3)" : "var(--text)", textDecoration: isDone ? "line-through" : "none" }}>
               {task.title ?? task.description ?? "—"}
-            </div>
+            </span>
           </div>
           {task.title && task.description && (
-            <div className="text-xs text-[#667085] mt-0.5">{task.description}</div>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{task.description}</div>
           )}
+          {assigneeNames && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>👤 {assigneeNames}</div>}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => void toggle()}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer transition-all
-              ${isDone ? "bg-[#EAF3DE] text-[#3B6D11] border-[#3B6D11]/20" : "bg-[#FAEEDA] text-[#BA7517] border-[#BA7517]/20"}`}
+            style={{
+              padding: "4px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700,
+              border: `1px solid ${isDone ? "rgba(34,197,94,0.3)" : "rgba(139,92,246,0.3)"}`,
+              background: isDone ? "rgba(34,197,94,0.12)" : "rgba(139,92,246,0.12)",
+              color: isDone ? "#4ade80" : "#c4b5fd",
+              cursor: "pointer",
+            }}
           >
-            {isDone ? "✓" : "●"}
+            {isDone ? "✓ Готово" : "●"}
           </button>
           {isAdmin && (
             <button type="button" onClick={() => void handleDelete()}
-              className="text-[#98A2B3] hover:text-red-400 cursor-pointer bg-transparent border-none text-base leading-none"
+              style={{ background: "transparent", border: "none", color: "var(--text3)", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "2px 4px" }}
             >×</button>
           )}
         </div>
       </div>
 
-      {assigneeNames && <div className="text-xs text-[#667085] mb-1">👤 {assigneeNames}</div>}
-
       {/* Subtask progress */}
       {isProject && subtasks.length > 0 && (
-        <div className="mb-2">
-          <div className="flex justify-between text-[10px] text-[#98A2B3] mb-1">
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text3)", marginBottom: 4 }}>
             <span>Подзадачи</span><span>{subDone}/{subtasks.length}</span>
           </div>
-          <div className="h-1.5 rounded-full bg-[#E2E8F0] overflow-hidden">
-            <div className="h-full rounded-full bg-[#185FA5]"
-              style={{ width: `${subtasks.length > 0 ? (subDone/subtasks.length)*100 : 0}%` }} />
+          <div style={{ height: 4, borderRadius: 4, background: "var(--bg3)", overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 4, background: "rgba(139,92,246,0.7)", width: `${subtasks.length > 0 ? (subDone / subtasks.length) * 100 : 0}%` }} />
           </div>
         </div>
       )}
 
       {/* Work comment */}
       {task.workComment && (
-        <div className="mt-1 mb-1.5 text-xs text-[#344054] bg-[#F7F9FC] rounded-lg p-2 border border-[#E2E8F0]">
-          <span className="text-purple-400 font-semibold">Отчёт: </span>{task.workComment}
+        <div style={{ marginBottom: 6, fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 6, padding: "4px 8px" }}>
+          <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{task.workComment}
         </div>
       )}
 
-      {/* Photos */}
       <PhotoGrid photos={task.photos ?? []} readOnly onView={setLightbox} />
 
-      {/* Subtasks */}
       {isProject && subtasks.length > 0 && (
-        <div className="mt-2 space-y-1.5">
+        <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
           {subtasks.map((s) => <SubtaskRow key={s.id} subtask={s} task={task} />)}
         </div>
       )}
 
-      {/* Actions */}
       {!isDone && (
-        <div className="flex gap-1.5 mt-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setShowComment(true)}
-            className="text-xs text-[#667085] bg-[#F2F4F7] px-2.5 py-1 rounded-lg border border-[#E2E8F0] cursor-pointer"
-          >
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => setShowComment(true)} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", padding: "4px 10px", borderRadius: 7, cursor: "pointer" }}>
             📝 {task.workComment ? "Изменить" : "Отчёт"}
           </button>
           <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
           {isProject && isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowAddSubtask(true)}
-              className="text-xs text-[#185FA5] bg-[#E6F1FB] px-2.5 py-1 rounded-lg border border-[#185FA5]/10 cursor-pointer font-semibold"
-            >
+            <button type="button" onClick={() => setShowAddSubtask(true)} style={{ fontSize: 11, color: "#c4b5fd", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", padding: "4px 10px", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>
               + Подзадача
             </button>
           )}
@@ -564,7 +590,6 @@ function RepairTaskRow({ task, client, repair }: {
   async function saveFreon(done: boolean) {
     const patch: Partial<RepairTask> = { freonKg };
     if (done) patch.status = "done";
-    // Also update repair.freonAmount for the parent repair
     const repairs = (client.repairs ?? []).map((r) => {
       if (r.id !== repair.id) return r;
       return {
@@ -590,93 +615,123 @@ function RepairTaskRow({ task, client, repair }: {
   }
 
   return (
-    <div className={`bg-[#F7F9FC] rounded-xl p-3 mb-1.5 border border-[#E2E8F0] ${isDone ? "opacity-60" : ""}`}>
-      <div className="flex items-start gap-2">
-        {/* Toggle button — hidden for freonTask (done via freon input) */}
-        {!isFreon && (
+    <div style={{
+      background: isDone ? "transparent" : "var(--bg3)",
+      border: `1px solid ${isDone ? "transparent" : "var(--border)"}`,
+      borderRadius: 10,
+      padding: isDone ? "6px 10px" : "10px 12px",
+      marginBottom: 6,
+      opacity: isDone ? 0.5 : 1,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+
+        {/* Checkbox / freon icon */}
+        {!isFreon ? (
           <button
             type="button"
             onClick={() => void toggle()}
-            className={`flex-shrink-0 mt-0.5 w-6 h-6 rounded-lg border cursor-pointer text-xs font-bold flex items-center justify-center
-              ${isDone ? "bg-[#EAF3DE] border-[#3B6D11]/30 text-[#3B6D11]" : "bg-[#FAEEDA] border-[#BA7517]/30 text-[#BA7517]"}`}
+            style={{
+              flexShrink: 0, marginTop: 2,
+              width: 20, height: 20, borderRadius: "50%",
+              border: `2px solid ${isDone ? "#4ade80" : "var(--border2)"}`,
+              background: isDone ? "rgba(34,197,94,0.15)" : "transparent",
+              color: isDone ? "#4ade80" : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", fontSize: 11, fontWeight: 700,
+            }}
           >
-            {isDone ? "✓" : "●"}
+            {isDone && "✓"}
           </button>
-        )}
-        {isFreon && (
-          <span className="flex-shrink-0 mt-0.5 text-cyan-500 text-base">❄️</span>
+        ) : (
+          <span style={{ flexShrink: 0, marginTop: 1, fontSize: 15 }}>❄️</span>
         )}
 
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-[#172033]">{task.description}</div>
-          {assigneeNames && <div className="text-xs text-[#667085]">👤 {assigneeNames}</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Description */}
+          <div style={{
+            fontSize: 13,
+            fontWeight: isDone ? 400 : 600,
+            color: isDone ? "var(--text3)" : "var(--text)",
+            textDecoration: isDone ? "line-through" : "none",
+          }}>
+            {task.description}
+          </div>
 
-          {/* Freon input — only for active freonTask */}
+          {assigneeNames && (
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>👤 {assigneeNames}</div>
+          )}
+
+          {/* Freon type badges */}
           {isFreon && !isDone && (
-            <div className="flex items-center gap-2 mt-2 bg-cyan-50 rounded-lg px-2 py-1.5 border border-cyan-100">
-              <span className="text-xs text-cyan-600 font-semibold flex-shrink-0">Кг фреона:</span>
+            <div style={{ display: "flex", gap: 4, marginTop: 7, flexWrap: "wrap" }}>
+              {FREON_BADGES.map((fr) => {
+                const active = task.freonType === fr;
+                return (
+                  <button
+                    key={fr}
+                    type="button"
+                    onClick={() => void patchTask({ freonType: fr })}
+                    style={{
+                      padding: "2px 9px", borderRadius: 6,
+                      fontSize: 10, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${active ? "#22d3ee" : "var(--border)"}`,
+                      background: active ? "rgba(6,182,212,0.2)" : "transparent",
+                      color: active ? "#22d3ee" : "var(--text3)",
+                    }}
+                  >
+                    {fr}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Freon kg input */}
+          {isFreon && !isDone && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: "#67e8f9", fontWeight: 600 }}>кг:</span>
               <Input
-                type="number"
-                step="0.1"
-                placeholder="0.0"
-                value={freonKg}
-                onChange={(e) => setFreonKg(e.target.value)}
+                type="number" step="0.1" placeholder="0.0"
+                value={freonKg} onChange={(e) => setFreonKg(e.target.value)}
                 className="!min-h-0 !py-1 !px-2 !text-sm w-20 flex-shrink-0"
               />
-              <button
-                type="button"
-                onClick={() => void saveFreon(false)}
-                className="text-xs text-cyan-600 bg-white border border-cyan-200 px-2 py-1 rounded-lg cursor-pointer flex-shrink-0"
-              >
+              <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#67e8f9", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
                 💾
               </button>
-              <button
-                type="button"
-                onClick={() => void saveFreon(true)}
-                className="text-xs text-white bg-green-600 px-2 py-1 rounded-lg cursor-pointer flex-shrink-0 font-bold"
-              >
-                ✓
+              <button type="button" onClick={() => void saveFreon(true)} style={{ fontSize: 11, color: "white", background: "#16a34a", border: "none", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>
+                ✓ Готово
               </button>
             </div>
           )}
 
           {/* Done freon — show kg */}
           {isFreon && isDone && task.freonKg && (
-            <div className="text-xs text-cyan-600 mt-1">
+            <div style={{ fontSize: 11, color: "#67e8f9", marginTop: 2 }}>
               ❄️ Заправлено: <strong>{task.freonKg} кг</strong>
             </div>
           )}
 
           {/* Work comment */}
           {task.workComment && (
-            <div className="mt-1 text-xs text-[#344054] bg-white rounded-lg p-1.5 border border-[#E2E8F0]">
-              <span className="text-purple-400 font-semibold">Отчёт: </span>{task.workComment}
+            <div style={{ marginTop: 6, fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 6, padding: "4px 8px" }}>
+              <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{task.workComment}
             </div>
           )}
 
-          {/* Photos */}
           <PhotoGrid photos={task.photos ?? []} readOnly onView={setLightbox} />
 
           {/* Actions */}
           {!isDone && (
-            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
               {!isFreon && (
-                <button
-                  type="button"
-                  onClick={() => setShowComment(true)}
-                  className="text-xs text-[#667085] bg-white px-2 py-0.5 rounded-lg border border-[#E2E8F0] cursor-pointer"
-                >
+                <button type="button" onClick={() => setShowComment(true)} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg2)", border: "1px solid var(--border)", padding: "3px 10px", borderRadius: 6, cursor: "pointer" }}>
                   📝 {task.workComment ? "Изменить" : "Отчёт"}
                 </button>
               )}
               <InlinePhotoButton onUploaded={addPhotos} label="Фото" capture="environment" />
               {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => void handleDelete()}
-                  className="text-xs text-red-400 bg-white px-2 py-0.5 rounded-lg border border-red-100 cursor-pointer"
-                >
-                  × удалить
+                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "3px 9px", borderRadius: 6, cursor: "pointer" }}>
+                  🗑
                 </button>
               )}
             </div>
@@ -696,7 +751,7 @@ function RepairTaskRow({ task, client, repair }: {
   );
 }
 
-// ─── Repair group ─────────────────────────────────────────────────────────────
+// ─── Repair group card ────────────────────────────────────────────────────────
 
 function RepairGroup({ client, repair, tasks, canAdd }: {
   client:  Client;
@@ -704,166 +759,233 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
   tasks:   RepairTask[];
   canAdd:  boolean;
 }) {
-  const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const vehicle    = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const brand      = vehicle?.brand ?? vehicle?.model;
+  const palette    = repairAvatarPalette(client.name || "");
+  const initials   = (client.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+  const doneTasks  = tasks.filter((t) => t.status === "done").length;
+  const totalTasks = tasks.length;
+  const allDone    = totalTasks > 0 && doneTasks === totalTasks;
+  const stripe     = allDone ? "var(--green)" : "var(--accent)";
+
   const [showAdd,   setShowAdd]   = useState(false);
   const [showClose, setShowClose] = useState(false);
   const [closeSum,  setCloseSum]  = useState(repair.cost ?? "");
   const [closing,   setClosing]   = useState(false);
 
-  const doneTasks  = tasks.filter((t) => t.status === "done").length;
-  const totalTasks = tasks.length;
-  const allDone    = totalTasks > 0 && doneTasks === totalTasks;
-
   async function closeRepair() {
     if (!closeSum.trim()) return;
     setClosing(true);
     const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : {
-        ...r,
-        cost: closeSum.trim(),
-        closedByManager: true,
-        status: "done" as const,
-      }
+      r.id !== repair.id ? r : { ...r, cost: closeSum.trim(), closedByManager: true, status: "done" as const },
     );
     await updateClientArray(client.id, "repairs", repairs);
     setClosing(false);
     setShowClose(false);
   }
 
+  async function markDone() {
+    const repairs = (client.repairs ?? []).map((r) =>
+      r.id !== repair.id ? r : { ...r, status: "done" as const },
+    );
+    await updateClientArray(client.id, "repairs", repairs);
+  }
+
+  async function deleteRepair() {
+    if (!confirm("Удалить наряд?")) return;
+    const repairs = (client.repairs ?? []).filter((r) => r.id !== repair.id);
+    await updateClientArray(client.id, "repairs", repairs);
+  }
+
   return (
     <div style={{
-      background: "var(--bg2)", border: "1px solid var(--border)",
-      borderRadius: 14, overflow: "hidden", marginBottom: 10,
-      borderLeft: "3px solid var(--accent)",
+      background: "var(--bg2)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${stripe}`,
+      borderRadius: 14,
+      overflow: "hidden",
+      marginBottom: 12,
+      boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
     }}>
-      {/* Header */}
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 10px" }}>
+
+        {/* Avatar */}
         <div style={{
-          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-          background: "rgba(59,130,246,0.15)", color: "var(--accent2)",
+          width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+          background: palette.bg, border: `1.5px solid ${palette.border}`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 12, fontWeight: 700,
+          fontSize: 14, fontWeight: 800, color: palette.text,
         }}>
-          {(client.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+          {initials}
         </div>
+
+        {/* Client info */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{client.name}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {client.name || "—"}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {vehicle?.plate && (
-              <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", background: "var(--bg3)", color: "var(--text2)", padding: "1px 6px", borderRadius: 5 }}>
+              <span style={{
+                fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                color: "#93c5fd", background: "rgba(59,130,246,0.12)",
+                border: "1px solid rgba(59,130,246,0.25)",
+                padding: "2px 8px", borderRadius: 6,
+              }}>
                 {vehicle.plate}
               </span>
             )}
-            {repair.description && (
-              <span style={{ fontSize: 11.5, color: "var(--text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                {repair.description}
+            {brand && (
+              <span style={{ fontSize: 11, color: "var(--text3)" }}>{brand}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: date + status */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+          {repair.date && (
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+              background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)",
+              color: allDone ? "#4ade80" : "var(--accent2)",
+            }}>
+              {allDone ? "✓ Готово" : "В работе"}
+            </span>
+            {totalTasks > 0 && (
+              <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>
+                {doneTasks}/{totalTasks}
               </span>
             )}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {repair.date && (
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
-          )}
-          {totalTasks > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
-              background: allDone ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
-              color: allDone ? "#4ade80" : "#fbbf24",
-              fontFamily: "JetBrains Mono, monospace",
-            }}>
-              {doneTasks}/{totalTasks}
-            </span>
-          )}
-        </div>
+
+        {/* Delete button — admin only */}
+        {canAdd && (
+          <button
+            type="button"
+            onClick={() => void deleteRepair()}
+            title="Удалить наряд"
+            style={{
+              flexShrink: 0, padding: "6px 8px", borderRadius: 8,
+              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
+              color: "#f87171", cursor: "pointer", fontSize: 14, lineHeight: 1,
+            }}
+          >
+            <i className="ti ti-trash" />
+          </button>
+        )}
       </div>
 
-      {/* Tasks */}
+      {/* ── Task list ──────────────────────────────────────────────────── */}
       {tasks.length > 0 && (
-        <div style={{ padding: "0 10px 6px" }}>
+        <div style={{ padding: "0 12px 6px" }}>
           {tasks.map((t) => <RepairTaskRow key={t.id} task={t} client={client} repair={repair} />)}
         </div>
       )}
 
-      {/* Footer actions */}
-      {canAdd && (
-        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column" as const, gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            style={{
-              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: "var(--bg3)", border: "1px solid var(--border)",
-              color: "var(--text2)", cursor: "pointer", alignSelf: "flex-start",
-            }}
-          >
-            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Задача
-          </button>
+      {/* ── Footer ─────────────────────────────────────────────────────── */}
+      <div style={{ padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
 
-          {/* Close repair */}
-          {!showClose ? (
+        {canAdd ? (
+          <>
+            {/* Add task */}
             <button
               type="button"
-              onClick={() => setShowClose(true)}
+              onClick={() => setShowAdd(true)}
               style={{
-                padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)",
-                color: "#4ade80", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                alignSelf: "flex-start", padding: "5px 14px", borderRadius: 8,
+                fontSize: 12, fontWeight: 600,
+                background: "var(--bg3)", border: "1px solid var(--border)",
+                color: "var(--text2)", cursor: "pointer",
               }}
             >
-              <i className="ti ti-circle-check" style={{ fontSize: 15 }} />
-              Закрыть наряд
+              <i className="ti ti-plus" style={{ fontSize: 12 }} /> Задача
             </button>
-          ) : (
-            <div style={{
-              background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
-              borderRadius: 10, padding: "10px 12px",
-            }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: "#4ade80", marginBottom: 8 }}>
-                <i className="ti ti-currency-ruble" style={{ fontSize: 13 }} /> Закрыть заказ-наряд
+
+            {/* Close repair — blue, admin only */}
+            {!showClose ? (
+              <button
+                type="button"
+                onClick={() => setShowClose(true)}
+                style={{
+                  padding: "11px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)",
+                  color: "var(--accent2)", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                }}
+              >
+                <i className="ti ti-circle-check" style={{ fontSize: 15 }} />
+                Закрыть наряд
+              </button>
+            ) : (
+              <div style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent2)", marginBottom: 8 }}>
+                  Сумма работ
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="number"
+                    placeholder="Сумма ₽"
+                    value={closeSum}
+                    onChange={(e) => setCloseSum(e.target.value)}
+                    style={{
+                      flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 700,
+                      background: "var(--bg3)", border: "1px solid rgba(59,130,246,0.3)",
+                      color: "var(--text)", outline: "none", fontFamily: "JetBrains Mono, monospace",
+                    }}
+                    autoFocus
+                  />
+                  <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
+                  <button
+                    type="button"
+                    onClick={() => void closeRepair()}
+                    disabled={closing || !closeSum.trim()}
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                      background: closing ? "rgba(59,130,246,0.2)" : "var(--accent)",
+                      border: "none", color: "white",
+                      cursor: closing ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {closing ? "..." : "✓"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowClose(false)}
+                    style={{
+                      padding: "8px 10px", borderRadius: 8, fontSize: 12,
+                      background: "var(--bg3)", border: "1px solid var(--border)",
+                      color: "var(--text3)", cursor: "pointer",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="number"
-                  placeholder="Сумма ₽"
-                  value={closeSum}
-                  onChange={(e) => setCloseSum(e.target.value)}
-                  style={{
-                    width: 130, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 700,
-                    background: "var(--bg3)", border: "1px solid rgba(34,197,94,0.3)", color: "var(--text)",
-                    outline: "none", fontFamily: "JetBrains Mono, monospace",
-                  }}
-                  autoFocus
-                />
-                <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
-                <button
-                  type="button"
-                  onClick={() => void closeRepair()}
-                  disabled={closing || !closeSum.trim()}
-                  style={{
-                    marginLeft: "auto", padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                    background: closing ? "rgba(34,197,94,0.2)" : "var(--green)", border: "none",
-                    color: "white", cursor: closing ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {closing ? "..." : "✓ Закрыть"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowClose(false)}
-                  style={{
-                    padding: "8px 10px", borderRadius: 8, fontSize: 12,
-                    background: "var(--bg3)", border: "1px solid var(--border)",
-                    color: "var(--text3)", cursor: "pointer",
-                  }}
-                >
-                  Отмена
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        ) : (
+          /* Mechanic: simple "done" button */
+          <button
+            type="button"
+            onClick={() => void markDone()}
+            style={{
+              width: "100%", padding: "11px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+              background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)",
+              color: "#4ade80", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}
+          >
+            <i className="ti ti-check" style={{ fontSize: 15 }} />
+            ✓ Выполнено
+          </button>
+        )}
+      </div>
 
       {showAdd && <AddRepairTaskModal client={client} repair={repair} onClose={() => setShowAdd(false)} />}
     </div>
@@ -877,8 +999,8 @@ export function MyTasksTab() {
   const { myProfile }      = useAuth();
   const [showAdd, setShowAdd] = useState(false);
 
-  const uid             = myProfile?.id ?? "";
-  const role            = myProfile?.role ?? "mechanic";
+  const uid              = myProfile?.id ?? "";
+  const role             = myProfile?.role ?? "mechanic";
   const isManagerOrAdmin = role === "admin" || role === "manager";
 
   // Standalone service tasks
@@ -908,7 +1030,7 @@ export function MyTasksTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* ── Сервисные задачи ───────────────────────────────────────────────── */}
+      {/* ── Сервисные задачи ──────────────────────────────────────────────── */}
       {(activeSvcTasks.length > 0 || isManagerOrAdmin) && (
         <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.15s both" }}>
           <div className="section-header">
