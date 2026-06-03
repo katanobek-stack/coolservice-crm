@@ -133,7 +133,7 @@ const MECH_COLORS = [
 
 function MechanicRow({ name, active, total, idx }: { name: string; active: number; total: number; idx: number }) {
   const c      = MECH_COLORS[idx % MECH_COLORS.length];
-  const initials = name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  const initials = (name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
   const pct    = total > 0 ? Math.round((active / total) * 100) : 0;
   return (
     <div className="mechanic-row" style={{ animationDelay: `${0.5 + idx * 0.06}s` }}>
@@ -198,7 +198,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
   cost?: string; status: string; plate?: string; isAdmin: boolean; idx: number;
 }) {
   const s       = STATUS_MAP[status] ?? { label: status, cls: "new" };
-  const initials = clientName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  const initials = (clientName || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
   const costNum  = parseFloat(cost ?? "0") || 0;
   const av       = AVATAR_COLORS[idx % AVATAR_COLORS.length];
   const prio     = repairPriority(date);

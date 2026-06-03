@@ -744,7 +744,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 12, fontWeight: 700,
         }}>
-          {client.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+          {(client.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{client.name}</div>

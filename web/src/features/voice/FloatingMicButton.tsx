@@ -153,7 +153,7 @@ export function FloatingMicButton() {
       if (p && (c.vehicles ?? []).some(
         (v) => v.plate.toUpperCase().replace(/\s/g, "") === p,
       )) return true;
-      const cn = c.name.toLowerCase();
+      const cn = (c.name || "").toLowerCase();
       return cn.includes(n) || n.includes(cn);
     });
   }
