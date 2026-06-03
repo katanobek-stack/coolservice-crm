@@ -270,41 +270,73 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
         </div>
       )}
 
-      {/* Tasks */}
+      {/* Tasks — each with its own photos */}
       {(repair.tasks ?? []).length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
             Задачи · {(repair.tasks ?? []).length}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {(repair.tasks ?? []).map((t) => {
               const isDone     = t.status === "done";
+              const isFreon    = t.freonTask === true;
               const taskNames  = (t.assignees ?? [])
                 .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
                 .filter(Boolean).join(", ");
+              const taskPhotos = (t.photos ?? []).filter((p) => p.url ?? p.data);
               return (
                 <div key={t.id} style={{
-                  background: "var(--bg3)", border: "1px solid var(--border)",
-                  borderRadius: 8, padding: "8px 10px", opacity: isDone ? 0.75 : 1,
+                  background: "var(--bg3)",
+                  border: `1px solid ${isFreon ? "rgba(6,182,212,0.2)" : "var(--border)"}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
                 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 7 }}>
-                    <span style={{ color: isDone ? "#4ade80" : "#fbbf24", fontSize: 12, marginTop: 1, flexShrink: 0 }}>
-                      {isDone ? "✓" : "●"}
+                  {/* Task header row */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                    <span style={{ flexShrink: 0, marginTop: 1, fontSize: isFreon ? 15 : 13 }}>
+                      {isFreon ? "❄️" : isDone ? "✓" : "●"}
                     </span>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: isDone ? "var(--text3)" : "var(--text)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 600,
+                        color: isDone ? "var(--text2)" : "var(--text)",
+                        textDecoration: isDone && !isFreon ? "line-through" : "none",
+                      }}>
                         {t.description}
-                        {t.freonType && <span style={{ color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
-                        {t.freonKg   && <span style={{ color: "#67e8f9" }}> {t.freonKg} кг</span>}
-                      </span>
-                      {taskNames && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>👤 {taskNames}</div>}
+                        {isFreon && t.freonType && (
+                          <span style={{ color: "#67e8f9", fontWeight: 400 }}> {t.freonType}</span>
+                        )}
+                        {isFreon && t.freonKg && (
+                          <span style={{ color: "#67e8f9", fontWeight: 700 }}> · {t.freonKg} кг</span>
+                        )}
+                      </div>
+                      {taskNames && (
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>👤 {taskNames}</div>
+                      )}
                       {t.workComment && (
-                        <div style={{ fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", borderRadius: 5, padding: "3px 7px", marginTop: 4, border: "1px solid rgba(139,92,246,0.15)" }}>
+                        <div style={{ fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", borderRadius: 5, padding: "3px 8px", marginTop: 5, border: "1px solid rgba(139,92,246,0.15)" }}>
                           <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{t.workComment}
                         </div>
                       )}
                     </div>
                   </div>
+                  {/* Per-task photos */}
+                  {taskPhotos.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                      {taskPhotos.map((p) => {
+                        const src = (p.url ?? p.data)!;
+                        return (
+                          <img
+                            key={p.id}
+                            src={src}
+                            alt=""
+                            onClick={() => setLightboxUrl(src)}
+                            style={{ width: 72, height: 72, borderRadius: 7, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -312,36 +344,29 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
         </div>
       )}
 
-      {/* All photos: repair-level + task-level combined */}
-      {(() => {
-        const allPhotos = [
-          ...(repair.photos ?? []),
-          ...(repair.tasks ?? []).flatMap((t) => t.photos ?? []),
-        ];
-        if (!allPhotos.length) return null;
-        return (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
-              Фото · {allPhotos.length}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {allPhotos.map((p) => {
-                const src = p.url ?? p.data;
-                if (!src) return null;
-                return (
-                  <img
-                    key={p.id}
-                    src={src}
-                    alt=""
-                    onClick={() => setLightboxUrl(src)}
-                    style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
-                  />
-                );
-              })}
-            </div>
+      {/* Repair-level photos (attached to the order itself, not to tasks) */}
+      {(repair.photos ?? []).some((p) => p.url ?? p.data) && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
+            Фото наряда
           </div>
-        );
-      })()}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {(repair.photos ?? []).map((p) => {
+              const src = p.url ?? p.data;
+              if (!src) return null;
+              return (
+                <img
+                  key={p.id}
+                  src={src}
+                  alt=""
+                  onClick={() => setLightboxUrl(src)}
+                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Featured cost block */}
       {isAdmin && costNum > 0 && (
