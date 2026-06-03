@@ -120,8 +120,7 @@ function taskWord(n: number) {
   return "задач";
 }
 
-const SILENCE_MS = 2000;   // остановить запись после 2с тишины
-const MAX_REC_MS = 30000;  // максимум 30 секунд записи
+const MAX_REC_MS = 60000;  // защита от забытой записи — 60 секунд
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -129,10 +128,9 @@ export function FloatingMicButton() {
   const { clients } = useData();
   const [state, setState]   = useState<MicState>("idle");
   const [toast, setToast]   = useState<{ msg: string; ok: boolean } | null>(null);
-  const recRef              = useRef<ISpeechRec | null>(null);
-  const txtRef              = useRef("");
-  const silenceTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const maxTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recRef      = useRef<ISpeechRec | null>(null);
+  const txtRef      = useRef("");
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const supported = typeof window !== "undefined" &&
     Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
@@ -143,8 +141,7 @@ export function FloatingMicButton() {
   }
 
   function clearTimers() {
-    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
-    if (maxTimerRef.current)     { clearTimeout(maxTimerRef.current);     maxTimerRef.current = null; }
+    if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null; }
   }
 
   function findClient(name: string, plate?: string) {
@@ -238,8 +235,6 @@ export function FloatingMicButton() {
   }, [clients]);
 
   function startRec() {
-    if (state !== "idle") return;
-
     if (!supported) {
       flash("❌ Нужен Chrome (Android или Desktop)", false);
       return;
@@ -252,21 +247,12 @@ export function FloatingMicButton() {
     const r = new SR();
     r.lang           = "ru-RU";
     r.continuous     = true;
-    r.interimResults = false; // только финальные результаты
-
-    // Сброс таймера тишины при каждом новом слове
-    function resetSilence() {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        recRef.current?.stop();
-      }, SILENCE_MS);
-    }
+    r.interimResults = false;
 
     r.onresult = (e: SREvent) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + " ";
       txtRef.current = t.trim();
-      resetSilence(); // сдвигаем таймер тишины
     };
 
     r.onend = () => {
@@ -287,20 +273,23 @@ export function FloatingMicButton() {
     r.start();
     setState("recording");
 
-    // Запускаем таймер тишины сразу — если не будет речи 2с, остановим
-    resetSilence();
-
-    // Жёсткий лимит 30 секунд
+    // Автостоп через 60с — защита от забытой записи
     maxTimerRef.current = setTimeout(() => {
       recRef.current?.stop();
     }, MAX_REC_MS);
   }
 
   function stopRec() {
-    if (state !== "recording") return;
     clearTimers();
     recRef.current?.stop();
     recRef.current = null;
+  }
+
+  // Toggle: первый клик = старт, второй = стоп
+  function handleClick() {
+    if (state === "idle")      return startRec();
+    if (state === "recording") return stopRec();
+    // processing / done / error — игнорируем
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -326,6 +315,14 @@ export function FloatingMicButton() {
         : "0 4px 24px rgba(59,130,246,0.45)",
   };
 
+  const hint = {
+    idle:       "Нажми для записи",
+    recording:  "Говори... нажми чтобы остановить",
+    processing: "Обрабатываю...",
+    done:       "Готово ✓",
+    error:      "",
+  }[state];
+
   return (
     <div className="mic-fab-wrap">
       {toast && (
@@ -334,15 +331,12 @@ export function FloatingMicButton() {
         </div>
       )}
 
+      {hint && <div className="mic-hint">{hint}</div>}
+
       <button
         className={`mic-fab${state === "recording" ? " mic-fab--pulse" : ""}${state === "processing" ? " mic-fab--spin" : ""}`}
         style={btnStyle}
-        onMouseDown={startRec}
-        onMouseUp={stopRec}
-        onMouseLeave={stopRec}
-        onTouchStart={(e) => { e.preventDefault(); startRec(); }}
-        onTouchEnd={(e) => { e.preventDefault(); stopRec(); }}
-        title="Нажми и говори"
+        onClick={handleClick}
         aria-label="Голосовая команда"
       >
         <i className={`ti ${iconClass}`} />
