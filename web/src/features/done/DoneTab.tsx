@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { repairStatus } from "../../shared/utils/repair";
 import { fmtDate, fmtMoney } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
+import { Modal } from "../../shared/ui/Modal";
 import { Input } from "../../shared/ui/Input";
 import { updateClientArray } from "../../shared/firebase/firestore";
 import type { Repair, Client, Vehicle } from "../../shared/types/client";
@@ -176,10 +177,181 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
   );
 }
 
+// ─── Repair detail modal ─────────────────────────────────────────────────────
+
+function RepairDetailModal({ item, isAdmin, onClose }: {
+  item:    DoneItem;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
+  const { staff }  = useData();
+  const { repair, client, vehicle, assigneeNames } = item;
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const brand       = vehicle?.brand ?? vehicle?.model ?? "";
+  const isCancelled = repairStatus(repair) === "cancelled";
+  const costNum     = parseFloat(repair.cost ?? "0") || 0;
+
+  return (
+    <Modal title="Детали ремонта" onClose={onClose}>
+
+      {/* Vehicle + client header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 14px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
+        {vehicle?.photo ? (
+          <img src={vehicle.photo} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+        ) : (
+          <div style={{ width: 52, height: 52, borderRadius: 8, flexShrink: 0, background: "rgba(59,130,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+            🚗
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {vehicle?.plate && (
+            <div style={{ marginBottom: 3 }}>
+              <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 6 }}>
+                {vehicle.plate}
+              </span>
+            </div>
+          )}
+          {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>{brand}</div>}
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{client.name}</div>
+        </div>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, flexShrink: 0,
+          background: isCancelled ? "var(--bg2)" : "rgba(34,197,94,0.15)",
+          color: isCancelled ? "var(--text3)" : "#4ade80",
+          border: `1px solid ${isCancelled ? "var(--border)" : "rgba(34,197,94,0.3)"}`,
+        }}>
+          {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Выполнено"}
+        </span>
+      </div>
+
+      {/* Meta rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14, padding: "12px 14px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12 }}>
+        {repair.date && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>📅 Начало</span>
+            <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(repair.date)}</span>
+          </div>
+        )}
+        {repair.closedAt && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>✓ Закрыто</span>
+            <span style={{ color: "#4ade80", fontWeight: 600 }}>{fmtDate(repair.closedAt.slice(0, 10))}</span>
+          </div>
+        )}
+        {assigneeNames && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>👨‍🔧 Механик</span>
+            <span style={{ color: "var(--text)" }}>{assigneeNames}</span>
+          </div>
+        )}
+        {repair.freonType && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>❄️ Фреон</span>
+            <span style={{ color: "#67e8f9" }}>{repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}</span>
+          </div>
+        )}
+        {isAdmin && costNum > 0 && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>💰 Итого</span>
+            <span style={{ color: "#4ade80", fontWeight: 700, fontFamily: "JetBrains Mono, monospace", fontSize: 14 }}>
+              {fmtMoney(costNum)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      {repair.description && (
+        <div style={{ marginBottom: 14, padding: "10px 14px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 5 }}>Описание</div>
+          <div style={{ fontSize: 13, color: "var(--text)" }}>{repair.description}</div>
+        </div>
+      )}
+
+      {/* Tasks */}
+      {(repair.tasks ?? []).length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
+            Задачи · {(repair.tasks ?? []).length}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {(repair.tasks ?? []).map((t) => {
+              const isDone     = t.status === "done";
+              const taskNames  = (t.assignees ?? [])
+                .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+                .filter(Boolean).join(", ");
+              return (
+                <div key={t.id} style={{
+                  background: "var(--bg3)", border: "1px solid var(--border)",
+                  borderRadius: 8, padding: "8px 10px", opacity: isDone ? 0.75 : 1,
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 7 }}>
+                    <span style={{ color: isDone ? "#4ade80" : "#fbbf24", fontSize: 12, marginTop: 1, flexShrink: 0 }}>
+                      {isDone ? "✓" : "●"}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 13, color: isDone ? "var(--text3)" : "var(--text)" }}>
+                        {t.description}
+                        {t.freonType && <span style={{ color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
+                        {t.freonKg   && <span style={{ color: "#67e8f9" }}> {t.freonKg} кг</span>}
+                      </span>
+                      {taskNames && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>👤 {taskNames}</div>}
+                      {t.workComment && (
+                        <div style={{ fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", borderRadius: 5, padding: "3px 7px", marginTop: 4, border: "1px solid rgba(139,92,246,0.15)" }}>
+                          <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{t.workComment}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Repair photos */}
+      {(repair.photos ?? []).length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 8 }}>
+            Фото · {(repair.photos ?? []).length}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {(repair.photos ?? []).map((p) => {
+              const src = p.url ?? p.data;
+              if (!src) return null;
+              return (
+                <img
+                  key={p.id}
+                  src={src}
+                  alt=""
+                  onClick={() => setLightboxUrl(src)}
+                  style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/90 cursor-pointer"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img src={lightboxUrl} alt="" className="max-w-[95%] max-h-[90%] object-contain rounded-xl" />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Repair card (closed history) ────────────────────────────────────────────
 
 function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
   const { repair, client, vehicle, assigneeNames } = item;
+  const [showDetail, setShowDetail] = useState(false);
   const isCancelled = repairStatus(repair) === "cancelled";
   const costNum     = parseFloat(repair.cost ?? "0") || 0;
 
@@ -188,87 +360,93 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
   const initials = brand.slice(0, 2).toUpperCase() || (vehicle?.plate ?? client.name).slice(0, 2).toUpperCase();
 
   return (
-    <div style={{
-      background:   "var(--bg2)",
-      borderRadius: 16,
-      border:       "1px solid var(--border)",
-      borderLeft:   `4px solid ${isCancelled ? "var(--text3)" : repair.closedByManager ? "var(--green)" : "var(--accent)"}`,
-      padding:      "14px 16px",
-      boxShadow:    "0 2px 8px rgba(0,0,0,0.07)",
-      display:      "flex",
-      gap:          14,
-      alignItems:   "center",
-    }}>
-      {/* Avatar */}
-      {vehicle?.photo ? (
-        <img
-          src={vehicle.photo}
-          alt=""
-          style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
-        />
-      ) : (
-        <div style={{
-          width: 60, height: 60, borderRadius: 10, flexShrink: 0,
-          background: av.bg, color: av.color,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, fontWeight: 800,
-        }}>
-          {initials}
-        </div>
-      )}
+    <>
+      <div
+        onClick={() => setShowDetail(true)}
+        style={{
+          background:   "var(--bg2)",
+          borderRadius: 16,
+          border:       "1px solid var(--border)",
+          borderLeft:   `4px solid ${isCancelled ? "var(--text3)" : repair.closedByManager ? "var(--green)" : "var(--accent)"}`,
+          padding:      "14px 16px",
+          boxShadow:    "0 2px 8px rgba(0,0,0,0.07)",
+          display:      "flex",
+          gap:          14,
+          alignItems:   "center",
+          cursor:       "pointer",
+        }}
+      >
+        {/* Avatar */}
+        {vehicle?.photo ? (
+          <img
+            src={vehicle.photo}
+            alt=""
+            style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+          />
+        ) : (
+          <div style={{
+            width: 60, height: 60, borderRadius: 10, flexShrink: 0,
+            background: av.bg, color: av.color,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, fontWeight: 800,
+          }}>
+            {initials}
+          </div>
+        )}
 
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Plate + brand + client */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 4 }}>
-          {vehicle?.plate && (
-            <span style={{
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: 13, fontWeight: 700,
-              color: "var(--accent2)",
-              background: "rgba(59,130,246,0.12)",
-              padding: "2px 8px", borderRadius: 6,
-            }}>
-              {vehicle.plate}
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 4 }}>
+            {vehicle?.plate && (
+              <span style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 13, fontWeight: 700,
+                color: "var(--accent2)",
+                background: "rgba(59,130,246,0.12)",
+                padding: "2px 8px", borderRadius: 6,
+              }}>
+                {vehicle.plate}
+              </span>
+            )}
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {brand ? `${brand} · ` : ""}{client.name}
+            </span>
+          </div>
+
+          {repair.description && (
+            <div style={{ fontSize: 12.5, color: "var(--text2)", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {repair.description}
+            </div>
+          )}
+
+          {repair.freonType && (
+            <div style={{ fontSize: 11.5, color: "var(--cyan)", marginBottom: 4 }}>
+              ❄️ {repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {assigneeNames && (
+              <span style={{ fontSize: 11.5, color: "var(--text3)" }}>👨‍🔧 {assigneeNames}</span>
+            )}
+            <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+          </div>
+        </div>
+
+        {/* Right: cost + badge */}
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          {isAdmin && costNum > 0 && (
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+              {fmtMoney(costNum)}
             </span>
           )}
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {brand ? `${brand} · ` : ""}{client.name}
-          </span>
-        </div>
-
-        {repair.description && (
-          <div style={{ fontSize: 12.5, color: "var(--text2)", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {repair.description}
-          </div>
-        )}
-
-        {repair.freonType && (
-          <div style={{ fontSize: 11.5, color: "var(--cyan)", marginBottom: 4 }}>
-            ❄️ {repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}
-          </div>
-        )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          {assigneeNames && (
-            <span style={{ fontSize: 11.5, color: "var(--text3)" }}>👨‍🔧 {assigneeNames}</span>
-          )}
-          <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+          <Badge variant={isCancelled ? "gray" : "green"}>
+            {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Готово"}
+          </Badge>
         </div>
       </div>
-
-      {/* Right: cost + badge */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-        {isAdmin && costNum > 0 && (
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
-            {fmtMoney(costNum)}
-          </span>
-        )}
-        <Badge variant={isCancelled ? "gray" : "green"}>
-          {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Готово"}
-        </Badge>
-      </div>
-    </div>
+      {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} onClose={() => setShowDetail(false)} />}
+    </>
   );
 }
 

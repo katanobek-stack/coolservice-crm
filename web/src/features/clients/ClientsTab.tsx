@@ -641,17 +641,32 @@ function SectionHeader({ title, count, accent }: { title: string; count?: number
   );
 }
 
-function VehicleRow({ vehicle, onEdit }: { vehicle: Vehicle; onEdit?: () => void }) {
+function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: () => void; onView?: () => void }) {
   const brand = vehicle.brand ?? vehicle.model;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, background: "var(--bg2)", border: "1px solid var(--border)", marginBottom: 6 }}>
-      <span style={{ fontSize: 20, flexShrink: 0 }}>🚗</span>
+    <div
+      onClick={onView}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "10px 12px", borderRadius: 12,
+        background: "var(--bg2)", border: "1px solid var(--border)", marginBottom: 6,
+        cursor: onView ? "pointer" : "default",
+      }}
+    >
+      {vehicle.photo ? (
+        <img src={vehicle.photo} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+      ) : (
+        <span style={{ fontSize: 20, flexShrink: 0 }}>🚗</span>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
         {brand && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 1 }}>{brand}</div>}
       </div>
+      {onView && (
+        <span style={{ fontSize: 10, color: "var(--text3)", flexShrink: 0 }}>История →</span>
+      )}
       {onEdit && (
-        <button type="button" onClick={onEdit} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "var(--text2)", flexShrink: 0 }}>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "var(--text2)", flexShrink: 0 }}>
           ✏️
         </button>
       )}
@@ -717,6 +732,131 @@ function VehiclePickerModal({ client, onPick, onClose }: {
   );
 }
 
+// ─── Vehicle history modal ────────────────────────────────────────────────────
+
+function VehicleHistoryModal({ client, vehicle, onClose }: {
+  client:  Client;
+  vehicle: Vehicle;
+  onClose: () => void;
+}) {
+  const { staff }     = useData();
+  const { myProfile } = useAuth();
+  const isAdmin = (myProfile?.role ?? "mechanic") !== "mechanic";
+  const brand   = vehicle.brand ?? vehicle.model;
+
+  const repairs = (client.repairs ?? [])
+    .filter((r) => r.vehicleId === vehicle.id)
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+
+  function getAssigneeNames(repair: Repair): string {
+    const uids = new Set<string>();
+    (repair.tasks ?? []).forEach((t) => (t.assignees ?? []).forEach((uid) => uids.add(uid)));
+    return Array.from(uids)
+      .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+      .filter(Boolean).join(", ");
+  }
+
+  function statusInfo(repair: Repair): { label: string; color: string; bg: string } {
+    const st = repairStatus(repair);
+    if (st === "cancelled")              return { label: "Отказ",     color: "var(--text3)", bg: "var(--bg3)" };
+    if (st === "done" && repair.closedByManager) return { label: "Закрыто",   color: "#4ade80",     bg: "rgba(34,197,94,0.15)" };
+    if (st === "done")                   return { label: "Выполнено", color: "#4ade80",     bg: "rgba(34,197,94,0.15)" };
+    return { label: "В работе", color: "var(--accent2)", bg: "rgba(59,130,246,0.15)" };
+  }
+
+  const repairWord = repairs.length === 1 ? "ремонт" : repairs.length < 5 ? "ремонта" : "ремонтов";
+
+  return (
+    <Modal title={`${vehicle.plate}${brand ? ` · ${brand}` : ""}`} onClose={onClose}>
+
+      {/* Vehicle photo */}
+      {vehicle.photo && (
+        <div style={{ marginBottom: 14, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
+          <img src={vehicle.photo} alt={vehicle.plate} style={{ width: "100%", maxHeight: 180, objectFit: "cover", display: "block" }} />
+        </div>
+      )}
+
+      {/* Vehicle summary */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 12px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
+        {!vehicle.photo && <span style={{ fontSize: 24 }}>🚗</span>}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
+          {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text3)" }}>
+          {repairs.length} {repairWord}
+        </div>
+      </div>
+
+      {/* Repairs */}
+      {repairs.length === 0 ? (
+        <div style={{ padding: "24px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+          Ремонтов для этого авто не найдено
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {repairs.map((r) => {
+            const names = getAssigneeNames(r);
+            const si    = statusInfo(r);
+            const cost  = parseFloat(r.cost ?? "0") || 0;
+            return (
+              <div key={r.id} style={{
+                background: "var(--bg2)", border: "1px solid var(--border)",
+                borderLeft: `3px solid ${si.color}`, borderRadius: 12, padding: "12px 14px",
+              }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "var(--text3)" }}>📅 {fmtDate(r.date)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: si.bg, color: si.color }}>
+                    {si.label}
+                  </span>
+                  {isAdmin && cost > 0 && (
+                    <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>
+                      {cost.toLocaleString("ru-RU")} ₽
+                    </span>
+                  )}
+                </div>
+
+                {r.description && (
+                  <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 5 }}>{r.description}</div>
+                )}
+
+                {r.freonType && (
+                  <div style={{ fontSize: 11.5, color: "#67e8f9", marginBottom: 5 }}>
+                    ❄️ {r.freonType}{r.freonAmount ? ` · ${r.freonAmount} кг` : ""}
+                  </div>
+                )}
+
+                {names && (
+                  <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 6 }}>👨‍🔧 {names}</div>
+                )}
+
+                {/* Task list */}
+                {(r.tasks ?? []).length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    {(r.tasks ?? []).map((t) => (
+                      <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12 }}>
+                        <span style={{ color: t.status === "done" ? "#4ade80" : "#fbbf24", flexShrink: 0, marginTop: 1 }}>
+                          {t.status === "done" ? "✓" : "●"}
+                        </span>
+                        <span style={{ color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>
+                          {t.description}
+                          {t.freonType && <span style={{ color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
+                          {t.freonKg   && <span style={{ color: "#67e8f9" }}> {t.freonKg} кг</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Client Detail ────────────────────────────────────────────────────────────
 
 function ClientDetail({ client, onClose }: { client: Client; onClose: () => void }) {
@@ -731,6 +871,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const [showAddAppt,     setShowAddAppt]     = useState(false);
   const [vehicleEdit,     setVehicleEdit]     = useState<Vehicle | null>(null);
   const [showAddVehicle,  setShowAddVehicle]  = useState(false);
+  const [historyVehicle,  setHistoryVehicle]  = useState<Vehicle | null>(null);
 
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
   const vehicles      = client.vehicles ?? [];
@@ -784,7 +925,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
       <div style={sec}>
         <SectionHeader title="Автомобили" count={vehicles.length} />
         {vehicles.map((v) => (
-          <VehicleRow key={v.id} vehicle={v} onEdit={isAdmin ? () => setVehicleEdit(v) : undefined} />
+          <VehicleRow key={v.id} vehicle={v} onEdit={isAdmin ? () => setVehicleEdit(v) : undefined} onView={() => setHistoryVehicle(v)} />
         ))}
         {vehicles.length === 0 && !isAdmin && (
           <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>Нет автомобилей</div>
@@ -873,8 +1014,9 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
       {showRepair      && <AddRepairModal      client={client} preVehicleId={pickedVehicleId} onClose={() => setShowRepair(false)} />}
       {showEditClient  && <EditClientModal     client={client} onClose={() => setShowEditClient(false)} />}
       {showAddAppt     && <AddAppointmentModal client={client} onClose={() => setShowAddAppt(false)} />}
-      {showAddVehicle  && <VehicleModal        client={client} onClose={() => setShowAddVehicle(false)} />}
-      {vehicleEdit     && <VehicleModal        client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
+      {showAddVehicle  && <VehicleModal           client={client} onClose={() => setShowAddVehicle(false)} />}
+      {vehicleEdit     && <VehicleModal           client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
+      {historyVehicle  && <VehicleHistoryModal    client={client} vehicle={historyVehicle} onClose={() => setHistoryVehicle(null)} />}
     </Modal>
   );
 }
