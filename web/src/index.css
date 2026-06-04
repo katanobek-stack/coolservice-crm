@@ -489,23 +489,36 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   background: rgba(17,19,24,0.95);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border);
-  padding: 8px 6px max(10px, env(safe-area-inset-bottom));
-  overflow-x: auto;
+  flex-direction: row;
+  align-items: flex-end;
+  overflow: visible; /* позволяет кнопке микрофона выступать над панелью */
+  padding: 0;
 }
 
-.mobile-nav::-webkit-scrollbar { display: none; }
+.mobile-nav-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 4px max(10px, env(safe-area-inset-bottom));
+  overflow-x: auto;
+  gap: 2px;
+}
+
+.mobile-nav-tabs::-webkit-scrollbar { display: none; }
 
 .mobile-nav-btn {
   flex: 1;
-  min-width: 60px;
+  min-width: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 6px 4px;
+  padding: 6px 2px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
   border: none;
@@ -634,61 +647,81 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   to   { transform: rotate(360deg); }
 }
 
-/* ═══ FLOATING MIC BUTTON (голосовой агент) ═══ */
-.mic-fab-wrap {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 150;
+/* ═══ MIC NAV BUTTON (голосовой агент в нижней панели) ═══ */
+.mic-nav-item {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 0;
+  padding: 0 4px max(12px, env(safe-area-inset-bottom));
 }
 
-@media (max-width: 767px) {
-  .mic-fab-wrap {
-    right: 16px;
-    bottom: 90px; /* выше mobile nav */
-  }
+/* Обёртка кнопки — приподнята над панелью навигации */
+.mic-nav-btn-wrap {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-10px);
 }
 
-.mic-fab {
-  width: 56px;
-  height: 56px;
+.mic-nav-btn {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+  position: relative;
+  z-index: 2;
   outline: none;
+  transition: transform 0.15s ease, box-shadow 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
-.mic-fab:active { transform: scale(0.91); }
+.mic-nav-btn:active { transform: scale(0.91); }
 
-.mic-fab i {
-  font-size: 24px;
+.mic-nav-btn i {
+  font-size: 22px;
   color: #fff;
   pointer-events: none;
 }
 
-/* пульсация при записи */
-.mic-fab--pulse {
-  animation: micPulse 1.4s ease-in-out infinite;
+/* состояния кнопки */
+.mic-nav-btn--idle {
+  background: linear-gradient(135deg, #3b82f6 0%, #22d3ee 100%);
+  box-shadow: 0 0 0 5px rgba(59,130,246,0.16), 0 6px 22px rgba(59,130,246,0.52);
 }
 
-@keyframes micPulse {
-  0%, 100% { transform: scale(1); }
-  50%       { transform: scale(1.1); }
+.mic-nav-btn--recording {
+  background: #ef4444;
+  box-shadow: 0 6px 22px rgba(239,68,68,0.65);
+}
+
+.mic-nav-btn--processing {
+  background: linear-gradient(135deg, #3b82f6 0%, #22d3ee 100%);
+  box-shadow: 0 6px 22px rgba(59,130,246,0.45);
+}
+
+.mic-nav-btn--done {
+  background: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34,197,94,0.18), 0 6px 22px rgba(34,197,94,0.55);
+}
+
+.mic-nav-btn--error {
+  background: #ef4444;
+  box-shadow: 0 6px 22px rgba(239,68,68,0.45);
 }
 
 /* вращение иконки при обработке */
-.mic-fab--spin i {
+.mic-nav-btn--processing i {
   animation: spin360 1s linear infinite;
 }
 
@@ -697,41 +730,61 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
   to   { transform: rotate(360deg); }
 }
 
-/* toast уведомление */
-/* подсказка над кнопкой */
-.mic-hint {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text2);
-  background: rgba(17,19,24,0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 5px 10px;
-  white-space: nowrap;
+/* пульсирующие ripple-кольца при записи */
+.mic-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(239,68,68,0.6);
   pointer-events: none;
-  animation: fadeUp 0.2s ease;
+  animation: micRipple 1.6s ease-out infinite;
 }
 
-.mic-toast {
-  background: var(--bg2);
-  border: 1px solid var(--green);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  max-width: 280px;
+.mic-ring--delayed { animation-delay: 0.8s; }
+
+@keyframes micRipple {
+  0%   { transform: scale(1);   opacity: 0.65; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* лейбл под кнопкой */
+.mic-nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 0.3px;
+  font-family: 'Manrope', sans-serif;
+  line-height: 1;
+  margin-top: -6px; /* компенсирует translateY зазор */
+}
+
+/* bubble с текстом ответа — появляется над кнопкой (над панелью) */
+.mic-bubble {
+  position: fixed;
+  bottom: 86px;
+  left: 16px;
+  right: 16px;
+  z-index: 200;
+  background: rgba(13,16,22,0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 11px 16px;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
   text-align: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   animation: fadeUp 0.25s ease;
   pointer-events: none;
   white-space: pre-wrap;
   word-break: break-word;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 
-.mic-toast--err {
-  border-color: var(--red);
+.mic-bubble--err {
+  border-color: rgba(239,68,68,0.3);
 }
 
 @keyframes pulseGreen {

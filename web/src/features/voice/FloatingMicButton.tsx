@@ -229,7 +229,7 @@ export function FloatingMicButton() {
           await updateClient(existing.id, clean({ repairs, vehicles }));
           setState("done");
           flash(`✅ Задача добавлена → ${existing.name}`);
-          setTimeout(() => setState("idle"), 2000);
+          setTimeout(() => setState("idle"), 1500);
           return;
         }
         // не найден → создаём как нового клиента
@@ -251,7 +251,7 @@ export function FloatingMicButton() {
         : `✅ Создан клиент ${cmd.client.name}`,
       );
       setState("done");
-      setTimeout(() => setState("idle"), 2000);
+      setTimeout(() => setState("idle"), 1500);
 
     } catch (err) {
       setState("error");
@@ -329,45 +329,33 @@ export function FloatingMicButton() {
     error:      "ti-x",
   }[state];
 
-  const btnStyle: React.CSSProperties = {
-    background: state === "done"
-      ? "var(--green)"
-      : state === "error" || state === "recording"
-        ? "var(--red)"
-        : "var(--accent)",
-    boxShadow: state === "recording"
-      ? "0 4px 28px rgba(239,68,68,0.6)"
-      : state === "done"
-        ? "0 4px 24px rgba(34,197,94,0.5)"
-        : "0 4px 24px rgba(59,130,246,0.45)",
-  };
-
-  const hint = {
-    idle:       "Нажми для записи",
-    recording:  "Говори... нажми чтобы остановить",
-    processing: "Обрабатываю...",
-    done:       "Готово ✓",
-    error:      "",
-  }[state];
-
   return (
-    <div className="mic-fab-wrap">
+    <div className="mic-nav-item">
+      {/* Bubble с ответом — появляется над навбаром */}
       {toast && (
-        <div className={`mic-toast${toast.ok ? "" : " mic-toast--err"}`}>
+        <div className={`mic-bubble${toast.ok ? "" : " mic-bubble--err"}`}>
           {toast.msg}
         </div>
       )}
 
-      {hint && <div className="mic-hint">{hint}</div>}
+      {/* Кнопка, приподнятая над панелью */}
+      <div className="mic-nav-btn-wrap">
+        {state === "recording" && (
+          <>
+            <span className="mic-ring" />
+            <span className="mic-ring mic-ring--delayed" />
+          </>
+        )}
+        <button
+          className={`mic-nav-btn mic-nav-btn--${state}`}
+          onClick={handleClick}
+          aria-label="Голосовая команда"
+        >
+          <i className={`ti ${iconClass}`} />
+        </button>
+      </div>
 
-      <button
-        className={`mic-fab${state === "recording" ? " mic-fab--pulse" : ""}${state === "processing" ? " mic-fab--spin" : ""}`}
-        style={btnStyle}
-        onClick={handleClick}
-        aria-label="Голосовая команда"
-      >
-        <i className={`ti ${iconClass}`} />
-      </button>
+      <span className="mic-nav-label">Голос</span>
     </div>
   );
 }

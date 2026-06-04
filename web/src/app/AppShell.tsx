@@ -231,41 +231,47 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut }: {
 
   return (
     <nav className="mobile-nav">
-      {visibleTabs.map((t) => {
-        const isActive  = tab === t.id;
-        const showBadge = t.id === "mytasks" && activeMine > 0;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            className={`mobile-nav-btn ${isActive ? "active" : ""}`}
-            onClick={() => onTab(t.id)}
-          >
-            <i className={`ti ${t.icon}`} />
-            {t.label}
-            {showBadge && (
-              <span style={{
-                position: "absolute", top: 4, right: 4,
-                width: 16, height: 16,
-                background: "var(--red)", borderRadius: "50%",
-                fontSize: 9, fontWeight: 700, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {activeMine}
-              </span>
-            )}
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        className="mobile-nav-btn"
-        onClick={onSignOut}
-        style={{ color: "var(--text3)" }}
-      >
-        <i className="ti ti-logout" />
-        Выйти
-      </button>
+      {/* Кнопка голосового агента — первая слева, приподнята над панелью */}
+      <FloatingMicButton />
+
+      {/* Прокручиваемые вкладки */}
+      <div className="mobile-nav-tabs">
+        {visibleTabs.map((t) => {
+          const isActive  = tab === t.id;
+          const showBadge = t.id === "mytasks" && activeMine > 0;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className={`mobile-nav-btn ${isActive ? "active" : ""}`}
+              onClick={() => onTab(t.id)}
+            >
+              <i className={`ti ${t.icon}`} />
+              {t.label}
+              {showBadge && (
+                <span style={{
+                  position: "absolute", top: 4, right: 4,
+                  width: 16, height: 16,
+                  background: "var(--red)", borderRadius: "50%",
+                  fontSize: 9, fontWeight: 700, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {activeMine}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="mobile-nav-btn"
+          onClick={onSignOut}
+          style={{ color: "var(--text3)" }}
+        >
+          <i className="ti ti-logout" />
+          Выйти
+        </button>
+      </div>
     </nav>
   );
 }
@@ -354,9 +360,6 @@ function Shell() {
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
-
-      {/* Голосовой ИИ-агент */}
-      <FloatingMicButton />
     </>
   );
 }
