@@ -820,10 +820,9 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
   tasks:   RepairTask[];
   canAdd:  boolean;
 }) {
-  const vehicle    = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
-  const brand      = vehicle?.brand ?? vehicle?.model;
-  const palette    = repairAvatarPalette(client.name || "");
-  const initials   = (client.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+  const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const brand   = vehicle?.brand ?? vehicle?.model;
+  const palette = repairAvatarPalette(client.name || "");
   const doneTasks  = tasks.filter((t) => taskStatus(t) === "done").length;
   const totalTasks = tasks.length;
   const allDone    = totalTasks > 0 && doneTasks === totalTasks;
@@ -856,27 +855,35 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
     }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 10px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px 10px" }}>
 
-        {/* Avatar */}
-        <div style={{
-          width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-          background: palette.bg, border: `1.5px solid ${palette.border}`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 14, fontWeight: 800, color: palette.text,
-        }}>
-          {initials}
-        </div>
-
-        {/* Client info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {client.name || "—"}
+        {/* Vehicle photo or colored avatar with car icon */}
+        {vehicle?.photo ? (
+          <img
+            src={vehicle.photo}
+            alt=""
+            style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+          />
+        ) : (
+          <div style={{
+            width: 52, height: 52, borderRadius: 10, flexShrink: 0,
+            background: palette.bg, border: `1px solid ${palette.border}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 22,
+          }}>
+            🚗
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        )}
+
+        {/* Main info: brand → plate + status → client name */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {brand || "Автомобиль"}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
             {vehicle?.plate && (
               <span style={{
-                fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
                 color: "#93c5fd", background: "rgba(59,130,246,0.12)",
                 border: "1px solid rgba(59,130,246,0.25)",
                 padding: "2px 8px", borderRadius: 6,
@@ -884,18 +891,6 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
                 {vehicle.plate}
               </span>
             )}
-            {brand && (
-              <span style={{ fontSize: 11, color: "var(--text3)" }}>{brand}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Right: date + status */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          {repair.date && (
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
               background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)",
@@ -909,23 +904,29 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
               </span>
             )}
           </div>
+          <div style={{ fontSize: 11, color: "var(--text3)" }}>{client.name}</div>
         </div>
 
-        {/* Delete button — admin only */}
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => void deleteRepair()}
-            title="Удалить наряд"
-            style={{
-              flexShrink: 0, padding: "6px 8px", borderRadius: 8,
-              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
-              color: "#f87171", cursor: "pointer", fontSize: 14, lineHeight: 1,
-            }}
-          >
-            <i className="ti ti-trash" />
-          </button>
-        )}
+        {/* Right: date + delete */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+          {repair.date && (
+            <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
+          )}
+          {canAdd && (
+            <button
+              type="button"
+              onClick={() => void deleteRepair()}
+              title="Удалить наряд"
+              style={{
+                padding: "5px 7px", borderRadius: 8,
+                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
+                color: "#f87171", cursor: "pointer", fontSize: 13, lineHeight: 1,
+              }}
+            >
+              <i className="ti ti-trash" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Task list ──────────────────────────────────────────────────── */}
