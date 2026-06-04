@@ -581,6 +581,10 @@ function RepairTaskRow({ task, client, repair }: {
   }
 
   async function toggle() {
+    if (isAdmin) {
+      await patchTask({ status: isDone ? "in_progress" : "done" });
+      return;
+    }
     const doneBy    = task.doneBy ?? [];
     const newDoneBy = myDone ? doneBy.filter((d) => d !== uid) : [...doneBy, uid];
     const assignees = getAssignees(task);
@@ -640,7 +644,7 @@ function RepairTaskRow({ task, client, repair }: {
             style={{
               flexShrink: 0, marginTop: 2,
               width: 20, height: 20, borderRadius: "50%",
-              border: `2px solid ${isDone ? "#4ade80" : "var(--border2)"}`,
+              border: `2px solid ${isDone ? "#4ade80" : "rgba(255,255,255,0.3)"}`,
               background: isDone ? "rgba(34,197,94,0.15)" : "transparent",
               color: isDone ? "#4ade80" : "transparent",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -772,7 +776,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
   const brand      = vehicle?.brand ?? vehicle?.model;
   const palette    = repairAvatarPalette(client.name || "");
   const initials   = (client.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "?";
-  const doneTasks  = tasks.filter((t) => t.status === "done").length;
+  const doneTasks  = tasks.filter((t) => taskStatus(t) === "done").length;
   const totalTasks = tasks.length;
   const allDone    = totalTasks > 0 && doneTasks === totalTasks;
   const stripe     = allDone ? "var(--green)" : "var(--accent)";
@@ -916,15 +920,20 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
               <i className="ti ti-plus" style={{ fontSize: 12 }} /> Задача
             </button>
 
-            {/* Close repair — blue, admin only */}
+            {/* Close repair — active only when all tasks done */}
             {!showClose ? (
               <button
                 type="button"
-                onClick={() => setShowClose(true)}
+                onClick={() => { if (allDone) setShowClose(true); }}
+                disabled={!allDone}
+                title={!allDone ? `Выполните все задачи (${doneTasks}/${totalTasks})` : "Закрыть наряд"}
                 style={{
                   padding: "11px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                  background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)",
-                  color: "var(--accent2)", cursor: "pointer",
+                  background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.07)",
+                  border: `1px solid ${allDone ? "rgba(34,197,94,0.35)" : "rgba(59,130,246,0.15)"}`,
+                  color: allDone ? "#4ade80" : "var(--text3)",
+                  cursor: allDone ? "pointer" : "not-allowed",
+                  opacity: allDone ? 1 : 0.55,
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 }}
               >
@@ -1025,12 +1034,14 @@ export function MyTasksTab() {
   const repairGroups: RepairGroupData[] = [];
   clients.forEach((c) => {
     (c.repairs ?? []).forEach((r) => {
-      if (repairStatus(r) !== "in_progress") return;
-      const allActive = (r.tasks ?? []).filter((t) => taskStatus(t) !== "done");
-      const visible   = isManagerOrAdmin ? allActive : allActive.filter((t) => getAssignees(t).includes(uid));
+      if (r.closedByManager || r.status === "cancelled") return;
+      const allRepairTasks = r.tasks ?? [];
+      const allActive      = allRepairTasks.filter((t) => taskStatus(t) !== "done");
+      const visible        = isManagerOrAdmin
+        ? allRepairTasks
+        : allActive.filter((t) => getAssignees(t).includes(uid));
       if (!visible.length && !isManagerOrAdmin) return;
-      if (allActive.length === 0 && !isManagerOrAdmin) return;
-      repairGroups.push({ client: c, repair: r, tasks: isManagerOrAdmin ? allActive : visible });
+      repairGroups.push({ client: c, repair: r, tasks: visible });
     });
   });
 
