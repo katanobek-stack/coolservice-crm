@@ -336,17 +336,11 @@ const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
-  const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
-
   const [vehicleId,   setVehicleId]   = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
   const [newPlate,    setNewPlate]    = useState("");
   const [serviceType, setServiceType] = useState<ServiceType>("refrigerator");
   const [desc,        setDesc]        = useState("");
   const [date,        setDate]        = useState(new Date().toISOString().slice(0, 10));
-  const [cost,        setCost]        = useState("");
-  const [freonType,   setFreonType]   = useState("");
-  const [freonAmt,    setFreonAmt]    = useState("");
   const [assignee,    setAssignee]    = useState("");
   const [taskDesc,    setTaskDesc]    = useState("");
   const [saving,      setSaving]      = useState(false);
@@ -379,9 +373,6 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
         photos: [],
         tasks,
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
-        ...(isAdmin && cost.trim() ? { cost: cost.trim() } : {}),
-        ...(freonType ? { freonType } : {}),
-        ...(freonAmt.trim() ? { freonAmount: freonAmt.trim() } : {}),
       };
       console.log("[AddRepairModal] saving repair:", repair);
       await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
@@ -413,15 +404,6 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
       </FormGroup>
       <FormGroup label="Описание"><Textarea placeholder="Что нужно сделать..." value={desc} onChange={(e) => setDesc(e.target.value)} /></FormGroup>
       <FormGroup label="Дата"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></FormGroup>
-      {isAdmin && <FormGroup label="Стоимость (₽)"><Input type="number" placeholder="0" value={cost} onChange={(e) => setCost(e.target.value)} /></FormGroup>}
-      <FormGroup label="Фреон">
-        <div className="flex gap-2">
-          <Select value={freonType} onChange={(e) => setFreonType(e.target.value)}>
-            {FREON_TYPES.map((f) => <option key={f} value={f}>{f || "— не указан —"}</option>)}
-          </Select>
-          <Input placeholder="кг" value={freonAmt} onChange={(e) => setFreonAmt(e.target.value)} className="w-24" />
-        </div>
-      </FormGroup>
       <FormGroup label="Задача механику"><Textarea placeholder="Необязательно" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} /></FormGroup>
       {taskDesc.trim() && (
         <FormGroup label="Назначить">

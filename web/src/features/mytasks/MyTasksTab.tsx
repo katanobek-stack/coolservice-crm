@@ -564,9 +564,14 @@ function RepairTaskRow({ task, client, repair }: {
   const myDone  = (task.doneBy ?? []).includes(uid);
   const isFreon = task.freonTask === true;
 
-  const [freonKg,     setFreonKg]     = useState(task.freonKg ?? "");
-  const [showComment, setShowComment] = useState(false);
-  const [lightbox,    setLightbox]    = useState<string | null>(null);
+  const STANDARD_FREONS = FREON_BADGES as readonly string[];
+  const isCustomFreon  = !!(task.freonType && !STANDARD_FREONS.includes(task.freonType));
+
+  const [freonKg,      setFreonKg]      = useState(task.freonKg ?? "");
+  const [showCustom,   setShowCustom]   = useState(false);
+  const [customFreon,  setCustomFreon]  = useState(isCustomFreon ? (task.freonType ?? "") : "");
+  const [showComment,  setShowComment]  = useState(false);
+  const [lightbox,     setLightbox]     = useState<string | null>(null);
 
   const assigneeNames = getAssignees(task)
     .map((id) => staff.find((s) => s.id === id)?.name ?? id)
@@ -674,14 +679,14 @@ function RepairTaskRow({ task, client, repair }: {
 
           {/* Freon type badges */}
           {isFreon && !isDone && (
-            <div style={{ display: "flex", gap: 4, marginTop: 7, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 4, marginTop: 7, flexWrap: "wrap", alignItems: "center" }}>
               {FREON_BADGES.map((fr) => {
                 const active = task.freonType === fr;
                 return (
                   <button
                     key={fr}
                     type="button"
-                    onClick={() => void patchTask({ freonType: fr })}
+                    onClick={() => { setShowCustom(false); void patchTask({ freonType: fr }); }}
                     style={{
                       padding: "2px 9px", borderRadius: 6,
                       fontSize: 10, fontWeight: 700, cursor: "pointer",
@@ -694,6 +699,49 @@ function RepairTaskRow({ task, client, repair }: {
                   </button>
                 );
               })}
+              {/* Custom freon badge */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomFreon(isCustomFreon ? (task.freonType ?? "") : "");
+                  setShowCustom(true);
+                }}
+                style={{
+                  padding: "2px 9px", borderRadius: 6,
+                  fontSize: 10, fontWeight: 700, cursor: "pointer",
+                  border: `1px solid ${isCustomFreon ? "#22d3ee" : "var(--border)"}`,
+                  background: isCustomFreon ? "rgba(6,182,212,0.2)" : "transparent",
+                  color: isCustomFreon ? "#22d3ee" : "var(--text3)",
+                }}
+              >
+                Др.
+              </button>
+              {/* Custom freon text input */}
+              {(showCustom || isCustomFreon) && (
+                <input
+                  type="text"
+                  placeholder="Тип фреона..."
+                  value={customFreon}
+                  onChange={(e) => setCustomFreon(e.target.value)}
+                  onBlur={() => {
+                    const val = customFreon.trim();
+                    if (val) {
+                      void patchTask({ freonType: val });
+                      setShowCustom(false);
+                    } else {
+                      setShowCustom(false);
+                    }
+                  }}
+                  autoFocus={showCustom && !isCustomFreon}
+                  style={{
+                    width: 110, padding: "1px 8px", borderRadius: 6,
+                    fontSize: 10, fontWeight: 700,
+                    background: "rgba(6,182,212,0.08)",
+                    border: "1px solid rgba(6,182,212,0.4)",
+                    color: "#22d3ee", outline: "none",
+                  }}
+                />
+              )}
             </div>
           )}
 
