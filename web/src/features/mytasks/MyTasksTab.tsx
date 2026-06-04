@@ -568,6 +568,7 @@ function RepairTaskRow({ task, client, repair }: {
   const isCustomFreon  = !!(task.freonType && !STANDARD_FREONS.includes(task.freonType));
 
   const [freonKg,      setFreonKg]      = useState(task.freonKg ?? "");
+  const [freonError,   setFreonError]   = useState("");
   const [showCustom,   setShowCustom]   = useState(false);
   const [customFreon,  setCustomFreon]  = useState(isCustomFreon ? (task.freonType ?? "") : "");
   const [showComment,  setShowComment]  = useState(false);
@@ -598,6 +599,12 @@ function RepairTaskRow({ task, client, repair }: {
   }
 
   async function saveFreon(done: boolean) {
+    setFreonError("");
+    const kg = parseFloat(freonKg);
+    if (done && kg > 0 && !task.freonType) {
+      setFreonError("Укажите марку фреона");
+      return;
+    }
     const patch: Partial<RepairTask> = { freonKg };
     if (done) patch.status = "done";
     const repairs = (client.repairs ?? []).map((r) => {
@@ -747,21 +754,29 @@ function RepairTaskRow({ task, client, repair }: {
 
           {/* Freon kg input */}
           {isFreon && !isDone && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-              <span style={{ fontSize: 11, color: "#67e8f9", fontWeight: 600 }}>кг:</span>
-              <Input
-                type="number" step="0.1" placeholder="0.0"
-                value={freonKg} onChange={(e) => setFreonKg(e.target.value)}
-                onBlur={() => void saveFreon(false)}
-                style={{ width: 100 }}
-                className="!min-h-0 !py-1 !px-2 !text-sm flex-shrink-0"
-              />
-              <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#67e8f9", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
-                💾
-              </button>
-              <button type="button" onClick={() => void saveFreon(true)} style={{ fontSize: 11, color: "white", background: "#16a34a", border: "none", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>
-                ✓ Готово
-              </button>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "#67e8f9", fontWeight: 600 }}>кг:</span>
+                <Input
+                  type="number" step="0.1" placeholder="0.0"
+                  value={freonKg}
+                  onChange={(e) => { setFreonKg(e.target.value); setFreonError(""); }}
+                  onBlur={() => void saveFreon(false)}
+                  style={{ width: 100 }}
+                  className="!min-h-0 !py-1 !px-2 !text-sm flex-shrink-0"
+                />
+                <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#67e8f9", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
+                  💾
+                </button>
+                <button type="button" onClick={() => void saveFreon(true)} style={{ fontSize: 11, color: "white", background: "#16a34a", border: "none", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>
+                  ✓ Готово
+                </button>
+              </div>
+              {freonError && (
+                <div style={{ marginTop: 4, fontSize: 10, color: "#f87171", fontWeight: 600 }}>
+                  ⚠ {freonError}
+                </div>
+              )}
             </div>
           )}
 
