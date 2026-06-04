@@ -781,21 +781,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
   const allDone    = totalTasks > 0 && doneTasks === totalTasks;
   const stripe     = allDone ? "var(--green)" : "var(--accent)";
 
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [showClose, setShowClose] = useState(false);
-  const [closeSum,  setCloseSum]  = useState(repair.cost ?? "");
-  const [closing,   setClosing]   = useState(false);
-
-  async function closeRepair() {
-    if (!closeSum.trim()) return;
-    setClosing(true);
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : { ...r, cost: closeSum.trim(), closedByManager: true, status: "done" as const },
-    );
-    await updateClientArray(client.id, "repairs", repairs);
-    setClosing(false);
-    setShowClose(false);
-  }
+  const [showAdd, setShowAdd] = useState(false);
 
   async function markDone() {
     const repairs = (client.repairs ?? []).map((r) =>
@@ -905,90 +891,21 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
       <div style={{ padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
 
         {canAdd ? (
-          <>
-            {/* Add task */}
-            <button
-              type="button"
-              onClick={() => setShowAdd(true)}
-              style={{
-                alignSelf: "flex-start", padding: "5px 14px", borderRadius: 8,
-                fontSize: 12, fontWeight: 600,
-                background: "var(--bg3)", border: "1px solid var(--border)",
-                color: "var(--text2)", cursor: "pointer",
-              }}
-            >
-              <i className="ti ti-plus" style={{ fontSize: 12 }} /> Задача
-            </button>
-
-            {/* Close repair — active only when all tasks done */}
-            {!showClose ? (
-              <button
-                type="button"
-                onClick={() => { if (allDone) setShowClose(true); }}
-                disabled={!allDone}
-                title={!allDone ? `Выполните все задачи (${doneTasks}/${totalTasks})` : "Закрыть наряд"}
-                style={{
-                  padding: "11px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                  background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.07)",
-                  border: `1px solid ${allDone ? "rgba(34,197,94,0.35)" : "rgba(59,130,246,0.15)"}`,
-                  color: allDone ? "#4ade80" : "var(--text3)",
-                  cursor: allDone ? "pointer" : "not-allowed",
-                  opacity: allDone ? 1 : 0.55,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                }}
-              >
-                <i className="ti ti-circle-check" style={{ fontSize: 15 }} />
-                Закрыть наряд
-              </button>
-            ) : (
-              <div style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 10, padding: "10px 12px" }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent2)", marginBottom: 8 }}>
-                  Сумма работ
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    type="number"
-                    placeholder="Сумма ₽"
-                    value={closeSum}
-                    onChange={(e) => setCloseSum(e.target.value)}
-                    style={{
-                      flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 700,
-                      background: "var(--bg3)", border: "1px solid rgba(59,130,246,0.3)",
-                      color: "var(--text)", outline: "none", fontFamily: "JetBrains Mono, monospace",
-                    }}
-                    autoFocus
-                  />
-                  <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
-                  <button
-                    type="button"
-                    onClick={() => void closeRepair()}
-                    disabled={closing || !closeSum.trim()}
-                    style={{
-                      padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                      background: closing ? "rgba(59,130,246,0.2)" : "var(--accent)",
-                      border: "none", color: "white",
-                      cursor: closing ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {closing ? "..." : "✓"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowClose(false)}
-                    style={{
-                      padding: "8px 10px", borderRadius: 8, fontSize: 12,
-                      background: "var(--bg3)", border: "1px solid var(--border)",
-                      color: "var(--text3)", cursor: "pointer",
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+          /* Admin/manager: only add-task button; closing happens in Отчёты */
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            style={{
+              alignSelf: "flex-start", padding: "5px 14px", borderRadius: 8,
+              fontSize: 12, fontWeight: 600,
+              background: "var(--bg3)", border: "1px solid var(--border)",
+              color: "var(--text2)", cursor: "pointer",
+            }}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 12 }} /> Задача
+          </button>
         ) : (
-          /* Mechanic: simple "done" button */
+          /* Mechanic: simple "done" button (for no-task repairs) */
           <button
             type="button"
             onClick={() => void markDone()}
@@ -1034,7 +951,7 @@ export function MyTasksTab() {
   const repairGroups: RepairGroupData[] = [];
   clients.forEach((c) => {
     (c.repairs ?? []).forEach((r) => {
-      if (r.closedByManager || r.status === "cancelled") return;
+      if (repairStatus(r) !== "in_progress") return;
       const allRepairTasks = r.tasks ?? [];
       const allActive      = allRepairTasks.filter((t) => taskStatus(t) !== "done");
       const visible        = isManagerOrAdmin
