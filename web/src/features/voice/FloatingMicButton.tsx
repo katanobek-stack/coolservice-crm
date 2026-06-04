@@ -331,29 +331,22 @@ export function FloatingMicButton() {
 
   return (
     <div className="mic-nav-item">
-      {/* Bubble с ответом — появляется над навбаром */}
+      {/* Bubble с ответом — фиксированный тост над навбаром */}
       {toast && (
         <div className={`mic-bubble${toast.ok ? "" : " mic-bubble--err"}`}>
           {toast.msg}
         </div>
       )}
 
-      {/* Кнопка, приподнятая над панелью */}
-      <div className="mic-nav-btn-wrap">
-        {state === "recording" && (
-          <>
-            <span className="mic-ring" />
-            <span className="mic-ring mic-ring--delayed" />
-          </>
-        )}
-        <button
-          className={`mic-nav-btn mic-nav-btn--${state}`}
-          onClick={handleClick}
-          aria-label="Голосовая команда"
-        >
-          <i className={`ti ${iconClass}`} />
-        </button>
-      </div>
+      {/* Круглый градиентный контейнер иконки */}
+      <button
+        type="button"
+        className={`mic-icon-wrap mic-icon-wrap--${state}`}
+        onClick={handleClick}
+        aria-label="Голосовая команда"
+      >
+        <i className={`ti ${iconClass}`} />
+      </button>
 
       <span className="mic-nav-label">Голос</span>
     </div>
