@@ -586,6 +586,19 @@ function RepairTaskRow({ task, client, repair }: {
     await updateClientArray(client.id, "repairs", repairs);
   }
 
+  // Syncs freonType to both task-level AND repair-level fields
+  async function patchFreonType(freonType: string) {
+    const repairs = (client.repairs ?? []).map((r) => {
+      if (r.id !== repair.id) return r;
+      return {
+        ...r,
+        freonType,
+        tasks: (r.tasks ?? []).map((t) => t.id === task.id ? { ...t, freonType } : t),
+      };
+    });
+    await updateClientArray(client.id, "repairs", repairs);
+  }
+
   async function toggle() {
     if (isAdmin) {
       await patchTask({ status: isDone ? "in_progress" : "done" });
@@ -612,6 +625,7 @@ function RepairTaskRow({ task, client, repair }: {
       return {
         ...r,
         freonAmount: freonKg,
+        ...(task.freonType ? { freonType: task.freonType } : {}),
         tasks: (r.tasks ?? []).map((t) => t.id === task.id ? { ...t, ...patch } : t),
       };
     });
@@ -693,7 +707,7 @@ function RepairTaskRow({ task, client, repair }: {
                   <button
                     key={fr}
                     type="button"
-                    onClick={() => { setShowCustom(false); void patchTask({ freonType: fr }); }}
+                    onClick={() => { setShowCustom(false); void patchFreonType(fr); }}
                     style={{
                       padding: "2px 9px", borderRadius: 6,
                       fontSize: 10, fontWeight: 700, cursor: "pointer",
@@ -733,7 +747,7 @@ function RepairTaskRow({ task, client, repair }: {
                   onBlur={() => {
                     const val = customFreon.trim();
                     if (val) {
-                      void patchTask({ freonType: val });
+                      void patchFreonType(val);
                       setShowCustom(false);
                     } else {
                       setShowCustom(false);

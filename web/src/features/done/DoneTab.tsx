@@ -9,7 +9,7 @@ import { Modal } from "../../shared/ui/Modal";
 import { Input } from "../../shared/ui/Input";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
 import { updateClientArray } from "../../shared/firebase/firestore";
-import type { Repair, Client, Vehicle } from "../../shared/types/client";
+import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
 
 const MONTH_NAMES_FULL = [
@@ -62,9 +62,14 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
   const brand    = vehicle?.brand ?? "";
   const initials = brand.slice(0, 2).toUpperCase() || (vehicle?.plate ?? client.name).slice(0, 2).toUpperCase();
 
+  // Block close if any freon task has kg > 0 but no type selected
+  const unresolvedFreon = (repair.tasks ?? []).some(
+    (t: RepairTask) => t.freonTask && parseFloat(t.freonKg ?? "0") > 0 && !t.freonType,
+  );
+
   async function handleClose() {
     const trimmed = closeSum.trim();
-    if (!trimmed) return;
+    if (!trimmed || unresolvedFreon) return;
     setClosing(true);
     const repairs = (client.repairs ?? []).map((r) =>
       r.id !== repair.id ? r : {
@@ -142,6 +147,17 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
           </div>
         )}
 
+        {/* Freon warning */}
+        {unresolvedFreon && (
+          <div style={{
+            marginBottom: 8, padding: "6px 10px", borderRadius: 8,
+            background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
+            fontSize: 12, color: "#fbbf24", fontWeight: 600,
+          }}>
+            ⚠ Укажите марку фреона в задаче заправки перед закрытием
+          </div>
+        )}
+
         {/* Close form */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input
@@ -149,25 +165,29 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
             placeholder="Сумма ₽"
             value={closeSum}
             onChange={(e) => setCloseSum(e.target.value)}
+            disabled={unresolvedFreon}
             style={{
               width: 130, padding: "8px 12px", borderRadius: 8,
               fontSize: 14, fontWeight: 700,
-              background: "var(--bg3)", border: "1px solid rgba(34,197,94,0.35)",
+              background: "var(--bg3)",
+              border: `1px solid ${unresolvedFreon ? "rgba(245,158,11,0.3)" : "rgba(34,197,94,0.35)"}`,
               color: "var(--text)", outline: "none",
               fontFamily: "JetBrains Mono, monospace",
+              opacity: unresolvedFreon ? 0.5 : 1,
             }}
           />
           <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
           <button
             type="button"
             onClick={() => void handleClose()}
-            disabled={closing || !closeSum.trim()}
+            disabled={closing || !closeSum.trim() || unresolvedFreon}
             style={{
               padding: "8px 18px", borderRadius: 8,
               fontSize: 13, fontWeight: 700,
-              background: closing || !closeSum.trim() ? "rgba(34,197,94,0.25)" : "var(--green)",
+              background: closing || !closeSum.trim() || unresolvedFreon
+                ? "rgba(34,197,94,0.25)" : "var(--green)",
               border: "none", color: "white",
-              cursor: closing || !closeSum.trim() ? "not-allowed" : "pointer",
+              cursor: closing || !closeSum.trim() || unresolvedFreon ? "not-allowed" : "pointer",
               transition: "all 0.18s",
             }}
           >
@@ -604,21 +624,118 @@ function MonthBlock({ mk, items, tasks, isAdmin }: {
   );
 }
 
+// ─── Freon fix modal ──────────────────────────────────────────────────────────
+
+const FREON_BADGE_OPTIONS = ["R134a", "R404A", "R410A", "R507", "R22"];
+
+interface UnknownFreonItem { client: Client; repair: Repair; vehicle?: Vehicle }
+
+function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose: () => void }) {
+  const [saving, setSaving] = useState<string | null>(null);
+
+  async function applyType(item: UnknownFreonItem, freonType: string) {
+    setSaving(item.repair.id);
+    const newRepairs = (item.client.repairs ?? []).map((r) => {
+      if (r.id !== item.repair.id) return r;
+      return {
+        ...r,
+        freonType,
+        tasks: (r.tasks ?? []).map((t) => t.freonTask ? { ...t, freonType } : t),
+      };
+    });
+    await updateClientArray(item.client.id, "repairs", newRepairs);
+    setSaving(null);
+  }
+
+  return (
+    <Modal title={`Уточнить тип фреона · ${items.length}`} onClose={onClose}>
+      {items.length === 0 ? (
+        <div style={{ padding: "24px 0", textAlign: "center", color: "#4ade80", fontWeight: 600 }}>
+          ✓ Все записи исправлены
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {items.map((item) => {
+            const brand = item.vehicle?.brand ?? item.vehicle?.model ?? "";
+            const isSaving = saving === item.repair.id;
+            return (
+              <div key={item.repair.id} style={{
+                background: "var(--bg3)", borderRadius: 10,
+                border: "1px solid var(--border)", padding: "10px 12px",
+              }}>
+                {/* Info row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  {item.vehicle?.plate && (
+                    <span style={{
+                      fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
+                      color: "#93c5fd", background: "rgba(59,130,246,0.12)",
+                      border: "1px solid rgba(59,130,246,0.25)", padding: "1px 7px", borderRadius: 5,
+                    }}>
+                      {item.vehicle.plate}
+                    </span>
+                  )}
+                  {brand && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{brand}</span>}
+                  <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>
+                    {item.client.name}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: "#67e8f9", marginBottom: 8 }}>
+                  ❄️ {item.repair.freonAmount} кг · {item.repair.date ? item.repair.date.slice(0, 10) : "—"}
+                </div>
+                {/* Badge picker */}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {FREON_BADGE_OPTIONS.map((fr) => (
+                    <button
+                      key={fr}
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void applyType(item, fr)}
+                      style={{
+                        padding: "3px 10px", borderRadius: 6,
+                        fontSize: 11, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer",
+                        border: "1px solid rgba(6,182,212,0.4)",
+                        background: "rgba(6,182,212,0.1)", color: "#22d3ee",
+                        opacity: isSaving ? 0.5 : 1,
+                      }}
+                    >
+                      {fr}
+                    </button>
+                  ))}
+                  {isSaving && <span style={{ fontSize: 11, color: "var(--text3)", alignSelf: "center" }}>сохраняем...</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Freon report section ─────────────────────────────────────────────────────
 
 function FreonSection({ clients }: { clients: Client[] }) {
   const [open, setOpen] = useState(false);
+  const [showFix, setShowFix] = useState(false);
 
   const stats = useMemo(() => {
-    const byType:  Record<string, number>                    = {};
-    const byMonth: Record<string, Record<string, number>>    = {};
-    let total = 0;
+    const byType:  Record<string, number>                 = {};
+    const byMonth: Record<string, Record<string, number>> = {};
+    const unknownItems: UnknownFreonItem[]                = [];
+    let total      = 0;
+    let unknownKg  = 0;
 
     clients.forEach((c) => {
       (c.repairs ?? []).forEach((r) => {
         const kg  = parseFloat(r.freonAmount ?? "0") || 0;
-        const typ = r.freonType;
-        if (kg <= 0 || !typ) return;
+        const typ = (r.freonType ?? "").trim();
+        if (kg <= 0) return;
+        if (!typ) {
+          unknownKg += kg;
+          const vehicle = (c.vehicles ?? []).find((v) => v.id === r.vehicleId);
+          unknownItems.push({ client: c, repair: r, vehicle });
+          return;
+        }
         const mk = r.date?.slice(0, 7) ?? "0000-00";
         byType[typ]  = (byType[typ]  ?? 0) + kg;
         if (!byMonth[mk]) byMonth[mk] = {};
@@ -630,11 +747,11 @@ function FreonSection({ clients }: { clients: Client[] }) {
     const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
     const monthKeys   = Object.keys(byMonth).filter((mk) => mk !== "0000-00").sort((a, b) => b.localeCompare(a));
     const allTypes    = typeEntries.map(([t]) => t);
-    const maxKg       = typeEntries[0]?.[1] ?? 1;
-    return { total, byType, byMonth, typeEntries, monthKeys, allTypes, maxKg };
+    const maxKg       = Math.max(typeEntries[0]?.[1] ?? 0, unknownKg, 1);
+    return { total, byType, byMonth, typeEntries, monthKeys, allTypes, maxKg, unknownKg, unknownItems };
   }, [clients]);
 
-  if (stats.total === 0) return null;
+  if (stats.total === 0 && stats.unknownKg === 0) return null;
 
   return (
     <div className="crm-section" style={{ animation: "fadeUp 0.5s ease 0.25s both" }}>
@@ -669,9 +786,49 @@ function FreonSection({ clients }: { clients: Client[] }) {
             </div>
           </div>
         ))}
+
+        {/* Unknown freon row */}
+        {stats.unknownKg > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text3)" }}>
+                  ❄️ Не определён
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowFix(true)}
+                  style={{
+                    fontSize: 10, fontWeight: 700, padding: "1px 8px", borderRadius: 5,
+                    background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                    color: "#fbbf24", cursor: "pointer",
+                  }}
+                >
+                  Исправить {stats.unknownItems.length}
+                </button>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>
+                {stats.unknownKg.toFixed(1)} кг
+              </span>
+            </div>
+            <div style={{ height: 7, background: "rgba(6,182,212,0.15)", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${(stats.unknownKg / stats.maxKg) * 100}%`,
+                background: "rgba(107,114,128,0.5)",
+                borderRadius: 4,
+                transition: "width 0.4s ease",
+              }} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Monthly table toggle */}
+      {showFix && (
+        <FreonFixModal items={stats.unknownItems} onClose={() => setShowFix(false)} />
+      )}
+
       {stats.monthKeys.length > 0 && (
         <>
           <button
