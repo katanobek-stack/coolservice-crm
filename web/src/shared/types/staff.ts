@@ -11,6 +11,12 @@ export function hasPermission(userRole: StaffRole, requiredRole: StaffRole): boo
   return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
 }
 
+export interface StaffPermissions {
+  dashboard_financials: boolean;
+  reports_amounts:      boolean;
+  pl_panel:             boolean;
+}
+
 export interface StaffMember {
   id: string;
   name?: string;
@@ -18,6 +24,7 @@ export interface StaffMember {
   email?: string;
   fcmTokens?: string[];
   fcmUpdatedAt?: string;
+  permissions?: Partial<StaffPermissions>;
 }
 
 export interface StaffProfileInput {

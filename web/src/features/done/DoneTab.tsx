@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
+import { usePermissions } from "../../shared/hooks/usePermissions";
 import { repairStatus } from "../../shared/utils/repair";
 import { fmtDate, fmtMoney } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
@@ -204,10 +205,11 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
 
 // ─── Repair detail modal ─────────────────────────────────────────────────────
 
-function RepairDetailModal({ item, isAdmin, onClose }: {
-  item:    DoneItem;
-  isAdmin: boolean;
-  onClose: () => void;
+function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
+  item:        DoneItem;
+  isAdmin:     boolean;
+  showAmounts: boolean;
+  onClose:     () => void;
 }) {
   const { staff }  = useData();
   const { repair, client, vehicle, assigneeNames } = item;
@@ -276,7 +278,7 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
             <span style={{ color: "#67e8f9" }}>{repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}</span>
           </div>
         )}
-        {isAdmin && costNum > 0 && (
+        {isAdmin && showAmounts && costNum > 0 && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>💰 Итого</span>
             <span style={{ color: "#4ade80", fontWeight: 700, fontFamily: "JetBrains Mono, monospace", fontSize: 14 }}>
@@ -409,7 +411,7 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
       )}
 
       {/* Featured cost block */}
-      {isAdmin && costNum > 0 && (
+      {isAdmin && showAmounts && costNum > 0 && (
         <div style={{
           padding: "14px 16px",
           background: "rgba(34,197,94,0.08)",
@@ -502,11 +504,12 @@ function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
 
 // ─── Repair card (closed history) ────────────────────────────────────────────
 
-function RepairCard({ item, isAdmin, isOwner, ownerUid }: {
-  item:     DoneItem;
-  isAdmin:  boolean;
-  isOwner:  boolean;
-  ownerUid: string;
+function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
+  item:        DoneItem;
+  isAdmin:     boolean;
+  showAmounts: boolean;
+  isOwner:     boolean;
+  ownerUid:    string;
 }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
@@ -617,7 +620,7 @@ function RepairCard({ item, isAdmin, isOwner, ownerUid }: {
 
         {/* Right: cost + badge + owner edit */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          {isAdmin && costNum > 0 && (
+          {isAdmin && showAmounts && costNum > 0 && (
             <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
               {fmtMoney(costNum)}
             </span>
@@ -640,7 +643,7 @@ function RepairCard({ item, isAdmin, isOwner, ownerUid }: {
           )}
         </div>
       </div>
-      {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} onClose={() => setShowDetail(false)} />}
+      {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} showAmounts={showAmounts} onClose={() => setShowDetail(false)} />}
       {showEdit   && <OwnerEditRepairModal item={item} uid={ownerUid} onClose={() => setShowEdit(false)} />}
     </>
   );
@@ -648,17 +651,18 @@ function RepairCard({ item, isAdmin, isOwner, ownerUid }: {
 
 // ─── Month block (collapsible) ────────────────────────────────────────────────
 
-function MonthBlock({ mk, items, tasks, isAdmin, isOwner, ownerUid }: {
-  mk:       string;
-  items:    DoneItem[];
-  tasks:    ServiceTask[];
-  isAdmin:  boolean;
-  isOwner:  boolean;
-  ownerUid: string;
+function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid }: {
+  mk:          string;
+  items:       DoneItem[];
+  tasks:       ServiceTask[];
+  isAdmin:     boolean;
+  showAmounts: boolean;
+  isOwner:     boolean;
+  ownerUid:    string;
 }) {
   const [open, setOpen] = useState(false);
 
-  const totalCost = isAdmin
+  const totalCost = isAdmin && showAmounts
     ? items.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0)
     : 0;
 
@@ -692,7 +696,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, isOwner, ownerUid }: {
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((i) => (
-            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} isOwner={isOwner} ownerUid={ownerUid} />
+            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} />
           ))}
           {tasks.map((t) => (
             <div
@@ -1179,7 +1183,9 @@ function FreonSection({ clients }: { clients: Client[] }) {
 export function DoneTab() {
   const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
   const { myProfile, isOwner, user }   = useAuth();
+  const { canSeeReportsAmounts }       = usePermissions();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
+  const showAmounts = isAdmin && canSeeReportsAmounts;
   const ownerUid  = user?.uid ?? "";
   const [search, setSearch] = useState("");
 
@@ -1421,7 +1427,7 @@ export function DoneTab() {
           <span className="section-count">
             {closedItems.length} рем.{doneTasks.length > 0 ? ` · ${doneTasks.length} задач` : ""}
           </span>
-          {isAdmin && totalRevenue > 0 && (
+          {showAmounts && totalRevenue > 0 && (
             <div className="section-actions">
               <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
                 {fmtMoney(totalRevenue)}
@@ -1477,7 +1483,7 @@ export function DoneTab() {
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
             {byMonth.map(([mk, { items, tasks: mTasks }]) => (
-              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} isOwner={isOwner} ownerUid={ownerUid} />
+              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} />
             ))}
           </div>
         )}

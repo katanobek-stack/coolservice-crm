@@ -4,8 +4,8 @@ import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
-import { saveStaffProfile } from "../../shared/firebase/firestore";
-import type { StaffMember, StaffRole } from "../../shared/types/staff";
+import { saveStaffProfile, saveStaffPermissions } from "../../shared/firebase/firestore";
+import type { StaffMember, StaffRole, StaffPermissions } from "../../shared/types/staff";
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   owner:    "Владелец",
@@ -82,13 +82,86 @@ function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () 
   );
 }
 
+// ─── Permission toggle (owner-only section on admin cards) ────────────────────
+
+const PERM_DEFS: Array<{ key: keyof StaffPermissions; icon: string; label: string; desc: string }> = [
+  { key: "dashboard_financials", icon: "📊", label: "Финансы дашборда",  desc: "Суммы, график детально, карточки выручки" },
+  { key: "reports_amounts",      icon: "📋", label: "Суммы в отчётах",   desc: "Итоговые суммы по заявкам" },
+  { key: "pl_panel",             icon: "💼", label: "P&L панель",         desc: "Полный доступ к разделу P&L" },
+];
+
+function PermissionToggles({ member }: { member: StaffMember }) {
+  const perms = member.permissions ?? {};
+  const [saving, setSaving] = useState<keyof StaffPermissions | null>(null);
+
+  async function toggle(key: keyof StaffPermissions) {
+    const current: StaffPermissions = {
+      dashboard_financials: perms.dashboard_financials !== false,
+      reports_amounts:      perms.reports_amounts      !== false,
+      pl_panel:             perms.pl_panel             !== false,
+    };
+    setSaving(key);
+    await saveStaffPermissions(member.id, { ...current, [key]: !current[key] });
+    setSaving(null);
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8F0FE",
+        background: "rgba(59,130,246,0.03)", borderRadius: "0 0 16px 16px",
+        margin: "12px -16px -16px", padding: "12px 16px 14px",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#98A2B3", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+        🔒 Доступ к данным
+      </div>
+      {PERM_DEFS.map(({ key, icon, label, desc }) => {
+        const enabled = perms[key] !== false;
+        const isSaving = saving === key;
+        return (
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            {/* Toggle switch */}
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void toggle(key)}
+              style={{
+                width: 38, height: 22, borderRadius: 11, flexShrink: 0,
+                background: enabled ? "#3b82f6" : "#D0D5DD",
+                border: "none", cursor: isSaving ? "not-allowed" : "pointer",
+                position: "relative", transition: "background 0.2s",
+                opacity: isSaving ? 0.6 : 1,
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, left: enabled ? 19 : 3,
+                width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: enabled ? "#172033" : "#98A2B3" }}>
+                {icon} {label}
+              </div>
+              <div style={{ fontSize: 11, color: "#98A2B3", marginTop: 1 }}>{desc}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Staff card ───────────────────────────────────────────────────────────────
 
-function StaffCard({ member, canEdit, onClick }: {
-  member: StaffMember; canEdit: boolean; onClick: () => void;
+function StaffCard({ member, canEdit, isOwner, onClick }: {
+  member: StaffMember; canEdit: boolean; isOwner: boolean; onClick: () => void;
 }) {
   const role   = member.role ?? "mechanic";
   const colors = ROLE_COLORS[role];
+  const showPerms = isOwner && role === "admin";
 
   return (
     <div
@@ -116,6 +189,8 @@ function StaffCard({ member, canEdit, onClick }: {
           {ROLE_LABELS[role]}
         </span>
       </div>
+
+      {showPerms && <PermissionToggles member={member} />}
     </div>
   );
 }
@@ -184,6 +259,7 @@ export function StaffTab() {
                 key={s.id}
                 member={s}
                 canEdit={canEditMember(s)}
+                isOwner={isOwner}
                 onClick={() => setEditing(s)}
               />
             ))}

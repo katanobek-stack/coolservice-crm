@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../features/auth";
 import { DataProvider, useData } from "../shared/context/DataContext";
+import { usePermissions } from "../shared/hooks/usePermissions";
 import { repairStatus } from "../shared/utils/repair";
 import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
@@ -45,8 +46,9 @@ const TABS: TabDef[] = [
   { id: "backup",   label: "Бэкап",     icon: "ti-database-export",  emoji: "💾", group: "finance", roles: ["admin"] },
 ];
 
-function canSeeTab(t: TabDef, role: StaffRole): boolean {
+function canSeeTab(t: TabDef, role: StaffRole, hidePnl = false): boolean {
   if (role === "owner") return true;
+  if (hidePnl && t.id === "pnl") return false;
   return !t.roles || t.roles.includes(role);
 }
 
@@ -102,7 +104,7 @@ function useFCMAndNotifications(myProfile: StaffMember | undefined) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount }: {
+function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount, hidePnl }: {
   tab:           Tab;
   onTab:         (t: Tab) => void;
   myProfile:     StaffMember | undefined;
@@ -110,13 +112,14 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
   activeRepairs: number;
   totalClients:  number;
   freezersCount: number;
+  hidePnl:       boolean;
 }) {
   const role = myProfile?.role ?? "mechanic";
 
   const groups: Array<{ key: string; label: string; tabs: TabDef[] }> = [
-    { key: "main",    label: "Главное",  tabs: TABS.filter((t) => t.group === "main"    && canSeeTab(t, role)) },
-    { key: "service", label: "Сервис",   tabs: TABS.filter((t) => t.group === "service" && canSeeTab(t, role)) },
-    { key: "finance", label: "Финансы",  tabs: TABS.filter((t) => t.group === "finance" && canSeeTab(t, role)) },
+    { key: "main",    label: "Главное",  tabs: TABS.filter((t) => t.group === "main"    && canSeeTab(t, role, hidePnl)) },
+    { key: "service", label: "Сервис",   tabs: TABS.filter((t) => t.group === "service" && canSeeTab(t, role, hidePnl)) },
+    { key: "finance", label: "Финансы",  tabs: TABS.filter((t) => t.group === "finance" && canSeeTab(t, role, hidePnl)) },
   ].filter((g) => g.tabs.length > 0);
 
   const initials = (myProfile?.name ?? myProfile?.email ?? "?")
@@ -221,14 +224,15 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "freezers", "done", "pnl"];
 
-function MobileNav({ tab, onTab, activeMine, role, onSignOut }: {
+function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
   tab:        Tab;
   onTab:      (t: Tab) => void;
   activeMine: number;
   role:       StaffRole;
   onSignOut:  () => void;
+  hidePnl:    boolean;
 }) {
-  const visibleTabs = TABS.filter((t) => MOBILE_TAB_IDS.includes(t.id) && canSeeTab(t, role));
+  const visibleTabs = TABS.filter((t) => MOBILE_TAB_IDS.includes(t.id) && canSeeTab(t, role, hidePnl));
 
   return (
     <nav className="mobile-nav">
@@ -280,20 +284,22 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut }: {
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 function Shell() {
-  const { myProfile, signOutUser }  = useAuth();
+  const { myProfile, signOutUser }   = useAuth();
   const { tasks, clients, freezers } = useData();
-  const [tab, setTab]               = useState<Tab>("stats");
-  const [showSearch, setShowSearch] = useState(false);
+  const { canSeePLPanel }            = usePermissions();
+  const [tab, setTab]                = useState<Tab>("stats");
+  const [showSearch, setShowSearch]  = useState(false);
 
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "owner";
   const uid     = myProfile?.id ?? "";
+  const hidePnl = !canSeePLPanel;
 
-  // Redirect to stats if current tab is not accessible for this role
+  // Redirect to stats if current tab is not accessible for this role or permissions
   useEffect(() => {
     const t = TABS.find((t) => t.id === tab);
-    if (t && !canSeeTab(t, role)) setTab("stats");
-  }, [role, tab]);
+    if (t && !canSeeTab(t, role, hidePnl)) setTab("stats");
+  }, [role, tab, hidePnl]);
 
   const activeMine = tasks.filter(
     (t) =>
@@ -318,7 +324,7 @@ function Shell() {
       case "calendar": return role !== "mechanic" ? <CalendarTab />  : null;
       case "freezers": return <FreezersTab />;
       case "done":     return role !== "mechanic" ? <DoneTab />      : null;
-      case "pnl":      return role !== "mechanic" ? <PnlTab />       : null;
+      case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
       case "staff":    return isAdmin             ? <StaffTab />     : null;
       case "backup":   return isAdmin             ? <BackupTab />    : null;
       default:         return null;
@@ -341,6 +347,7 @@ function Shell() {
           activeRepairs={activeRepairs}
           totalClients={clients.length}
           freezersCount={freezers.length}
+          hidePnl={hidePnl}
         />
 
         {/* Main area */}
@@ -357,7 +364,7 @@ function Shell() {
         </div>
 
         {/* Mobile bottom nav */}
-        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} role={role} onSignOut={() => void signOutUser()} />
+        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} role={role} onSignOut={() => void signOutUser()} hidePnl={hidePnl} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}

@@ -79,6 +79,10 @@ export function saveStaffProfile(uid: string, data: StaffProfileInput) {
   return setDoc(doc(getFirebaseDb(), "staff", uid), data, { merge: true });
 }
 
+export function saveStaffPermissions(uid: string, permissions: { dashboard_financials: boolean; reports_amounts: boolean; pl_panel: boolean }) {
+  return setDoc(doc(getFirebaseDb(), "staff", uid), { permissions }, { merge: true });
+}
+
 // ─── Expenses (commissions, etc.) ──────────────────────────────────────────
 export function addExpense(data: { category: string; month: string; amount: number; comment: string; createdBy: string }) {
   return addDoc(collection(getFirebaseDb(), "expenses"), { ...data, createdAt: serverTimestamp() });

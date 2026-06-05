@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
+import { usePermissions } from "../../shared/hooks/usePermissions";
 import { repairStatus, taskStatus, SERVICE_TYPES } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
@@ -78,9 +79,10 @@ function fmtK(n: number): string {
   return String(n);
 }
 
-function RevenueChart({ monthData, onBarClick }: {
-  monthData: { mk: string; label: string; rev: number; exp: number; cnt: number }[];
-  onBarClick?: (mk: string) => void;
+function RevenueChart({ monthData, onBarClick, hideAmounts }: {
+  monthData:    { mk: string; label: string; rev: number; exp: number; cnt: number }[];
+  onBarClick?:  (mk: string) => void;
+  hideAmounts?: boolean;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const data  = monthData ?? [];
@@ -101,7 +103,7 @@ function RevenueChart({ monthData, onBarClick }: {
     <div style={{ padding: "4px 16px 0", userSelect: "none" }}>
       {/* Hover info row */}
       <div style={{ height: 36, display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
-        {hov ? (() => {
+        {!hideAmounts && hov ? (() => {
           const profit = hov.rev - hov.exp;
           return (
             <>
@@ -117,7 +119,9 @@ function RevenueChart({ monthData, onBarClick }: {
             </>
           );
         })() : (
-          <span style={{ fontSize: 11, color: "var(--text3)" }}>{onBarClick ? "нажмите на месяц для деталей" : "наведите на месяц"}</span>
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>
+            {!hideAmounts && onBarClick ? "нажмите на месяц для деталей" : hideAmounts ? "" : "наведите на месяц"}
+          </span>
         )}
       </div>
 
@@ -652,9 +656,11 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { clients, tasks, staff, finance: rawFinance, expenses } = useData();
   const { myProfile } = useAuth();
+  const { canSeeDashboardFinancials } = usePermissions();
   const role           = myProfile?.role ?? "mechanic";
   const isAdmin        = role === "admin" || role === "owner";
   const showFinance    = role !== "mechanic";
+  const showAmounts    = showFinance && canSeeDashboardFinancials;
 
   const [showAllActive,    setShowAllActive]    = useState(false);
   const [selectedRepair,   setSelectedRepair]   = useState<EnrichedRepair | null>(null);
@@ -874,7 +880,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           delta={activeTasks > 0 ? `+${activeTasks} задач` : undefined}
           deltaUp={activeTasks > 0}
         />
-        {showFinance && (
+        {showAmounts && (
           <KpiCard
             label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#4ade80"
             value={curMonthRev > 0 ? fmtMoney(curMonthRev) : "—"}
@@ -945,17 +951,19 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                 </div>
               )}
             </div>
-            <RevenueChart monthData={monthData} onBarClick={setSelectedMonthKey} />
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
-                <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
+            <RevenueChart monthData={monthData} onBarClick={showAmounts ? setSelectedMonthKey : undefined} hideAmounts={!showAmounts} />
+            {showAmounts && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text3)", marginTop: 2 }}>{fmtMoney(prevMonthRev)}</div>
+                </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
-                <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text3)", marginTop: 2 }}>{fmtMoney(prevMonthRev)}</div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Mechanic productivity */}
@@ -983,7 +991,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       )}
 
       {/* Finance: Top clients */}
-      {showFinance && topClients.length > 0 && (
+      {showAmounts && topClients.length > 0 && (
         <Section title="Топ клиентов по выручке" icon="ti-trophy" count={`${topClients.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {(topClients || []).map((c) => (
@@ -1001,7 +1009,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       )}
 
       {/* Finance: Revenue by service type */}
-      {showFinance && byServiceType.length > 0 && (
+      {showAmounts && byServiceType.length > 0 && (
         <Section title="Выручка по типам услуг" icon="ti-chart-pie" count={`${byServiceType.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {(byServiceType || []).map((s) => (
