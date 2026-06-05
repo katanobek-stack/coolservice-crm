@@ -27,10 +27,17 @@ admin.initializeApp({
 
 async function setOwnerRole() {
   const auth = admin.auth();
+  const db   = admin.firestore();
+
   const user = await auth.getUserByEmail(OWNER_EMAIL);
   await auth.setCustomUserClaims(user.uid, { role: "owner" });
+
+  // Обновляем Firestore staff doc — роль вступает в силу без перелогина
+  await db.collection("staff").doc(user.uid).set({ role: "owner" }, { merge: true });
+
   console.log(`✅ Роль owner установлена для ${OWNER_EMAIL} (uid: ${user.uid})`);
-  console.log("ℹ️  Также установите role: 'owner' в документе Firestore staff/${uid}");
+  console.log("   ✓ Firebase Auth custom claim: role=owner");
+  console.log("   ✓ Firestore staff document обновлён");
   process.exit(0);
 }
 
