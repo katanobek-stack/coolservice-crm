@@ -28,9 +28,10 @@ const ROLE_ORDER: Record<StaffRole, number> = {
 // ─── Edit staff modal ─────────────────────────────────────────────────────────
 
 function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
-  const { isOwner } = useAuth();
   const [name,   setName]   = useState(member.name ?? "");
-  const [role,   setRole]   = useState<StaffRole>(member.role ?? "mechanic");
+  const [role,   setRole]   = useState<Exclude<StaffRole, "owner">>(
+    (member.role === "owner" ? "admin" : (member.role ?? "mechanic")) as Exclude<StaffRole, "owner">,
+  );
   const [saving, setSaving] = useState(false);
 
   const isEditingOwner = member.role === "owner";
@@ -38,7 +39,9 @@ function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () 
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    await saveStaffProfile(member.id, { name: name.trim(), role, email: member.email ?? "" });
+    // Preserve owner role — never overwrite it from client
+    const roleToSave: StaffRole = isEditingOwner ? "owner" : role;
+    await saveStaffProfile(member.id, { name: name.trim(), role: roleToSave, email: member.email ?? "" });
     onClose();
   }
 
@@ -49,32 +52,30 @@ function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () 
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван Иванов" />
       </FormGroup>
       <FormGroup label="Роль">
-        <Select
-          value={role}
-          onChange={(e) => setRole(e.target.value as StaffRole)}
-          disabled={isEditingOwner && !isOwner}
-        >
-          {isOwner && <option value="owner">Владелец</option>}
-          <option value="admin">Администратор</option>
-          <option value="manager">Менеджер</option>
-          <option value="mechanic">Механик</option>
-        </Select>
+        {isEditingOwner ? (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 14px", borderRadius: 10,
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+          }}>
+            <span style={{ fontSize: 16 }}>👑</span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#f87171" }}>Владелец</span>
+            <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>системная роль</span>
+          </div>
+        ) : (
+          <Select value={role} onChange={(e) => setRole(e.target.value as Exclude<StaffRole, "owner">)}>
+            <option value="admin">Администратор</option>
+            <option value="manager">Менеджер</option>
+            <option value="mechanic">Механик</option>
+          </Select>
+        )}
       </FormGroup>
-      {isEditingOwner && !isOwner && (
-        <div style={{
-          background: "rgba(239,68,68,0.08)", borderRadius: 10, padding: "10px 14px",
-          border: "1px solid rgba(239,68,68,0.2)", marginBottom: 12,
-          fontSize: 12, color: "#f87171",
-        }}>
-          Только владелец может изменить роль другого владельца
-        </div>
-      )}
       {!isEditingOwner && (
         <div className="bg-[#FAEEDA] rounded-xl p-3 border border-[#BA7517]/20 mb-3 text-xs text-[#BA7517]">
           ⚠️ Смена роли вступит в силу при следующем входе сотрудника в систему.
         </div>
       )}
-      <Button size="lg" onClick={() => void handleSave()} disabled={saving || (isEditingOwner && !isOwner)}>
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "Сохранение..." : "Сохранить"}
       </Button>
     </Modal>
