@@ -75,4 +75,13 @@ export interface Client {
   repairs: Repair[];
   appointments: Appointment[];
   createdAt?: unknown;
+  // Поля конвертации физлица в юрлицо
+  companyName?: string;
+  bankAccount?: string;
+  legalAddress?: string;
+  convertedFrom?: "individual";
+  convertedAt?: string;
+  convertedBy?: string;
+  previousName?: string;
+  comment?: string;
 }

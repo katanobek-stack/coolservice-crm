@@ -85,6 +85,87 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
   );
 }
 
+// ─── Convert to Company Modal ─────────────────────────────────────────────────
+
+function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: () => void }) {
+  const { user } = useAuth();
+  const [companyName,  setCompanyName]  = useState("");
+  const [inn,          setInn]          = useState(client.inn ?? "");
+  const [bankAccount,  setBankAccount]  = useState("");
+  const [legalAddress, setLegalAddress] = useState("");
+  const [comment,      setComment]      = useState("");
+  const [saving,       setSaving]       = useState(false);
+
+  async function handleConvert() {
+    if (!companyName.trim()) return;
+    setSaving(true);
+    try {
+      const data: Record<string, unknown> = {
+        clientType: "legal",
+        name: companyName.trim(),
+        companyName: companyName.trim(),
+        convertedFrom: "individual",
+        convertedAt: new Date().toISOString(),
+        convertedBy: user?.uid ?? "",
+        previousName: client.name,
+      };
+      if (inn.trim())          data.inn          = inn.trim();
+      if (bankAccount.trim())  data.bankAccount  = bankAccount.trim();
+      if (legalAddress.trim()) data.legalAddress = legalAddress.trim();
+      if (comment.trim())      data.comment      = comment.trim();
+      await updateClient(client.id, data as Partial<Client>);
+      onClose();
+    } catch (err) {
+      console.error("[ConvertToCompanyModal] handleConvert failed:", err);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Перевести в юр. лицо" onClose={onClose}>
+      <div style={{
+        background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)",
+        borderRadius: 12, padding: "10px 14px", marginBottom: 16,
+        fontSize: 12.5, color: "#fcd34d", lineHeight: 1.5,
+      }}>
+        ⚠️ Все заявки и машины клиента будут сохранены и привязаны к новому юр. лицу
+      </div>
+      <FormGroup label="Название компании *">
+        <Input placeholder="ООО «Пример»" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+      </FormGroup>
+      <FormGroup label="ИНН">
+        <Input placeholder="1234567890" value={inn} onChange={(e) => setInn(e.target.value)} />
+      </FormGroup>
+      <FormGroup label="Расчётный счёт">
+        <Input placeholder="40702810..." value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+      </FormGroup>
+      <FormGroup label="Юридический адрес">
+        <Input placeholder="г. Владивосток, ул. ..." value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} />
+      </FormGroup>
+      <FormGroup label="Комментарий">
+        <Textarea placeholder="бывший ИП Иванов С.А." value={comment} onChange={(e) => setComment(e.target.value)} />
+      </FormGroup>
+      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            flex: 1, padding: "13px 0", borderRadius: 14,
+            background: "var(--bg2)", border: "1px solid var(--border2)",
+            color: "var(--text2)", fontSize: 14, fontWeight: 700,
+            cursor: "pointer", fontFamily: "Manrope, sans-serif",
+          }}
+        >
+          Отмена
+        </button>
+        <Button size="lg" onClick={() => void handleConvert()} disabled={saving || !companyName.trim()}>
+          {saving ? "..." : "Конвертировать"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Add Client Modal ─────────────────────────────────────────────────────────
 
 function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => void }) {
@@ -997,9 +1078,10 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
 // ─── Client Detail ────────────────────────────────────────────────────────────
 
 function ClientDetail({ client, onClose }: { client: Client; onClose: () => void }) {
-  const { myProfile } = useAuth();
+  const { myProfile, isOwner } = useAuth();
+  const { staff } = useData();
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
+  const isAdmin = role === "admin" || role === "manager" || isOwner;
 
   const [showPickVehicle, setShowPickVehicle] = useState(false);
   const [pickedVehicleId, setPickedVehicleId] = useState<string | undefined>();
@@ -1009,6 +1091,12 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const [vehicleEdit,     setVehicleEdit]     = useState<Vehicle | null>(null);
   const [showAddVehicle,  setShowAddVehicle]  = useState(false);
   const [historyVehicle,  setHistoryVehicle]  = useState<Vehicle | null>(null);
+  const [showConvert,     setShowConvert]     = useState(false);
+
+  const isIndividual = (client.clientType ?? client.type ?? "phys") === "phys";
+  const convertedByName = client.convertedBy
+    ? (staff.find((s) => s.id === client.convertedBy)?.name ?? client.convertedBy)
+    : null;
 
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
   const vehicles      = client.vehicles ?? [];
@@ -1051,11 +1139,29 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         {client.contactPerson && <div style={{ fontSize: 12, color: "var(--text2)" }}>👤 {client.contactPerson}</div>}
         {client.subscription  && <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 600, marginTop: 5 }}>💰 Абонплата: {client.subscription} ₽/мес</div>}
         {client.note          && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6, fontStyle: "italic" }}>{client.note}</div>}
-        {isAdmin && (
-          <button type="button" onClick={() => setShowEditClient(true)} style={{ marginTop: 10, fontSize: 11.5, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
-            ✏️ Редактировать
-          </button>
+        {client.convertedFrom === "individual" && client.previousName && (
+          <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+            📋 Ранее: физлицо · {client.previousName}
+          </div>
         )}
+        {client.legalAddress && (
+          <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 4 }}>📍 {client.legalAddress}</div>
+        )}
+        {client.bankAccount && (
+          <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 3 }}>🏦 р/с {client.bankAccount}</div>
+        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: isAdmin || (isOwner && isIndividual) ? 10 : 0 }}>
+          {isAdmin && (
+            <button type="button" onClick={() => setShowEditClient(true)} style={{ fontSize: 11.5, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+              ✏️ Редактировать
+            </button>
+          )}
+          {isOwner && isIndividual && (
+            <button type="button" onClick={() => setShowConvert(true)} style={{ fontSize: 11.5, color: "#c4b5fd", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+              🏢 Перевести в юр. лицо
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── АВТОМОБИЛИ ── */}
@@ -1138,6 +1244,39 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
       {/* ── ЗАПИСИ ── */}
       <AppointmentsList client={client} isAdmin={isAdmin} />
 
+      {/* ── ИСТОРИЯ ИЗМЕНЕНИЙ ── */}
+      {client.convertedFrom === "individual" && (
+        <div style={sec}>
+          <SectionHeader title="История изменений" />
+          <div style={{ background: "var(--bg2)", borderRadius: 12, border: "1px solid var(--border)", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>🏢</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>Конвертация из физлица</span>
+            </div>
+            {client.previousName && (
+              <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 4 }}>
+                <span style={{ color: "var(--text3)" }}>Ранее: </span>{client.previousName}
+              </div>
+            )}
+            {client.convertedAt && (
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
+                Дата: {fmtDate(client.convertedAt)}
+              </div>
+            )}
+            {convertedByName && (
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
+                Кто: {convertedByName}
+              </div>
+            )}
+            {client.comment && (
+              <div style={{ fontSize: 12, color: "var(--text3)", fontStyle: "italic" }}>
+                {client.comment}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── УДАЛИТЬ ── */}
       {isAdmin && (
         <div style={{ marginTop: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
@@ -1154,6 +1293,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
       {showAddVehicle  && <VehicleModal           client={client} onClose={() => setShowAddVehicle(false)} />}
       {vehicleEdit     && <VehicleModal           client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
       {historyVehicle  && <VehicleHistoryModal    client={client} vehicle={historyVehicle} onClose={() => setHistoryVehicle(null)} />}
+      {showConvert     && <ConvertToCompanyModal  client={client} onClose={() => setShowConvert(false)} />}
     </Modal>
   );
 }
