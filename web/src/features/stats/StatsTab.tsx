@@ -78,32 +78,117 @@ function fmtK(n: number): string {
   return String(n);
 }
 
-function RevenueChart({ monthData }: { monthData: { label: string; rev: number; cnt: number }[] }) {
-  const safeMonthData = monthData || [];
-  const maxRev  = Math.max(...safeMonthData.map((m) => m.rev), 1);
-  const hasData = safeMonthData.some((m) => m.rev > 0);
+function RevenueChart({ monthData }: {
+  monthData: { label: string; rev: number; exp: number; cnt: number }[]
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const data  = monthData ?? [];
+  const n     = data.length || 1;
+  const maxVal = Math.max(
+    ...data.flatMap((m) => [m.rev, m.exp, Math.max(0, m.rev - m.exp)]),
+    1,
+  );
+
+  function barH(v: number): string {
+    if (v <= 0) return "2px";
+    return `${Math.max(6, (v / maxVal) * 100)}%`;
+  }
+
+  const hov = hovered !== null ? data[hovered] : null;
+
   return (
-    <div className="chart-bars">
-      {safeMonthData.map((m, i) => {
-        const isLast = i === monthData.length - 1;
-        const pct    = m.rev > 0 ? Math.max(8, (m.rev / maxRev) * 100) : 3;
-        return (
-          <div key={i} className="bar-wrap">
-            {m.rev > 0 && (
-              <span className="bar-value" style={isLast ? { color: "var(--cyan)" } : undefined}>
-                {fmtK(m.rev)}
+    <div style={{ padding: "4px 16px 0", userSelect: "none" }}>
+      {/* Hover info row */}
+      <div style={{ height: 36, display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
+        {hov ? (() => {
+          const profit = hov.rev - hov.exp;
+          return (
+            <>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", minWidth: 28 }}>{hov.label}</span>
+              <span style={{ fontSize: 11.5, color: "#60a5fa" }}>↑ {fmtK(hov.rev)}</span>
+              {hov.exp > 0 && <span style={{ fontSize: 11.5, color: "#f87171" }}>↓ {fmtK(hov.exp)}</span>}
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: profit >= 0 ? "#4ade80" : "#f87171" }}>
+                = {profit >= 0 ? "+" : "−"}{fmtK(Math.abs(profit))}
               </span>
-            )}
+            </>
+          );
+        })() : (
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>наведите на месяц</span>
+        )}
+      </div>
+
+      {/* Bars */}
+      <div style={{ display: "flex", gap: 4, height: 90, alignItems: "flex-end" }}>
+        {data.map((m, i) => {
+          const profit = m.rev - m.exp;
+          const isLast = i === n - 1;
+          return (
             <div
-              className={`bar ${isLast && hasData ? "active" : ""}`}
-              style={{ height: `${pct}%`, animationDelay: `${0.5 + i * 0.06}s`, opacity: m.rev > 0 ? undefined : 0.2 }}
-            />
-            <span className="bar-label" style={isLast ? { color: "var(--cyan)" } : undefined}>
-              {m.label}
-            </span>
+              key={i}
+              style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%", cursor: "default" }}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: "100%" }}>
+                {/* Revenue — blue */}
+                <div style={{
+                  width: 10, height: barH(m.rev),
+                  background: isLast ? "#3b82f6" : "rgba(59,130,246,0.5)",
+                  borderRadius: "3px 3px 0 0",
+                  transition: "height 0.4s ease",
+                }} />
+                {/* Expenses — red */}
+                <div style={{
+                  width: 10, height: barH(m.exp),
+                  background: m.exp > 0
+                    ? (isLast ? "#ef4444" : "rgba(239,68,68,0.55)")
+                    : "rgba(107,114,128,0.15)",
+                  borderRadius: "3px 3px 0 0",
+                  transition: "height 0.4s ease",
+                }} />
+                {/* Profit — green (0 if negative) */}
+                <div style={{
+                  width: 10, height: barH(Math.max(0, profit)),
+                  background: profit > 0
+                    ? (isLast ? "#22c55e" : "rgba(34,197,94,0.55)")
+                    : "rgba(107,114,128,0.15)",
+                  borderRadius: "3px 3px 0 0",
+                  transition: "height 0.4s ease",
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Month labels */}
+      <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
+        {data.map((m, i) => (
+          <div key={i} style={{
+            flex: 1, textAlign: "center", fontSize: 10,
+            color: i === n - 1 ? "var(--cyan)" : "var(--text3)",
+          }}>
+            {m.label}
           </div>
-        );
-      })}
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        display: "flex", gap: 16, justifyContent: "center", alignItems: "center",
+        fontSize: 11, padding: "9px 0 4px", marginTop: 6, borderTop: "1px solid var(--border)",
+      }}>
+        {([
+          { color: "#3b82f6", label: "Выручка" },
+          { color: "#ef4444", label: "Расходы" },
+          { color: "#22c55e", label: "Прибыль" },
+        ] as const).map(({ color, label }) => (
+          <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text3)" }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: "inline-block", flexShrink: 0 }} />
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -433,10 +518,10 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { clients, tasks, staff } = useData();
+  const { clients, tasks, staff, finance: rawFinance } = useData();
   const { myProfile } = useAuth();
   const role           = myProfile?.role ?? "mechanic";
-  const isAdmin        = role === "admin";
+  const isAdmin        = role === "admin" || role === "owner";
   const showFinance    = role !== "mechanic";
 
   const [showAllActive,  setShowAllActive]  = useState(false);
@@ -467,25 +552,47 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
 
-  // ── Monthly revenue (last 6 months) ──────────────────────────────────────
+  // ── Monthly revenue + expenses (last 6 months) ───────────────────────────
   const monthData = useMemo(() => {
-    const map = new Map<string, { rev: number; cnt: number }>();
+    type FinDoc = {
+      boxes?:     Array<{ cost: number }>;
+      salaries?:  Array<{ salary: number }>;
+      elecBills?: Record<string, number>;
+      purchases?: Array<{ date?: string; amount: number }>;
+    };
+    const fin = rawFinance as FinDoc;
+
+    // Fixed monthly costs (box rent + salaries — same every month)
+    const fixedMonthly =
+      (fin.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0) +
+      (fin.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+
+    // One-off purchases grouped by month
+    const purchByMonth: Record<string, number> = {};
+    (fin.purchases ?? []).forEach((p) => {
+      const mk = p.date?.slice(0, 7);
+      if (mk) purchByMonth[mk] = (purchByMonth[mk] ?? 0) + (parseFloat(String(p.amount)) || 0);
+    });
+
+    const map = new Map<string, { rev: number; exp: number; cnt: number }>();
     for (let i = 5; i >= 0; i--) {
-      const d  = new Date(now.getFullYear(), now.getMonth()-i, 1);
-      const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      map.set(mk, { rev: 0, cnt: 0 });
+      const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mk  = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const elec  = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
+      const purch = purchByMonth[mk] ?? 0;
+      map.set(mk, { rev: 0, exp: fixedMonthly + elec + purch, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
-      const mk = r.date?.slice(0,7);
+      const mk = r.date?.slice(0, 7);
       if (!mk || !map.has(mk)) return;
       const prev = map.get(mk)!;
-      map.set(mk, { rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
+      map.set(mk, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
     });
     return Array.from(map.entries()).map(([mk, v]) => ({
-      label: MONTH_NAMES[parseInt(mk.split("-")[1])-1],
+      label: MONTH_NAMES[parseInt(mk.split("-")[1]) - 1],
       ...v,
     }));
-  }, [doneRepairs]);
+  }, [doneRepairs, rawFinance]);
 
   const curMonthRev  = doneRepairs.filter((r) => r.date?.slice(0,7) === curMonthKey)
     .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
