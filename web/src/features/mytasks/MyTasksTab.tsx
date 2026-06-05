@@ -308,7 +308,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
   const { staff }     = useData();
   const uid     = myProfile?.id ?? "";
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
+  const isAdmin = role === "owner" || role === "admin" || role === "manager";
   const isDone  = subtask.status === "done";
   const myDone  = subtask.doneBy.includes(uid);
   const [showComment, setShowComment] = useState(false);
@@ -413,7 +413,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
   const { staff }     = useData();
   const uid     = myProfile?.id ?? "";
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
+  const isAdmin = role === "owner" || role === "admin" || role === "manager";
 
   const isDone    = task.status === "done";
   const myDone    = (task.doneBy ?? []).includes(uid);
@@ -559,7 +559,7 @@ function RepairTaskRow({ task, client, repair }: {
   const { staff }     = useData();
   const uid     = myProfile?.id ?? "";
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin" || role === "manager";
+  const isAdmin = role === "owner" || role === "admin" || role === "manager";
   const isDone  = taskStatus(task) === "done";
   const myDone  = (task.doneBy ?? []).includes(uid);
   const isFreon = task.freonTask === true;
@@ -1014,7 +1014,7 @@ export function MyTasksTab() {
 
   const uid              = myProfile?.id ?? "";
   const role             = myProfile?.role ?? "mechanic";
-  const isManagerOrAdmin = role === "admin" || role === "manager";
+  const isManagerOrAdmin = role === "owner" || role === "admin" || role === "manager";
 
   // Standalone service tasks
   const activeSvcTasks = tasks.filter((t) => {
