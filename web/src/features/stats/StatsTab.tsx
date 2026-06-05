@@ -78,8 +78,9 @@ function fmtK(n: number): string {
   return String(n);
 }
 
-function RevenueChart({ monthData }: {
-  monthData: { label: string; rev: number; exp: number; cnt: number }[]
+function RevenueChart({ monthData, onBarClick }: {
+  monthData: { mk: string; label: string; rev: number; exp: number; cnt: number }[];
+  onBarClick?: (mk: string) => void;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const data  = monthData ?? [];
@@ -110,10 +111,13 @@ function RevenueChart({ monthData }: {
               <span style={{ fontSize: 11.5, fontWeight: 700, color: profit >= 0 ? "#4ade80" : "#f87171" }}>
                 = {profit >= 0 ? "+" : "−"}{fmtK(Math.abs(profit))}
               </span>
+              {onBarClick && (
+                <span style={{ fontSize: 10, color: "var(--text3)" }}>· нажмите</span>
+              )}
             </>
           );
         })() : (
-          <span style={{ fontSize: 11, color: "var(--text3)" }}>наведите на месяц</span>
+          <span style={{ fontSize: 11, color: "var(--text3)" }}>{onBarClick ? "нажмите на месяц для деталей" : "наведите на месяц"}</span>
         )}
       </div>
 
@@ -122,14 +126,21 @@ function RevenueChart({ monthData }: {
         {data.map((m, i) => {
           const profit = m.rev - m.exp;
           const isLast = i === n - 1;
+          const isHov  = hovered === i;
           return (
             <div
               key={i}
-              style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%", cursor: "default" }}
+              style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%", cursor: onBarClick ? "pointer" : "default" }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
+              onClick={() => onBarClick?.(m.mk)}
             >
-              <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: "100%" }}>
+              <div style={{
+                display: "flex", gap: 2, alignItems: "flex-end", height: "100%",
+                opacity: isHov ? 1 : undefined,
+                filter: isHov ? "brightness(1.2)" : undefined,
+                transition: "filter 0.15s",
+              }}>
                 {/* Revenue — blue */}
                 <div style={{
                   width: 10, height: barH(m.rev),
@@ -412,6 +423,124 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
   );
 }
 
+// ─── Month detail modal ───────────────────────────────────────────────────────
+
+function MonthDetailModal({ mk, doneRepairs, rawFinance, onClose }: {
+  mk:          string;
+  doneRepairs: EnrichedRepair[];
+  rawFinance:  unknown;
+  onClose:     () => void;
+}) {
+  type FinDoc = {
+    boxes?:     Array<{ id: string; name: string; cost: number }>;
+    salaries?:  Array<{ uid: string; name: string; salary: number }>;
+    elecBills?: Record<string, number>;
+    purchases?: Array<{ id: string; date: string; amount: number; comment: string }>;
+  };
+  const fin = rawFinance as FinDoc;
+
+  const [y, m] = mk.split("-");
+  const title  = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
+
+  // Revenue by client
+  const clientRevMap = new Map<string, { name: string; amount: number }>();
+  doneRepairs
+    .filter((r) => r.date?.slice(0, 7) === mk)
+    .forEach((r) => {
+      const prev = clientRevMap.get(r.clientId) ?? { name: r.clientName, amount: 0 };
+      clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
+    });
+  const clientRevList = Array.from(clientRevMap.values()).filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
+  const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0);
+
+  // Expenses
+  const salary      = (fin.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+  const rent        = (fin.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0);
+  const electricity = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
+  const purchases   = (fin.purchases ?? []).filter((p) => p.date?.slice(0, 7) === mk).reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
+  const totalExpenses = salary + rent + electricity + purchases;
+
+  const profit = totalRevenue - totalExpenses;
+
+  const expenseRows = [
+    { icon: "👥", label: "Зарплата",      amount: salary      },
+    { icon: "⚡", label: "Электричество", amount: electricity },
+    { icon: "🏠", label: "Аренда",        amount: rent        },
+    { icon: "🔧", label: "Закупки",       amount: purchases   },
+  ].filter((e) => e.amount > 0);
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "7px 0", borderBottom: "1px solid var(--border)", fontSize: 13,
+  };
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+
+        {/* Block 1: Revenues */}
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+            💰 Доходы
+          </div>
+          {clientRevList.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text3)", padding: "8px 0" }}>Нет данных</div>
+          ) : (
+            clientRevList.map((c) => (
+              <div key={c.name} style={rowStyle}>
+                <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8, fontSize: 12.5 }}>
+                  {c.name}
+                </span>
+                <span style={{ color: "#4ade80", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
+                  {fmtMoney(c.amount)}
+                </span>
+              </div>
+            ))
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0 0", borderTop: "1px solid var(--border2)", marginTop: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalRevenue)}</span>
+          </div>
+        </div>
+
+        {/* Block 2: Expenses */}
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+            📤 Расходы
+          </div>
+          {expenseRows.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text3)", padding: "8px 0" }}>Нет данных</div>
+          ) : (
+            expenseRows.map((e) => (
+              <div key={e.label} style={rowStyle}>
+                <span style={{ color: "var(--text)", fontSize: 12.5 }}>{e.icon} {e.label}</span>
+                <span style={{ color: "#f87171", fontFamily: "JetBrains Mono, monospace", fontWeight: 700 }}>{fmtMoney(e.amount)}</span>
+              </div>
+            ))
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0 0", borderTop: "1px solid var(--border2)", marginTop: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalExpenses)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Net profit row */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginTop: 16, padding: "12px 16px", borderRadius: 12,
+        background:  profit >= 0 ? "rgba(34,197,94,0.1)"  : "rgba(239,68,68,0.1)",
+        border: `1px solid ${profit >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Чистая прибыль</span>
+        <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: profit >= 0 ? "#4ade80" : "#f87171" }}>
+          {profit >= 0 ? "+" : ""}{fmtMoney(profit)}
+        </span>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({ title, icon, count, actions, children }: {
@@ -524,8 +653,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const isAdmin        = role === "admin" || role === "owner";
   const showFinance    = role !== "mechanic";
 
-  const [showAllActive,  setShowAllActive]  = useState(false);
-  const [selectedRepair, setSelectedRepair] = useState<EnrichedRepair | null>(null);
+  const [showAllActive,    setShowAllActive]    = useState(false);
+  const [selectedRepair,   setSelectedRepair]   = useState<EnrichedRepair | null>(null);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
 
   const now          = new Date();
   const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
@@ -589,6 +719,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       map.set(mk, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
     });
     return Array.from(map.entries()).map(([mk, v]) => ({
+      mk,
       label: MONTH_NAMES[parseInt(mk.split("-")[1]) - 1],
       ...v,
     }));
@@ -802,7 +933,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                 </div>
               )}
             </div>
-            <RevenueChart monthData={monthData} />
+            <RevenueChart monthData={monthData} onBarClick={setSelectedMonthKey} />
             <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
               <div>
                 <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
@@ -975,6 +1106,15 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           repair={selectedRepair}
           isAdmin={showFinance}
           onClose={() => setSelectedRepair(null)}
+        />
+      )}
+
+      {selectedMonthKey && (
+        <MonthDetailModal
+          mk={selectedMonthKey}
+          doneRepairs={doneRepairs}
+          rawFinance={rawFinance}
+          onClose={() => setSelectedMonthKey(null)}
         />
       )}
 
