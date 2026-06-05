@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
+import { useAuth } from "../auth";
 import { repairStatus } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate, genId } from "../../shared/utils/format";
 import { Button } from "../../shared/ui/Button";
 import { Input, FormGroup } from "../../shared/ui/Input";
-import { saveFinance } from "../../shared/firebase/firestore";
+import { saveFinance, addExpense, deleteExpense } from "../../shared/firebase/firestore";
 
 // ─── Types for finance document ───────────────────────────────────────────────
 
@@ -131,7 +132,8 @@ function ExpensesModal({ finance, onClose }: { finance: FinanceDoc; onClose: () 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function PnlTab() {
-  const { clients, freezers, finance: rawFinance } = useData();
+  const { clients, freezers, finance: rawFinance, expenses } = useData();
+  const { user } = useAuth();
   const finance = rawFinance as unknown as FinanceDoc;
   const now     = new Date();
   const curMK   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
@@ -143,6 +145,10 @@ export function PnlTab() {
   const [newPurCmt,    setNewPurCmt]    = useState("");
   const [savingPur,    setSavingPur]    = useState(false);
   const [savingElec,   setSavingElec]   = useState(false);
+  const [newComMK,     setNewComMK]     = useState(curMK);
+  const [newComAmt,    setNewComAmt]    = useState("");
+  const [newComCmt,    setNewComCmt]    = useState("");
+  const [savingCom,    setSavingCom]    = useState(false);
 
   // ── Revenue ──────────────────────────────────────────────────────────────
   const allDone = useMemo(
@@ -186,10 +192,31 @@ export function PnlTab() {
   const curPurchases = purchases.filter((p) => p.date?.slice(0,7) === curMK);
   const curPurTotal  = curPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
 
+  // ── Commissions (current month) ───────────────────────────────────────────
+  const commissions    = expenses.filter((e) => e.category === "commission");
+  const curCommissions = commissions.filter((e) => e.month === curMK);
+  const curCommTotal   = curCommissions.reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
+
   // ── P&L ──────────────────────────────────────────────────────────────────
   const curMonthRev = monthStats.find((m) => m.month === curMK)?.revenue ?? 0;
   const curIncome   = curMonthRev + rentalIncome;
-  const curProfit   = curIncome - totalExpenses - curPurTotal;
+  const curProfit   = curIncome - totalExpenses - curPurTotal - curCommTotal;
+
+  async function addCommission() {
+    const amt = parseFloat(newComAmt);
+    if (isNaN(amt) || amt <= 0) return;
+    setSavingCom(true);
+    await addExpense({
+      category:  "commission",
+      month:     newComMK,
+      amount:    amt,
+      comment:   newComCmt.trim(),
+      createdBy: user?.uid ?? "",
+    });
+    setNewComAmt("");
+    setNewComCmt("");
+    setSavingCom(false);
+  }
 
   async function saveElecBill() {
     const val = parseFloat(elecInput);
@@ -239,8 +266,8 @@ export function PnlTab() {
         <div className="kpi-card" style={{ borderTop: "2px solid var(--red)" }}>
           <i className="ti ti-trending-down kpi-icon" />
           <div className="kpi-label">Расходы</div>
-          <div className="kpi-value" style={{ color: "#f87171" }}>{fmtMoney(totalExpenses + curPurTotal)}</div>
-          <div className="kpi-delta muted">Пост. + закупки</div>
+          <div className="kpi-value" style={{ color: "#f87171" }}>{fmtMoney(totalExpenses + curPurTotal + curCommTotal)}</div>
+          <div className="kpi-delta muted">Пост. + закупки + ком.</div>
         </div>
         <div className="kpi-card blue" style={{ gridColumn: "span 2" }}>
           <i className={`ti ${curProfit >= 0 ? "ti-trophy" : "ti-alert-circle"} kpi-icon`} />
@@ -369,6 +396,126 @@ export function PnlTab() {
                 </span>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Комиссионные ────────────────────────────────────────────────── */}
+      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.25s both" }}>
+        <div className="section-header" style={{ background: "rgba(245,158,11,0.06)" }}>
+          <i className="ti ti-handshake" style={{ fontSize: 17, color: "#fbbf24" }} />
+          <span className="section-title">Комиссионные</span>
+          <span className="section-count">{CURMONTH_LABEL}</span>
+          {curCommTotal > 0 && (
+            <div className="section-actions">
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24", fontFamily: "JetBrains Mono, monospace" }}>
+                {fmtMoney(curCommTotal)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Add form */}
+        <div style={{ display: "flex", gap: 8, padding: "12px 16px", flexWrap: "wrap" as const, borderBottom: "1px solid var(--border)" }}>
+          <select
+            value={newComMK}
+            onChange={(e) => setNewComMK(e.target.value)}
+            style={{
+              padding: "8px 10px", borderRadius: 8, fontSize: 13,
+              background: "var(--bg3)", border: "1px solid var(--border2)",
+              color: "var(--text)", outline: "none", cursor: "pointer", flexShrink: 0,
+            }}
+          >
+            {Array.from({ length: 6 }, (_, i) => {
+              const d  = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              return <option key={mk} value={mk}>{MONTH_NAMES[d.getMonth()]} {d.getFullYear()}</option>;
+            })}
+          </select>
+          <input
+            type="number"
+            placeholder="Сумма ₽"
+            value={newComAmt}
+            onChange={(e) => setNewComAmt(e.target.value)}
+            style={{
+              width: 110, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+              outline: "none", fontFamily: "JetBrains Mono, monospace",
+            }}
+            onKeyDown={(e) => e.key === "Enter" && void addCommission()}
+          />
+          <input
+            type="text"
+            placeholder="Комментарий (необязательно)"
+            value={newComCmt}
+            onChange={(e) => setNewComCmt(e.target.value)}
+            style={{
+              flex: 1, minWidth: 130, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
+              outline: "none",
+            }}
+            onKeyDown={(e) => e.key === "Enter" && void addCommission()}
+          />
+          <button
+            type="button"
+            onClick={() => void addCommission()}
+            disabled={savingCom}
+            style={{
+              padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+              background: "rgba(245,158,11,0.18)", border: "1px solid rgba(245,158,11,0.35)",
+              color: "#fbbf24", cursor: savingCom ? "not-allowed" : "pointer",
+            }}
+          >
+            {savingCom ? "..." : "+ Добавить"}
+          </button>
+        </div>
+
+        {/* Commission list */}
+        {commissions.length === 0 ? (
+          <div style={{ padding: "18px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Нет записей о комиссионных
+          </div>
+        ) : (
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {[...commissions].sort((a, b) => b.month.localeCompare(a.month)).map((e, i) => (
+              <div
+                key={e.id}
+                className="tr-animate"
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "11px 16px", borderBottom: "1px solid var(--border)",
+                  animationDelay: `${i * 0.05}s`,
+                }}
+              >
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                  background: "rgba(245,158,11,0.12)", color: "#fbbf24",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+                }}>
+                  🤝
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>
+                    {mkLabel(e.month)}
+                  </div>
+                  {e.comment && (
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {e.comment}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                  {fmtMoney(e.amount)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void deleteExpense(e.id)}
+                  style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text3)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

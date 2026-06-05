@@ -425,10 +425,11 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
 
 // ─── Month detail modal ───────────────────────────────────────────────────────
 
-function MonthDetailModal({ mk, doneRepairs, rawFinance, onClose }: {
+function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
   mk:          string;
   doneRepairs: EnrichedRepair[];
   rawFinance:  unknown;
+  expenses:    Array<{ id: string; category: string; month: string; amount: number; comment: string }>;
   onClose:     () => void;
 }) {
   type FinDoc = {
@@ -458,15 +459,17 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, onClose }: {
   const rent        = (fin.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0);
   const electricity = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
   const purchases   = (fin.purchases ?? []).filter((p) => p.date?.slice(0, 7) === mk).reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
-  const totalExpenses = salary + rent + electricity + purchases;
+  const commission  = expenses.filter((e) => e.category === "commission" && e.month === mk).reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
+  const totalExpenses = salary + rent + electricity + purchases + commission;
 
   const profit = totalRevenue - totalExpenses;
 
   const expenseRows = [
-    { icon: "👥", label: "Зарплата",      amount: salary      },
-    { icon: "⚡", label: "Электричество", amount: electricity },
-    { icon: "🏠", label: "Аренда",        amount: rent        },
-    { icon: "🔧", label: "Закупки",       amount: purchases   },
+    { icon: "👥", label: "Зарплата",        amount: salary      },
+    { icon: "⚡", label: "Электричество",   amount: electricity },
+    { icon: "🏠", label: "Аренда",          amount: rent        },
+    { icon: "🔧", label: "Закупки",         amount: purchases   },
+    { icon: "🤝", label: "Комиссионные",    amount: commission  },
   ].filter((e) => e.amount > 0);
 
   const rowStyle: React.CSSProperties = {
@@ -647,7 +650,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { clients, tasks, staff, finance: rawFinance } = useData();
+  const { clients, tasks, staff, finance: rawFinance, expenses } = useData();
   const { myProfile } = useAuth();
   const role           = myProfile?.role ?? "mechanic";
   const isAdmin        = role === "admin" || role === "owner";
@@ -704,13 +707,22 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       if (mk) purchByMonth[mk] = (purchByMonth[mk] ?? 0) + (parseFloat(String(p.amount)) || 0);
     });
 
+    // Commissions grouped by month
+    const commByMonth: Record<string, number> = {};
+    expenses
+      .filter((e) => e.category === "commission")
+      .forEach((e) => {
+        if (e.month) commByMonth[e.month] = (commByMonth[e.month] ?? 0) + (parseFloat(String(e.amount)) || 0);
+      });
+
     const map = new Map<string, { rev: number; exp: number; cnt: number }>();
     for (let i = 5; i >= 0; i--) {
       const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk  = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const elec  = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
       const purch = purchByMonth[mk] ?? 0;
-      map.set(mk, { rev: 0, exp: fixedMonthly + elec + purch, cnt: 0 });
+      const comm  = commByMonth[mk] ?? 0;
+      map.set(mk, { rev: 0, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
       const mk = r.date?.slice(0, 7);
@@ -723,7 +735,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       label: MONTH_NAMES[parseInt(mk.split("-")[1]) - 1],
       ...v,
     }));
-  }, [doneRepairs, rawFinance]);
+  }, [doneRepairs, rawFinance, expenses]);
 
   const curMonthRev  = doneRepairs.filter((r) => r.date?.slice(0,7) === curMonthKey)
     .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
@@ -1114,6 +1126,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           mk={selectedMonthKey}
           doneRepairs={doneRepairs}
           rawFinance={rawFinance}
+          expenses={expenses}
           onClose={() => setSelectedMonthKey(null)}
         />
       )}

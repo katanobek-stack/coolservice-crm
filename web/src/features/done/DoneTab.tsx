@@ -1177,7 +1177,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function DoneTab() {
-  const { clients, tasks, staff, freezers, finance: rawFinance } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
   const { myProfile, isOwner, user }   = useAuth();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
   const ownerUid  = user?.uid ?? "";
@@ -1334,10 +1334,12 @@ export function DoneTab() {
     const salCost    = salaries.reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
     const mkPurchases = purchases.filter((p) => p.date?.slice(0, 7) === exportMK);
     const purTotal   = mkPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
+    const mkCommissions = expenses.filter((e) => e.category === "commission" && e.month === exportMK);
+    const commTotal  = mkCommissions.reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
     const rentalInc  = freezers
       .filter((f) => (f as { rented?: boolean }).rented || (f as { status?: string }).status === "rented")
       .reduce((s, f) => s + (parseFloat(String((f as { rentAmount?: number }).rentAmount ?? 0)) || 0), 0);
-    const totalExp   = boxCost + salCost + elecCost + purTotal;
+    const totalExp   = boxCost + salCost + elecCost + purTotal + commTotal;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const expRows: any[][] = [["Статья расхода", "Сумма ₽"]];
@@ -1345,6 +1347,7 @@ export function DoneTab() {
     salaries.filter((s) => s.salary > 0).forEach((s) => expRows.push([`Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0]));
     if (elecCost > 0) expRows.push([`Электричество (${mLabel})`, elecCost]);
     mkPurchases.forEach((p) => expRows.push([`Закупка: ${p.comment}`, parseFloat(String(p.amount)) || 0]));
+    mkCommissions.forEach((c) => expRows.push([`Комиссионные${c.comment ? `: ${c.comment}` : ""}`, parseFloat(String(c.amount)) || 0]));
     expRows.push([], ["ИТОГО РАСХОДЫ", totalExp]);
 
     const ws2 = XLSX.utils.aoa_to_sheet(expRows);
@@ -1369,6 +1372,7 @@ export function DoneTab() {
       ...salaries.filter((s) => s.salary > 0).map((s) => [`  Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0, "₽"]),
       ...(elecCost > 0  ? [[`  Электричество`, elecCost, "₽"]] : []),
       ...(purTotal > 0  ? [[`  Закупки и материалы`, purTotal, "₽"]] : []),
+      ...(commTotal > 0 ? [[`  Комиссионные`, commTotal, "₽"]] : []),
       ["ИТОГО РАСХОДЫ", totalExp, "₽"],
       [],
       ["═══ ПРИБЫЛЬ ═══"],

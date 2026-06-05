@@ -78,3 +78,12 @@ export function saveFinance(data: Record<string, unknown>) {
 export function saveStaffProfile(uid: string, data: StaffProfileInput) {
   return setDoc(doc(getFirebaseDb(), "staff", uid), data, { merge: true });
 }
+
+// ─── Expenses (commissions, etc.) ──────────────────────────────────────────
+export function addExpense(data: { category: string; month: string; amount: number; comment: string; createdBy: string }) {
+  return addDoc(collection(getFirebaseDb(), "expenses"), { ...data, createdAt: serverTimestamp() });
+}
+
+export function deleteExpense(id: string) {
+  return deleteDoc(doc(getFirebaseDb(), "expenses", id));
+}
