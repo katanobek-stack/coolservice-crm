@@ -46,6 +46,7 @@ const TABS: TabDef[] = [
 ];
 
 function canSeeTab(t: TabDef, role: StaffRole): boolean {
+  if (role === "owner") return true;
   return !t.roles || t.roles.includes(role);
 }
 
@@ -121,7 +122,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
   const initials = (myProfile?.name ?? myProfile?.email ?? "?")
     .split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
-  const roleLabel = { admin: "Администратор", manager: "Менеджер", mechanic: "Механик" }[role];
+  const roleLabel = ({ owner: "Владелец", admin: "Администратор", manager: "Менеджер", mechanic: "Механик" } as Record<string, string>)[role] ?? "Механик";
 
   function getBadge(id: Tab): { count: number; variant: "red" | "blue" | "" } | null {
     if (id === "mytasks" && activeRepairs > 0) return { count: activeRepairs, variant: "red" };
@@ -285,7 +286,7 @@ function Shell() {
   const [showSearch, setShowSearch] = useState(false);
 
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "owner";
   const uid     = myProfile?.id ?? "";
 
   // Redirect to stats if current tab is not accessible for this role

@@ -25,6 +25,7 @@ interface AuthContextValue {
   loginError: string;
   staff: StaffMember[];
   myProfile: StaffMember | undefined;
+  isOwner: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
   saveProfile: (name: string, role: StaffRole) => Promise<void>;
@@ -58,10 +59,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [claimRole, setClaimRole] = useState<StaffRole | null>(null);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      if (nextUser) {
+        void nextUser.getIdTokenResult().then((tokenResult) => {
+          const r = tokenResult.claims["role"];
+          setClaimRole(typeof r === "string" ? (r as StaffRole) : null);
+        });
+      } else {
+        setClaimRole(null);
+      }
       setUser(nextUser);
       setAuthLoading(false);
       setLoginLoading(false);
@@ -88,9 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [user]);
 
-  const myProfile = useMemo(
-    () => (user ? staff.find((member) => member.id === user.uid) : undefined),
-    [staff, user],
+  const myProfile = useMemo(() => {
+    if (!user) return undefined;
+    const profile = staff.find((member) => member.id === user.uid);
+    if (!profile) return undefined;
+    // Custom claim owner overrides Firestore role
+    if (claimRole === "owner") return { ...profile, role: "owner" as StaffRole };
+    return profile;
+  }, [staff, user, claimRole]);
+
+  const isOwner = useMemo(
+    () => myProfile?.role === "owner" || claimRole === "owner",
+    [myProfile, claimRole],
   );
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -132,12 +151,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginError,
       staff,
       myProfile,
+      isOwner,
       signIn,
       signOutUser,
       saveProfile,
     }),
     [
       authLoading,
+      isOwner,
       loginError,
       loginLoading,
       myProfile,

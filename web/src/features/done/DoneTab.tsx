@@ -6,11 +6,14 @@ import { repairStatus } from "../../shared/utils/repair";
 import { fmtDate, fmtMoney } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
-import { Input } from "../../shared/ui/Input";
+import { Input, Select, FormGroup } from "../../shared/ui/Input";
+import { Button } from "../../shared/ui/Button";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
 import { updateClientArray } from "../../shared/firebase/firestore";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
+
+const FREON_TYPES = ["R134a", "R404A", "R410A", "R507", "R22", "R507a"];
 
 const MONTH_NAMES_FULL = [
   "Январь","Февраль","Март","Апрель","Май","Июнь",
@@ -436,15 +439,81 @@ function RepairDetailModal({ item, isAdmin, onClose }: {
   );
 }
 
+// ─── Tasks preview (inline in card) ──────────────────────────────────────────
+
+function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (tasks.length === 0) return null;
+  const MAX      = 3;
+  const showing  = expanded ? tasks : tasks.slice(0, MAX);
+  const remaining = tasks.length - MAX;
+
+  return (
+    <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
+      {showing.map((t) => {
+        const done    = t.status === "done";
+        const isFreon = t.freonTask === true;
+        return (
+          <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 5, marginBottom: 2 }}>
+            <span style={{ fontSize: 11, color: done ? "#4ade80" : "var(--text3)", flexShrink: 0, marginTop: 1 }}>
+              {isFreon ? "❄️" : done ? "✓" : "○"}
+            </span>
+            <span style={{
+              fontSize: 11.5,
+              color: done ? "var(--text2)" : "var(--text3)",
+              textDecoration: done && !isFreon ? "line-through" : "none",
+              flex: 1, minWidth: 0,
+            }}>
+              {t.description}
+              {isFreon && t.freonType && (
+                <span style={{ color: "#67e8f9" }}> · {t.freonType}{t.freonKg ? ` ${t.freonKg} кг` : ""}</span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+      {!expanded && remaining > 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+          style={{
+            fontSize: 11, color: "var(--accent2)", background: "none",
+            border: "none", cursor: "pointer", padding: "2px 0", marginTop: 2,
+          }}
+        >
+          и ещё {remaining}...
+        </button>
+      )}
+      {expanded && tasks.length > MAX && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+          style={{
+            fontSize: 11, color: "var(--text3)", background: "none",
+            border: "none", cursor: "pointer", padding: "2px 0", marginTop: 2,
+          }}
+        >
+          ▲ Скрыть
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Repair card (closed history) ────────────────────────────────────────────
 
-function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
+function RepairCard({ item, isAdmin, isOwner, ownerUid }: {
+  item:     DoneItem;
+  isAdmin:  boolean;
+  isOwner:  boolean;
+  ownerUid: string;
+}) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
+  const [showEdit,   setShowEdit]   = useState(false);
   const isCancelled = repairStatus(repair) === "cancelled";
 
   function openDetail() {
-    console.log("[RepairCard] opening detail:", { repair, client, vehicle, assigneeNames, isAdmin });
     setShowDetail(true);
   }
   const costNum     = parseFloat(repair.cost ?? "0") || 0;
@@ -513,11 +582,28 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
             </div>
           )}
 
-          {repair.freonType && (
-            <div style={{ fontSize: 11.5, color: "var(--cyan)", marginBottom: 4 }}>
-              ❄️ {repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}
-            </div>
-          )}
+          {(() => {
+            // Show freon from repair-level or aggregate from tasks
+            const repairFreon = repair.freonType
+              ? `❄️ ${repair.freonType}${repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}`
+              : null;
+            const taskFreonMap: Record<string, number> = {};
+            (repair.tasks ?? []).forEach((t) => {
+              if (t.freonTask && t.freonType) {
+                taskFreonMap[t.freonType] = (taskFreonMap[t.freonType] ?? 0) + (parseFloat(t.freonKg ?? "0") || 0);
+              }
+            });
+            const taskFreonStr = Object.entries(taskFreonMap)
+              .map(([type, kg]) => `❄️ ${type}${kg > 0 ? ` · ${kg.toFixed(1)} кг` : ""}`)
+              .join("  ");
+            const freonLine = repairFreon ?? (taskFreonStr || null);
+            if (!freonLine) return null;
+            return (
+              <div style={{ fontSize: 11.5, color: "var(--cyan)", marginBottom: 4 }}>
+                {freonLine}
+              </div>
+            );
+          })()}
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {assigneeNames && (
@@ -525,9 +611,11 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
             )}
             <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
           </div>
+
+          <TasksPreview tasks={repair.tasks ?? []} />
         </div>
 
-        {/* Right: cost + badge */}
+        {/* Right: cost + badge + owner edit */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {isAdmin && costNum > 0 && (
             <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
@@ -537,20 +625,36 @@ function RepairCard({ item, isAdmin }: { item: DoneItem; isAdmin: boolean }) {
           <Badge variant={isCancelled ? "gray" : "green"}>
             {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Готово"}
           </Badge>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowEdit(true); }}
+              style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)",
+                color: "#a78bfa", cursor: "pointer",
+              }}
+            >
+              ✏️ Ред.
+            </button>
+          )}
         </div>
       </div>
       {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} onClose={() => setShowDetail(false)} />}
+      {showEdit   && <OwnerEditRepairModal item={item} uid={ownerUid} onClose={() => setShowEdit(false)} />}
     </>
   );
 }
 
 // ─── Month block (collapsible) ────────────────────────────────────────────────
 
-function MonthBlock({ mk, items, tasks, isAdmin }: {
-  mk:      string;
-  items:   DoneItem[];
-  tasks:   ServiceTask[];
-  isAdmin: boolean;
+function MonthBlock({ mk, items, tasks, isAdmin, isOwner, ownerUid }: {
+  mk:       string;
+  items:    DoneItem[];
+  tasks:    ServiceTask[];
+  isAdmin:  boolean;
+  isOwner:  boolean;
+  ownerUid: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -588,7 +692,7 @@ function MonthBlock({ mk, items, tasks, isAdmin }: {
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((i) => (
-            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} />
+            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} isOwner={isOwner} ownerUid={ownerUid} />
           ))}
           {tasks.map((t) => (
             <div
@@ -625,8 +729,6 @@ function MonthBlock({ mk, items, tasks, isAdmin }: {
 }
 
 // ─── Freon fix modal ──────────────────────────────────────────────────────────
-
-const FREON_BADGE_OPTIONS = ["R134a", "R404A", "R410A", "R507", "R22"];
 
 interface UnknownFreonItem { client: Client; repair: Repair; vehicle?: Vehicle }
 
@@ -684,7 +786,7 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
                 </div>
                 {/* Badge picker */}
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {FREON_BADGE_OPTIONS.map((fr) => (
+                  {FREON_TYPES.map((fr) => (
                     <button
                       key={fr}
                       type="button"
@@ -708,6 +810,178 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
           })}
         </div>
       )}
+    </Modal>
+  );
+}
+
+// ─── Owner edit repair modal ──────────────────────────────────────────────────
+
+function OwnerEditRepairModal({ item, uid, onClose }: {
+  item:    DoneItem;
+  uid:     string;
+  onClose: () => void;
+}) {
+  const { repair, client } = item;
+
+  const [freonType,   setFreonType]   = useState(repair.freonType ?? "");
+  const [freonAmount, setFreonAmount] = useState(repair.freonAmount ?? "");
+  const [cost,        setCost]        = useState(repair.cost ?? "");
+  const [status,      setStatus]      = useState<"in_progress" | "done" | "cancelled">(repair.status ?? "done");
+  const [date,        setDate]        = useState(repair.date ?? "");
+  const [tasks,       setTasks]       = useState<RepairTask[]>([...(repair.tasks ?? [])]);
+  const [saving,      setSaving]      = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const updatedRepairs = (client.repairs ?? []).map((r) => {
+      if (r.id !== repair.id) return r;
+      return {
+        ...r,
+        freonType:   freonType   || undefined,
+        freonAmount: freonAmount || undefined,
+        cost,
+        status,
+        date,
+        tasks,
+        editedBy: uid,
+        editedAt: new Date().toISOString(),
+      };
+    });
+    await updateClientArray(client.id, "repairs", updatedRepairs);
+    setSaving(false);
+    onClose();
+  }
+
+  function updateTask(id: string, patch: Partial<RepairTask>) {
+    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, ...patch } : t));
+  }
+
+  function removeTask(id: string) {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  function addTask() {
+    const newTask: RepairTask = {
+      id:          crypto.randomUUID(),
+      description: "",
+      assignees:   [],
+      doneBy:      [],
+      status:      "in_progress",
+    };
+    setTasks((prev) => [...prev, newTask]);
+  }
+
+  const inputStyle = {
+    width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13,
+    background: "var(--bg3)", border: "1px solid var(--border2)",
+    color: "var(--text)", outline: "none",
+  };
+
+  return (
+    <Modal title="✏️ Редактировать ремонт" onClose={onClose}>
+
+      {/* Freon */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <FormGroup label="Тип фреона">
+          <Select value={freonType} onChange={(e) => setFreonType(e.target.value)}>
+            <option value="">— не указан —</option>
+            {FREON_TYPES.map((f) => <option key={f} value={f}>{f}</option>)}
+          </Select>
+        </FormGroup>
+        <FormGroup label="Кол-во фреона (кг)">
+          <input
+            type="number"
+            step={0.1}
+            min={0}
+            value={freonAmount}
+            onChange={(e) => setFreonAmount(e.target.value)}
+            placeholder="0.0"
+            style={inputStyle}
+          />
+        </FormGroup>
+      </div>
+
+      {/* Cost + status */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <FormGroup label="Сумма ₽">
+          <input
+            type="number"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            placeholder="0"
+            style={inputStyle}
+          />
+        </FormGroup>
+        <FormGroup label="Статус">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as "in_progress" | "done" | "cancelled")}>
+            <option value="in_progress">В работе</option>
+            <option value="done">Выполнено</option>
+            <option value="cancelled">Отказ</option>
+          </Select>
+        </FormGroup>
+      </div>
+
+      {/* Date */}
+      <FormGroup label="Дата начала">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={inputStyle}
+        />
+      </FormGroup>
+
+      {/* Tasks */}
+      <div style={{ marginTop: 4, marginBottom: 14 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: "var(--text3)",
+          textTransform: "uppercase" as const, letterSpacing: "0.5px",
+          marginBottom: 8,
+        }}>
+          Задачи · {tasks.length}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {tasks.map((t) => (
+            <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="text"
+                value={t.description}
+                onChange={(e) => updateTask(t.id, { description: e.target.value })}
+                placeholder="Описание задачи"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => removeTask(t.id)}
+                style={{
+                  width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(239,68,68,0.3)",
+                  background: "rgba(239,68,68,0.08)", color: "#f87171",
+                  cursor: "pointer", fontSize: 16, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addTask}
+          style={{
+            marginTop: 8, padding: "6px 14px", borderRadius: 8,
+            fontSize: 12, fontWeight: 600,
+            background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.25)",
+            color: "var(--accent2)", cursor: "pointer",
+          }}
+        >
+          + Добавить задачу
+        </button>
+      </div>
+
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+        {saving ? "Сохранение..." : "Сохранить изменения"}
+      </Button>
     </Modal>
   );
 }
@@ -904,8 +1178,9 @@ function FreonSection({ clients }: { clients: Client[] }) {
 
 export function DoneTab() {
   const { clients, tasks, staff, freezers, finance: rawFinance } = useData();
-  const { myProfile }             = useAuth();
+  const { myProfile, isOwner, user }   = useAuth();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
+  const ownerUid  = user?.uid ?? "";
   const [search, setSearch] = useState("");
 
   const now   = new Date();
@@ -1198,7 +1473,7 @@ export function DoneTab() {
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
             {byMonth.map(([mk, { items, tasks: mTasks }]) => (
-              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} />
+              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} isOwner={isOwner} ownerUid={ownerUid} />
             ))}
           </div>
         )}

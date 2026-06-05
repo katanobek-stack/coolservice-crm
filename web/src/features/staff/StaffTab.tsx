@@ -8,23 +8,32 @@ import { saveStaffProfile } from "../../shared/firebase/firestore";
 import type { StaffMember, StaffRole } from "../../shared/types/staff";
 
 const ROLE_LABELS: Record<StaffRole, string> = {
+  owner:    "Владелец",
   admin:    "Администратор",
   manager:  "Менеджер",
   mechanic: "Механик",
 };
 
 const ROLE_COLORS: Record<StaffRole, { bg: string; text: string }> = {
-  admin:    { bg: "rgba(245,158,11,0.15)", text: "#fbbf24" },
-  manager:  { bg: "rgba(59,130,246,0.15)", text: "var(--accent2)" },
-  mechanic: { bg: "rgba(34,197,94,0.15)",  text: "#4ade80" },
+  owner:    { bg: "rgba(239,68,68,0.15)",   text: "#f87171" },
+  admin:    { bg: "rgba(245,158,11,0.15)",  text: "#fbbf24" },
+  manager:  { bg: "rgba(59,130,246,0.15)",  text: "var(--accent2)" },
+  mechanic: { bg: "rgba(34,197,94,0.15)",   text: "#4ade80" },
+};
+
+const ROLE_ORDER: Record<StaffRole, number> = {
+  owner: 0, admin: 1, manager: 2, mechanic: 3,
 };
 
 // ─── Edit staff modal ─────────────────────────────────────────────────────────
 
 function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
+  const { isOwner } = useAuth();
   const [name,   setName]   = useState(member.name ?? "");
   const [role,   setRole]   = useState<StaffRole>(member.role ?? "mechanic");
   const [saving, setSaving] = useState(false);
+
+  const isEditingOwner = member.role === "owner";
 
   async function handleSave() {
     if (!name.trim()) return;
@@ -40,16 +49,32 @@ function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () 
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван Иванов" />
       </FormGroup>
       <FormGroup label="Роль">
-        <Select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+        <Select
+          value={role}
+          onChange={(e) => setRole(e.target.value as StaffRole)}
+          disabled={isEditingOwner && !isOwner}
+        >
+          {isOwner && <option value="owner">Владелец</option>}
           <option value="admin">Администратор</option>
           <option value="manager">Менеджер</option>
           <option value="mechanic">Механик</option>
         </Select>
       </FormGroup>
-      <div className="bg-[#FAEEDA] rounded-xl p-3 border border-[#BA7517]/20 mb-3 text-xs text-[#BA7517]">
-        ⚠️ Смена роли вступит в силу при следующем входе сотрудника в систему.
-      </div>
-      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+      {isEditingOwner && !isOwner && (
+        <div style={{
+          background: "rgba(239,68,68,0.08)", borderRadius: 10, padding: "10px 14px",
+          border: "1px solid rgba(239,68,68,0.2)", marginBottom: 12,
+          fontSize: 12, color: "#f87171",
+        }}>
+          Только владелец может изменить роль другого владельца
+        </div>
+      )}
+      {!isEditingOwner && (
+        <div className="bg-[#FAEEDA] rounded-xl p-3 border border-[#BA7517]/20 mb-3 text-xs text-[#BA7517]">
+          ⚠️ Смена роли вступит в силу при следующем входе сотрудника в систему.
+        </div>
+      )}
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving || (isEditingOwner && !isOwner)}>
         {saving ? "Сохранение..." : "Сохранить"}
       </Button>
     </Modal>
@@ -98,26 +123,37 @@ function StaffCard({ member, canEdit, onClick }: {
 
 export function StaffTab() {
   const { staff } = useData();
-  const { myProfile } = useAuth();
+  const { myProfile, isOwner } = useAuth();
   const role    = myProfile?.role ?? "mechanic";
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "owner";
 
   const [editing, setEditing] = useState<StaffMember | null>(null);
 
   const sorted = [...staff].sort((a, b) => {
-    const order: Record<StaffRole, number> = { admin: 0, manager: 1, mechanic: 2 };
-    return (order[a.role ?? "mechanic"] ?? 2) - (order[b.role ?? "mechanic"] ?? 2);
+    return (ROLE_ORDER[a.role ?? "mechanic"] ?? 3) - (ROLE_ORDER[b.role ?? "mechanic"] ?? 3);
   });
+
+  function canEditMember(member: StaffMember): boolean {
+    if (!isAdmin) return false;
+    if (member.role === "owner") return isOwner;
+    return true;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
       {/* KPI */}
       <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
-        {(["admin", "manager", "mechanic"] as StaffRole[]).map((r) => {
+        {(["owner", "admin", "manager", "mechanic"] as StaffRole[]).map((r) => {
           const count = staff.filter((s) => s.role === r).length;
+          if (r === "owner" && count === 0) return null;
           const c     = ROLE_COLORS[r];
-          const icons: Record<StaffRole, string> = { admin: "ti-shield", manager: "ti-user-star", mechanic: "ti-tools" };
+          const icons: Record<StaffRole, string> = {
+            owner:    "ti-crown",
+            admin:    "ti-shield",
+            manager:  "ti-user-star",
+            mechanic: "ti-tools",
+          };
           return (
             <div key={r} className="kpi-card" style={{ borderTop: `2px solid ${c.text}` }}>
               <i className={`ti ${icons[r]} kpi-icon`} />
@@ -143,7 +179,12 @@ export function StaffTab() {
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
             {sorted.map((s) => (
-              <StaffCard key={s.id} member={s} canEdit={isAdmin} onClick={() => setEditing(s)} />
+              <StaffCard
+                key={s.id}
+                member={s}
+                canEdit={canEditMember(s)}
+                onClick={() => setEditing(s)}
+              />
             ))}
           </div>
         )}
