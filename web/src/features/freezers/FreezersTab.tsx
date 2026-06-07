@@ -343,28 +343,9 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
 
 // ─── Isometric freezer card ───────────────────────────────────────────────────
 
-function FanBlades({ cx, cy, r, spinning }: { cx: number; cy: number; r: number; spinning: boolean }) {
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={r + 1} fill="rgba(15,25,45,0.7)" stroke="rgba(100,140,180,0.4)" strokeWidth="0.6" />
-      <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: spinning ? "fanSpin 0.7s linear infinite" : "none" }}>
-        <ellipse cx={cx} cy={cy - r * 0.55} rx={r * 0.38} ry={r * 0.6} fill="rgba(186,230,253,0.75)" />
-        <ellipse cx={cx + r * 0.55} cy={cy} rx={r * 0.6} ry={r * 0.38} fill="rgba(186,230,253,0.6)" />
-        <ellipse cx={cx} cy={cy + r * 0.55} rx={r * 0.38} ry={r * 0.6} fill="rgba(186,230,253,0.75)" />
-        <ellipse cx={cx - r * 0.55} cy={cy} rx={r * 0.6} ry={r * 0.38} fill="rgba(186,230,253,0.6)" />
-      </g>
-      <circle cx={cx} cy={cy} r={r * 0.22} fill="rgba(120,160,210,0.9)" />
-    </g>
-  );
-}
-
 function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => void }) {
   const rented   = isRented(freezer);
   const isActive = !rented;
-  const uid      = freezer.id.slice(-4);
-
-  const edgeColor = rented ? "rgba(96,165,250,0.8)"  : "rgba(148,163,184,0.30)";
-  const ew        = rented ? 1.4 : 0.7;
 
   return (
     <div
@@ -383,73 +364,103 @@ function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => vo
         position: "relative",
       }}
     >
-      <svg width="100%" viewBox="0 0 200 140" style={{ display: "block", overflow: "visible" }}>
+      <svg viewBox="0 0 680 360" width="100%" role="img" style={{ display: "block" }}>
+        <style>{`
+          @keyframes spin{to{transform:rotate(360deg)}}
+          @keyframes spinR{to{transform:rotate(-360deg)}}
+          @keyframes hl{0%{transform:translateX(0);opacity:0}18%{opacity:.78}100%{transform:translateX(-36px);opacity:0}}
+          @keyframes bl{0%,100%{opacity:1}47%,53%{opacity:.1}}
+          @keyframes pu{0%,100%{transform:scale(1)}50%{transform:scale(1.028)}}
+        `}</style>
         <defs>
-          <filter id={`glow${uid}`} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="2.5" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-          <linearGradient id={`tg${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"   stopColor={rented ? "rgba(147,197,253,0.22)" : "rgba(180,210,255,0.10)"} />
-            <stop offset="100%" stopColor={rented ? "rgba(59,130,246,0.08)"  : "rgba(90,130,200,0.05)"} />
-          </linearGradient>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </marker>
         </defs>
 
-        {/* ── Container body ── */}
-        {/* Top face */}
-        <polygon points="20,60 110,20 190,60 110,100"
-          fill={`url(#tg${uid})`} stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
-        {/* Front face */}
-        <polygon points="20,60 110,100 110,132 20,92"
-          fill={rented ? "rgba(59,130,246,0.10)" : "rgba(80,110,170,0.06)"}
-          stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
-        {/* Right face */}
-        <polygon points="110,100 190,60 190,92 110,132"
-          fill={rented ? "rgba(30,80,200,0.13)" : "rgba(50,80,150,0.05)"}
-          stroke={edgeColor} strokeWidth={ew} strokeLinejoin="round" />
+        {/* КРЫША */}
+        <polygon points="80,148 260,148 488,14 308,14" fill="#1c3248" stroke="#1e4060" strokeWidth="1.5"/>
+        <line x1="130" y1="148" x2="358" y2="14" stroke="#142436" strokeWidth=".8"/>
+        <line x1="180" y1="148" x2="408" y2="14" stroke="#142436" strokeWidth=".8"/>
+        <line x1="230" y1="148" x2="458" y2="14" stroke="#142436" strokeWidth=".8"/>
 
-        {/* Vertical ribs — front face */}
-        {[0.33, 0.66].map((t, i) => (
-          <line key={i}
-            x1={20 + t * 90} y1={60 + t * 40}
-            x2={20 + t * 90} y2={92 + t * 40}
-            stroke={edgeColor} strokeWidth={ew * 0.55} opacity={0.5} />
+        {/* БОКОВАЯ СТЕНКА */}
+        <polygon points="260,348 488,214 488,14 260,148" fill="#14253a" stroke="#1e4060" strokeWidth="1.5"/>
+        <line x1="260" y1="330" x2="488" y2="196" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="312" x2="488" y2="178" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="294" x2="488" y2="160" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="276" x2="488" y2="142" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="258" x2="488" y2="124" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="240" x2="488" y2="106" stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="222" x2="488" y2="88"  stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="204" x2="488" y2="70"  stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="186" x2="488" y2="52"  stroke="#0e1e30" strokeWidth="1.2"/>
+        <line x1="260" y1="168" x2="488" y2="34"  stroke="#0e1e30" strokeWidth="1.2"/>
+
+        {/* РЕФАГРЕГАТ — фронтальный торец */}
+        <polygon points="80,348 260,348 260,148 80,148" fill="#0b1724" stroke="#1e4060" strokeWidth="2"/>
+        <line x1="80" y1="284" x2="260" y2="284" stroke="#1a3858" strokeWidth="1.5"/>
+
+        {/* Решётки */}
+        {[172,180,188,196,204,212,220,228,236,244,252,260,268,276].map(y => (
+          <g key={y}>
+            <line x1="82" y1={y} x2="110" y2={y} stroke="#142c44" strokeWidth=".8"/>
+            <line x1="228" y1={y} x2="256" y2={y} stroke="#142c44" strokeWidth=".8"/>
+          </g>
         ))}
-        {/* Vertical ribs — right face */}
-        {[0.33, 0.66].map((t, i) => (
-          <line key={i}
-            x1={110 + t * 80} y1={100 - t * 40}
-            x2={110 + t * 80} y2={132 - t * 40}
-            stroke={edgeColor} strokeWidth={ew * 0.55} opacity={0.5} />
+
+        {/* ВЕНТИЛЯТОР */}
+        <g transform="translate(170,216)">
+          <circle r="60" fill="#08111f" stroke="#1a3248" strokeWidth="2"/>
+          <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: "spinR .7s linear infinite" }}>
+            <circle r="55" fill="#060c18" stroke="#102030" strokeWidth="1"/>
+            {[0,60,120,180,240,300].map(deg => (
+              <path key={deg} d="M0 0C-4-12-12-32-6-42C0-52 14-28 0 0Z" fill="#0d3a56" transform={`rotate(${deg})`}/>
+            ))}
+            <circle r="10" fill="#060e1c" stroke="#145880" strokeWidth="1.5"/>
+            <circle r="5"  fill="#050b18" stroke="#1a6090" strokeWidth="1"/>
+          </g>
+          <circle r="60" fill="none" stroke="#0e2438" strokeWidth="1.5"/>
+        </g>
+
+        {/* ПАТРУБКИ */}
+        <line x1="174" y1="283" x2="174" y2="270" stroke="#922010" strokeWidth="5" strokeLinecap="round"/>
+        <rect x="168" y="266" width="12" height="7" rx="2" fill="#7a1a0c" stroke="#a02810" strokeWidth=".8"/>
+        <line x1="92" y1="319" x2="82" y2="319" stroke="#124870" strokeWidth="5" strokeLinecap="round"/>
+        <rect x="78" y="313" width="7" height="12" rx="2" fill="#0e3860" stroke="#1a5888" strokeWidth=".8"/>
+
+        {/* КОМПРЕССОР BITZER */}
+        <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: "pu 1.9s ease-in-out infinite" }}>
+          <rect x="90" y="292" width="164" height="52" rx="26" fill="#09121e" stroke="#1e3e5c" strokeWidth="1.8"/>
+          {[296,299,302,305,308,311,314,317,320,323,326,329,332,335,338].map(y => (
+            <line key={y} x1="116" y1={y} x2="244" y2={y} stroke="#0e2535" strokeWidth="1.1"/>
+          ))}
+          <rect x="124" y="285" width="112" height="16" rx="3" fill="#07101c" stroke="#1a4060" strokeWidth="1.2"/>
+          <circle cx="131" cy="293" r="3.5" fill="#0a1c2e" stroke="#1e4060" strokeWidth=".8"/>
+          <circle cx="155" cy="293" r="3.5" fill="#0a1c2e" stroke="#1e4060" strokeWidth=".8"/>
+          <circle cx="185" cy="293" r="3.5" fill="#0a1c2e" stroke="#1e4060" strokeWidth=".8"/>
+          <circle cx="229" cy="293" r="3.5" fill="#0a1c2e" stroke="#1e4060" strokeWidth=".8"/>
+          <circle cx="234" cy="318" r="8"   fill="#06101e" stroke="#1a4060" strokeWidth="1.2"/>
+          <circle cx="234" cy="318" r="5"   fill="#040d1c" stroke="#145a80" strokeWidth="1"/>
+          <circle cx="234" cy="318" r="2.5" fill="#030b18" stroke="#1a6090" strokeWidth=".8"/>
+          <rect x="120" y="309" width="62" height="14" rx="2" fill="#03090f" stroke="#1a4060" strokeWidth=".8"/>
+          <text x="151" y="320" textAnchor="middle" fill="#2060a0" fontSize="9" fontFamily="monospace" fontWeight="bold" letterSpacing="1">BITZER</text>
+          <circle cx="248" cy="302" r="3" fill="#0a1c2e" stroke="#1e3e58" strokeWidth=".8"/>
+          <circle cx="252" cy="318" r="3" fill="#0a1c2e" stroke="#1e3e58" strokeWidth=".8"/>
+          <circle cx="248" cy="334" r="3" fill="#0a1c2e" stroke="#1e3e58" strokeWidth=".8"/>
+        </g>
+
+        {/* ГОРЯЧИЙ ВОЗДУХ */}
+        {[{y:196,d:0},{y:216,d:.4},{y:236,d:.8}].map(({y,d}) => (
+          <g key={y} style={{ animation: `hl 1.5s linear infinite ${d}s` }}>
+            <line x1="75" y1={y} x2="36" y2={y} stroke="#b02808" strokeWidth="2.5" markerEnd="url(#ar)"/>
+          </g>
         ))}
 
-        {/* ── Blue edge glow when rented ── */}
-        {rented && (
-          <>
-            <line x1="20" y1="60" x2="20" y2="92"   stroke="rgba(96,165,250,0.65)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
-            <line x1="20" y1="60" x2="110" y2="20"  stroke="rgba(96,165,250,0.55)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
-            <line x1="190" y1="60" x2="190" y2="92" stroke="rgba(96,165,250,0.65)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
-            <line x1="110" y1="20" x2="190" y2="60" stroke="rgba(96,165,250,0.55)" strokeWidth="1.5" filter={`url(#glow${uid})`} />
-          </>
-        )}
-
-        {/* ── Carrier unit on top-left of top face ── */}
-        {/* Carrier top */}
-        <polygon points="38,54 84,32 122,54 76,76"
-          fill="rgba(22,32,52,0.85)" stroke="rgba(100,130,170,0.55)" strokeWidth="0.9" />
-        {/* Carrier front */}
-        <polygon points="38,54 76,76 76,88 38,66"
-          fill="rgba(15,24,42,0.88)" stroke="rgba(90,120,160,0.45)" strokeWidth="0.9" />
-        {/* Carrier right */}
-        <polygon points="76,76 122,54 122,66 76,88"
-          fill="rgba(10,18,36,0.88)" stroke="rgba(80,110,150,0.40)" strokeWidth="0.9" />
-
-        {/* Brand text on carrier front */}
-        <text x="41" y="85" fontSize="5" fill="rgba(148,163,184,0.75)" fontWeight="bold" letterSpacing="0.6">CARRIER</text>
-
-        {/* ── Fans ── */}
-        <FanBlades cx={52} cy={68} r={7} spinning={rented} />
-        <FanBlades cx={68} cy={76} r={7} spinning={rented} />
+        {/* LEDs */}
+        <circle cx="94"  cy="157" r="5" fill="#00c853" style={{ animation: "bl 2s ease-in-out infinite" }}/>
+        <circle cx="109" cy="157" r="5" fill="#ffd600" style={{ animation: "bl 3.8s ease-in-out infinite .7s" }}/>
+        <circle cx="124" cy="157" r="5" fill="#1c2e40"/>
       </svg>
 
       {/* ── Name + indicators ── */}
