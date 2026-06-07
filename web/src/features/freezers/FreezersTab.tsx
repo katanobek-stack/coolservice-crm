@@ -412,7 +412,7 @@ function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => vo
         {/* ВЕНТИЛЯТОР */}
         <g transform="translate(170,216)">
           <circle r="60" fill="#08111f" stroke="#1a3248" strokeWidth="2"/>
-          <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: "spinR .7s linear infinite" }}>
+          <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: rented ? "spinR .7s linear infinite" : "none" }}>
             <circle r="55" fill="#060c18" stroke="#102030" strokeWidth="1"/>
             {[0,60,120,180,240,300].map(deg => (
               <path key={deg} d="M0 0C-4-12-12-32-6-42C0-52 14-28 0 0Z" fill="#0d3a56" transform={`rotate(${deg})`}/>
@@ -430,7 +430,7 @@ function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => vo
         <rect x="78" y="313" width="7" height="12" rx="2" fill="#0e3860" stroke="#1a5888" strokeWidth=".8"/>
 
         {/* КОМПРЕССОР BITZER */}
-        <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: "pu 1.9s ease-in-out infinite" }}>
+        <g style={{ transformBox: "fill-box" as const, transformOrigin: "center", animation: rented ? "pu 1.9s ease-in-out infinite" : "none" }}>
           <rect x="90" y="292" width="164" height="52" rx="26" fill="#09121e" stroke="#1e3e5c" strokeWidth="1.8"/>
           {[296,299,302,305,308,311,314,317,320,323,326,329,332,335,338].map(y => (
             <line key={y} x1="116" y1={y} x2="244" y2={y} stroke="#0e2535" strokeWidth="1.1"/>
@@ -452,14 +452,14 @@ function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => vo
 
         {/* ГОРЯЧИЙ ВОЗДУХ */}
         {[{y:196,d:0},{y:216,d:.4},{y:236,d:.8}].map(({y,d}) => (
-          <g key={y} style={{ animation: `hl 1.5s linear infinite ${d}s` }}>
+          <g key={y} style={{ animation: rented ? `hl 1.5s linear infinite ${d}s` : "none", opacity: rented ? 1 : 0 }}>
             <line x1="75" y1={y} x2="36" y2={y} stroke="#b02808" strokeWidth="2.5" markerEnd="url(#ar)"/>
           </g>
         ))}
 
         {/* LEDs */}
-        <circle cx="94"  cy="157" r="5" fill="#00c853" style={{ animation: "bl 2s ease-in-out infinite" }}/>
-        <circle cx="109" cy="157" r="5" fill="#ffd600" style={{ animation: "bl 3.8s ease-in-out infinite .7s" }}/>
+        <circle cx="94"  cy="157" r="5" fill="#00c853" style={{ animation: rented ? "bl 2s ease-in-out infinite" : "none", opacity: 1 }}/>
+        <circle cx="109" cy="157" r="5" fill="#ffd600" style={{ animation: rented ? "bl 3.8s ease-in-out infinite .7s" : "none", opacity: rented ? 1 : 0.2 }}/>
         <circle cx="124" cy="157" r="5" fill="#1c2e40"/>
       </svg>
 
