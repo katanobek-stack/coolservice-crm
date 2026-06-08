@@ -120,7 +120,7 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 - assigneeQuery: имя механика или менеджера если сказано, иначе пустая строка ""
 ---`;
 
-async function callClaude(text: string): Promise<VoiceCmd> {
+async function callClaude(text: string): Promise<{ cmd: VoiceCmd; raw: string; cleaned: string }> {
   const key = import.meta.env.VITE_ANTHROPIC_API_KEY;
   if (!key) throw new Error("Добавьте VITE_ANTHROPIC_API_KEY в файл .env");
 
@@ -149,8 +149,8 @@ async function callClaude(text: string): Promise<VoiceCmd> {
   const raw     = d.content.find((b) => b.type === "text")?.text ?? "";
   const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
   const m = cleaned.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("Неверный ответ Claude");
-  return JSON.parse(m[0]) as VoiceCmd;
+  if (!m) throw new Error("Не JSON: " + cleaned.slice(0, 60));
+  return { cmd: JSON.parse(m[0]) as VoiceCmd, raw, cleaned };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -203,7 +203,17 @@ export function FloatingMicButton() {
     setState("processing");
 
     try {
-      const cmd = await callClaude(transcript);
+      const { cmd, raw } = await callClaude(transcript);
+
+      // debug 1: сырой ответ AI (первые 80 символов)
+      flash("🔍 AI: " + raw.slice(0, 80));
+      await new Promise<void>((r) => setTimeout(r, 800));
+      // debug 2: что распознал как action
+      if (cmd.action === "create_appointment") {
+        flash("📅 Создаю: " + JSON.stringify(cmd).slice(0, 60));
+      } else {
+        flash("⚠️ action=" + (cmd as { action?: string }).action, false);
+      }
 
       // Найти механика по имени из голосовой команды
       const mechAssignees: string[] = [];
@@ -275,24 +285,30 @@ export function FloatingMicButton() {
         }
         // Поддерживаем оба поля: новый "type" и старый "appointmentType"
         const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
-        await addAppointment(clean({
-          clientName:    cmd.clientName ?? "Клиент",
-          carBrand:      cmd.carBrand   ?? undefined,
-          carModel:      cmd.carModel   ?? undefined,
-          date:          cmd.date ?? new Date().toISOString().slice(0, 10),
-          time:          cmd.time ?? "09:00",
-          type:          apptType,
-          assignees,
-          assigneeNames,
-          status:        "pending" as const,
-          note:          cmd.note || undefined,
-          createdBy:     user?.uid ?? "",
-          createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
-        }));
-        const apptLabel = cmd.clientName && cmd.clientName !== "Клиент"
-          ? cmd.clientName
-          : cmd.carBrand ? `${cmd.carBrand} ${cmd.carModel ?? ""}`.trim() : "Запись";
-        flash(`📅 Запись создана: ${apptLabel}`);
+        try {
+          await addAppointment(clean({
+            clientName:    cmd.clientName ?? "Клиент",
+            carBrand:      cmd.carBrand   ?? undefined,
+            carModel:      cmd.carModel   ?? undefined,
+            date:          cmd.date ?? new Date().toISOString().slice(0, 10),
+            time:          cmd.time ?? "09:00",
+            type:          apptType,
+            assignees,
+            assigneeNames,
+            status:        "pending" as const,
+            note:          cmd.note || undefined,
+            createdBy:     user?.uid ?? "",
+            createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+          }));
+        } catch (fbErr) {
+          // debug 3: ошибка Firestore
+          flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
+          setState("error");
+          setTimeout(() => setState("idle"), 3500);
+          return;
+        }
+        // debug 3: успешная запись в Firestore
+        flash("✅ Запись создана в Firestore ✅");
         setState("done");
         setTimeout(() => setState("idle"), 1500);
         return;
