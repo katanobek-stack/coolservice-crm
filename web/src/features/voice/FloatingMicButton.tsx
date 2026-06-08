@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
+import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
-import { addClient, updateClient } from "../../shared/firebase/firestore";
+import { addClient, updateClient, addAppointment } from "../../shared/firebase/firestore";
 import { genId } from "../../shared/utils/format";
 import type { Vehicle, Repair, RepairTask } from "../../shared/types/client";
 
@@ -34,7 +35,8 @@ declare global {
 type MicState = "idle" | "recording" | "processing" | "done" | "error";
 
 interface VoiceCmd {
-  action: "create_client" | "add_task" | "both";
+  action: "create_client" | "add_task" | "both" | "create_appointment";
+  // for client / repair actions:
   clientType: "individual" | "company";
   client: {
     name: string;
@@ -43,6 +45,14 @@ interface VoiceCmd {
   };
   tasks: Array<{ description: string; type: "repair" | "freon" | "service" }>;
   mechanic?: { name: string };
+  // for create_appointment:
+  clientName?: string;
+  carBrand?: string;
+  carModel?: string;
+  date?: string;
+  time?: string;
+  appointmentType?: "diagnostics" | "repair" | "consultation";
+  note?: string;
 }
 
 // ─── Util: strip undefined fields recursively (Firestore не принимает undefined) ──
@@ -64,18 +74,23 @@ function clean<T>(v: T): T {
 const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сервиса (Владивосток).
 Из голосовой команды извлеки данные и верни ТОЛЬКО JSON без пояснений и форматирования.
 
-Пример формата:
+ЕСЛИ речь о записи на приём (слова: "запиши", "запись", "записать", "назначь визит", "визит"):
+{"action":"create_appointment","clientName":"Иван Петров","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","appointmentType":"diagnostics","note":"","mechanic":{"name":"Сергей"}}
+
+ЕСЛИ речь о ремонте/заявке (по умолчанию):
 {"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}],"mechanic":{"name":"Сергей"}}
 
 Правила:
-- action "both" — создать клиента и задачи (используй по умолчанию)
+- action "create_appointment" — запись клиента на приём (диагностика, консультация, визит)
+- action "both" — создать клиента и задачи (ремонт, неисправность)
 - action "create_client" — только клиент без задач
 - action "add_task" — клиент уже существует, добавить задачу
 - clientType "individual" — физлицо; "company" — юрлицо (ООО, ИП)
-- type "repair" — ремонт, неисправность
-- type "service" — плановое ТО
+- appointmentType: "diagnostics" — диагностика; "repair" — ремонт; "consultation" — консультация
+- type "repair" — ремонт, неисправность; "service" — плановое ТО
 - phone — только цифры без пробелов и знаков
 - plate — кириллица+цифры без пробелов
+- date — формат YYYY-MM-DD; если не указана дата явно — используй сегодняшнюю из начала сообщения
 - Если задач нет — tasks:[]
 - Если нет телефона — не включай поле phone
 - Если нет авто — не включай поле vehicle
@@ -98,7 +113,7 @@ async function callClaude(text: string): Promise<VoiceCmd> {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       system: SYSTEM,
-      messages: [{ role: "user", content: text }],
+      messages: [{ role: "user", content: `Сегодня: ${new Date().toISOString().slice(0, 10)}. ${text}` }],
     }),
   });
 
@@ -128,6 +143,7 @@ const MAX_REC_MS = 60000;  // защита от забытой записи — 
 
 export function FloatingMicButton() {
   const { clients, staff } = useData();
+  const { user, myProfile } = useAuth();
   const [state, setState]   = useState<MicState>("idle");
   const [toast, setToast]   = useState<{ msg: string; ok: boolean } | null>(null);
   const recRef      = useRef<ISpeechRec | null>(null);
@@ -216,6 +232,41 @@ export function FloatingMicButton() {
           })
         : null;
 
+      // Запись на приём
+      if (cmd.action === "create_appointment") {
+        const assignees: string[]     = [];
+        const assigneeNames: string[] = [];
+        if (cmd.mechanic?.name) {
+          const n = cmd.mechanic.name.toLowerCase();
+          const found = staff.find((s) => {
+            const sn = (s.name ?? s.email ?? "").toLowerCase();
+            return sn.includes(n) || n.includes((sn || "").split(" ")[0]);
+          });
+          if (found) {
+            assignees.push(found.id);
+            assigneeNames.push(found.name ?? found.email ?? found.id);
+          }
+        }
+        await addAppointment(clean({
+          clientName:    cmd.clientName ?? "Неизвестно",
+          carBrand:      cmd.carBrand   ?? undefined,
+          carModel:      cmd.carModel   ?? undefined,
+          date:          cmd.date ?? new Date().toISOString().slice(0, 10),
+          time:          cmd.time ?? "",
+          type:          cmd.appointmentType ?? "diagnostics",
+          assignees,
+          assigneeNames,
+          status:        "pending" as const,
+          note:          cmd.note || undefined,
+          createdBy:     user?.uid ?? "",
+          createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        }));
+        flash(`📅 Запись создана: ${cmd.clientName ?? ""}`);
+        setState("done");
+        setTimeout(() => setState("idle"), 1500);
+        return;
+      }
+
       // Найти существующего клиента для "add_task"
       if (cmd.action === "add_task") {
         const existing = findClient(cmd.client.name, vData?.plate);
@@ -259,7 +310,7 @@ export function FloatingMicButton() {
       setTimeout(() => setState("idle"), 3500);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, staff]);
+  }, [clients, staff, user, myProfile]);
 
   function startRec() {
     if (!supported) {

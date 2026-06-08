@@ -7,7 +7,7 @@ import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
 import { MyTasksTab } from "../features/mytasks/MyTasksTab";
 import { ClientsTab } from "../features/clients/ClientsTab";
-import { CalendarTab } from "../features/calendar/CalendarTab";
+import { AppointmentsTab } from "../features/appointments/AppointmentsTab";
 import { FreezersTab } from "../features/freezers/FreezersTab";
 import { DoneTab } from "../features/done/DoneTab";
 import { PnlTab } from "../features/pnl/PnlTab";
@@ -38,7 +38,7 @@ const TABS: TabDef[] = [
   { id: "mytasks",  label: "Заявки",    icon: "ti-clipboard-list",   emoji: "🔧", group: "main" },
   { id: "phys",     label: "Клиенты",   icon: "ti-users",            emoji: "👤", group: "main" },
   { id: "legal",    label: "Компании",  icon: "ti-building",         emoji: "🏢", group: "main" },
-  { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service", roles: ["manager", "admin"] },
+  { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service" },
   { id: "freezers", label: "Склад",     icon: "ti-package",          emoji: "📦", group: "service" },
   { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance", roles: ["manager", "admin"] },
   { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", roles: ["manager", "admin"] },
@@ -104,7 +104,7 @@ function useFCMAndNotifications(myProfile: StaffMember | undefined) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount, hidePnl }: {
+function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount, pendingAppts, hidePnl }: {
   tab:           Tab;
   onTab:         (t: Tab) => void;
   myProfile:     StaffMember | undefined;
@@ -112,6 +112,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
   activeRepairs: number;
   totalClients:  number;
   freezersCount: number;
+  pendingAppts:  number;
   hidePnl:       boolean;
 }) {
   const role = myProfile?.role ?? "mechanic";
@@ -127,10 +128,11 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
 
   const roleLabel = ({ owner: "Владелец", admin: "Администратор", manager: "Менеджер", mechanic: "Механик" } as Record<string, string>)[role] ?? "Механик";
 
-  function getBadge(id: Tab): { count: number; variant: "red" | "blue" | "" } | null {
-    if (id === "mytasks" && activeRepairs > 0) return { count: activeRepairs, variant: "red" };
+  function getBadge(id: Tab): { count?: number; variant: "red" | "blue" | "pulse" | "" } | null {
+    if (id === "mytasks" && activeRepairs > 0)  return { count: activeRepairs, variant: "red" };
     if ((id === "phys" || id === "legal") && totalClients > 0) return { count: totalClients, variant: "blue" };
     if (id === "freezers" && freezersCount > 0) return { count: freezersCount, variant: "red" };
+    if (id === "calendar" && pendingAppts > 0)  return { count: pendingAppts, variant: "pulse" };
     return null;
   }
 
@@ -162,9 +164,19 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
                 >
                   <i className={`ti ${t.icon}`} />
                   {t.label}
-                  {badge && (
+                  {badge && badge.variant === "pulse" ? (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 18, height: 18, borderRadius: 9, padding: "0 5px",
+                      fontSize: 10, fontWeight: 700, color: "#fff",
+                      background: "var(--accent)",
+                      animation: "apptPulse 1.5s ease-in-out infinite",
+                    }}>
+                      {badge.count}
+                    </span>
+                  ) : badge ? (
                     <span className={`nav-badge ${badge.variant}`}>{badge.count}</span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
@@ -222,15 +234,16 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "freezers", "done", "pnl"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "calendar", "freezers", "done", "pnl"];
 
-function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
-  tab:        Tab;
-  onTab:      (t: Tab) => void;
-  activeMine: number;
-  role:       StaffRole;
-  onSignOut:  () => void;
-  hidePnl:    boolean;
+function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
+  tab:          Tab;
+  onTab:        (t: Tab) => void;
+  activeMine:   number;
+  pendingAppts: number;
+  role:         StaffRole;
+  onSignOut:    () => void;
+  hidePnl:      boolean;
 }) {
   const visibleTabs = TABS.filter((t) => MOBILE_TAB_IDS.includes(t.id) && canSeeTab(t, role, hidePnl));
 
@@ -242,8 +255,9 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
       {/* Прокручиваемые вкладки */}
       <div className="mobile-nav-tabs">
         {visibleTabs.map((t) => {
-          const isActive  = tab === t.id;
-          const showBadge = t.id === "mytasks" && activeMine > 0;
+          const isActive     = tab === t.id;
+          const showRepairs  = t.id === "mytasks"  && activeMine > 0;
+          const showAppts    = t.id === "calendar" && pendingAppts > 0;
           return (
             <button
               key={t.id}
@@ -253,7 +267,7 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
             >
               <i className={`ti ${t.icon}`} />
               {t.label}
-              {showBadge && (
+              {showRepairs && (
                 <span style={{
                   position: "absolute", top: 4, right: 4,
                   width: 16, height: 16,
@@ -262,6 +276,18 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {activeMine}
+                </span>
+              )}
+              {showAppts && (
+                <span style={{
+                  position: "absolute", top: 4, right: 4,
+                  width: 16, height: 16,
+                  background: "var(--accent)", borderRadius: "50%",
+                  fontSize: 9, fontWeight: 700, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  animation: "apptPulse 1.5s ease-in-out infinite",
+                }}>
+                  {pendingAppts}
                 </span>
               )}
             </button>
@@ -284,8 +310,8 @@ function MobileNav({ tab, onTab, activeMine, role, onSignOut, hidePnl }: {
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 function Shell() {
-  const { myProfile, signOutUser }   = useAuth();
-  const { tasks, clients, freezers } = useData();
+  const { myProfile, signOutUser }              = useAuth();
+  const { tasks, clients, freezers, appointments } = useData();
   const { canSeePLPanel }            = usePermissions();
   const [tab, setTab]                = useState<Tab>("stats");
   const [showSearch, setShowSearch]  = useState(false);
@@ -313,6 +339,13 @@ function Shell() {
     [clients],
   );
 
+  const pendingAppts = useMemo(() => {
+    const isMechanic = role === "mechanic";
+    return appointments.filter(
+      (a) => a.status === "pending" && (!isMechanic || a.assignees.includes(uid)),
+    ).length;
+  }, [appointments, role, uid]);
+
   useFCMAndNotifications(myProfile);
 
   function renderTab() {
@@ -321,7 +354,7 @@ function Shell() {
       case "mytasks":  return <MyTasksTab />;
       case "phys":     return <ClientsTab type="phys" />;
       case "legal":    return <ClientsTab type="legal" />;
-      case "calendar": return role !== "mechanic" ? <CalendarTab />  : null;
+      case "calendar": return <AppointmentsTab />;
       case "freezers": return <FreezersTab />;
       case "done":     return role !== "mechanic" ? <DoneTab />      : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
@@ -333,6 +366,13 @@ function Shell() {
 
   return (
     <>
+      <style>{`
+        @keyframes apptPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.35; transform: scale(0.8); }
+        }
+      `}</style>
+
       {/* Animated background */}
       <div className="bg-grid" />
       <div className="bg-glow" />
@@ -347,6 +387,7 @@ function Shell() {
           activeRepairs={activeRepairs}
           totalClients={clients.length}
           freezersCount={freezers.length}
+          pendingAppts={pendingAppts}
           hidePnl={hidePnl}
         />
 
@@ -364,7 +405,7 @@ function Shell() {
         </div>
 
         {/* Mobile bottom nav */}
-        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} role={role} onSignOut={() => void signOutUser()} hidePnl={hidePnl} />
+        <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} pendingAppts={pendingAppts} role={role} onSignOut={() => void signOutUser()} hidePnl={hidePnl} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
