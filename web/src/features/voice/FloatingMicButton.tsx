@@ -202,19 +202,136 @@ export function FloatingMicButton() {
     if (!transcript.trim()) { setState("idle"); return; }
     setState("processing");
 
-    try {
-      const { cmd, raw } = await callClaude(transcript);
+    // ── debug 1: что услышали ─────────────────────────────────────────────────
+    flash("👂 " + transcript.slice(0, 80));
 
-      // debug 1: сырой ответ AI (первые 80 символов)
-      flash("🔍 AI: " + raw.slice(0, 80));
-      await new Promise<void>((r) => setTimeout(r, 800));
-      // debug 2: что распознал как action
-      if (cmd.action === "create_appointment") {
-        flash("📅 Создаю: " + JSON.stringify(cmd).slice(0, 60));
-      } else {
-        flash("⚠️ action=" + (cmd as { action?: string }).action, false);
+    // ── Claude API (мягкий catch — fallback по ключевым словам ниже) ──────────
+    let cmd: VoiceCmd | null = null;
+    let rawAI = "";
+    try {
+      const result = await callClaude(transcript);
+      cmd   = result.cmd;
+      rawAI = result.raw;
+    } catch (claudeErr) {
+      rawAI = claudeErr instanceof Error ? claudeErr.message : "Ошибка Claude";
+    }
+
+    // ── debug 2: сырой ответ AI ───────────────────────────────────────────────
+    await new Promise<void>((resolve) => setTimeout(resolve, 600));
+    flash("🤖 AI: " + rawAI.slice(0, 100));
+
+    // ── debug 3: что распознал как action ─────────────────────────────────────
+    await new Promise<void>((resolve) => setTimeout(resolve, 600));
+    flash("🔎 action: " + (cmd?.action ?? "нет"));
+
+    // ── KEYWORD FALLBACK ──────────────────────────────────────────────────────
+    // Если AI не вернул create_appointment — определяем по тексту сами
+    if (cmd?.action !== "create_appointment") {
+      const lower = transcript.toLowerCase();
+      const isAppointment = ["запись", "запиши", "записать", "диагностика", "приём", "прием"]
+        .some((w) => lower.includes(w));
+
+      if (isAppointment) {
+        // Вытащить время из текста
+        let apptTime = "09:00";
+        const tmFull = lower.match(/(\d{1,2})[:\s](\d{2})/);
+        if (tmFull) {
+          apptTime = `${tmFull[1].padStart(2, "0")}:${tmFull[2]}`;
+        } else {
+          const tmHour = lower.match(/в\s+(\d{1,2})/);
+          if (tmHour) apptTime = `${tmHour[1].padStart(2, "0")}:00`;
+        }
+        // Вытащить марку авто из текста
+        const knownBrands = ["toyota","nissan","honda","bmw","mercedes","kia","hyundai","mazda","mitsubishi","lexus"];
+        const foundBrand  = knownBrands.find((b) => lower.includes(b));
+        const carBrand    = foundBrand
+          ? foundBrand.charAt(0).toUpperCase() + foundBrand.slice(1)
+          : undefined;
+
+        try {
+          await addAppointment(clean({
+            clientName:    "Клиент",
+            date:          new Date().toISOString().slice(0, 10),
+            time:          apptTime,
+            type:          "diagnostics" as const,
+            assignees:     [] as string[],
+            assigneeNames: [] as string[],
+            status:        "pending" as const,
+            createdBy:     user?.uid ?? "",
+            createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+            ...(carBrand ? { carBrand } : {}),
+          }));
+          flash("✅ Запись создана по ключевым словам ✅");
+          setState("done");
+          setTimeout(() => setState("idle"), 1500);
+        } catch (fbErr) {
+          flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
+          setState("error");
+          setTimeout(() => setState("idle"), 3500);
+        }
+        return;
       }
 
+      // Нет ни action от AI, ни ключевых слов — показываем ошибку
+      if (!cmd) {
+        setState("error");
+        flash("❌ " + rawAI.slice(0, 100), false);
+        setTimeout(() => setState("idle"), 3500);
+        return;
+      }
+      // cmd есть, action ≠ create_appointment → идём в repair/client логику
+    }
+
+    // ── ЗАПИСЬ НА ПРИЁМ ОТ AI ─────────────────────────────────────────────────
+    if (cmd?.action === "create_appointment") {
+      const assignees: string[]     = [];
+      const assigneeNames: string[] = [];
+      // Поддерживаем оба формата: новый assigneeQuery и старый mechanic.name
+      const assigneeSearch = cmd.assigneeQuery || cmd.mechanic?.name;
+      if (assigneeSearch) {
+        const n = assigneeSearch.toLowerCase().trim();
+        const found = staff.find((s) => {
+          const sn = (s.name ?? s.email ?? "").toLowerCase();
+          return sn.includes(n) || n.includes((sn || "").split(" ")[0]);
+        });
+        if (found) {
+          assignees.push(found.id);
+          assigneeNames.push(found.name ?? found.email ?? found.id);
+        }
+      }
+      // Поддерживаем оба поля: новый "type" и старый "appointmentType"
+      const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
+      try {
+        await addAppointment(clean({
+          clientName:    cmd.clientName ?? "Клиент",
+          carBrand:      cmd.carBrand   ?? undefined,
+          carModel:      cmd.carModel   ?? undefined,
+          date:          cmd.date ?? new Date().toISOString().slice(0, 10),
+          time:          cmd.time ?? "09:00",
+          type:          apptType,
+          assignees,
+          assigneeNames,
+          status:        "pending" as const,
+          note:          cmd.note || undefined,
+          createdBy:     user?.uid ?? "",
+          createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        }));
+      } catch (fbErr) {
+        flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
+        setState("error");
+        setTimeout(() => setState("idle"), 3500);
+        return;
+      }
+      flash("✅ Запись создана в Firestore ✅");
+      setState("done");
+      setTimeout(() => setState("idle"), 1500);
+      return;
+    }
+
+    // ── РЕМОНТ / КЛИЕНТ (action ≠ create_appointment) ────────────────────────
+    if (!cmd) return;
+
+    try {
       // Найти механика по имени из голосовой команды
       const mechAssignees: string[] = [];
       if (cmd.mechanic?.name) {
@@ -265,54 +382,6 @@ export function FloatingMicButton() {
             tasks:       repairTasks,
           })
         : null;
-
-      // Запись на приём
-      if (cmd.action === "create_appointment") {
-        const assignees: string[]     = [];
-        const assigneeNames: string[] = [];
-        // Поддерживаем оба формата: новый assigneeQuery и старый mechanic.name
-        const assigneeSearch = cmd.assigneeQuery || cmd.mechanic?.name;
-        if (assigneeSearch) {
-          const n = assigneeSearch.toLowerCase().trim();
-          const found = staff.find((s) => {
-            const sn = (s.name ?? s.email ?? "").toLowerCase();
-            return sn.includes(n) || n.includes((sn || "").split(" ")[0]);
-          });
-          if (found) {
-            assignees.push(found.id);
-            assigneeNames.push(found.name ?? found.email ?? found.id);
-          }
-        }
-        // Поддерживаем оба поля: новый "type" и старый "appointmentType"
-        const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
-        try {
-          await addAppointment(clean({
-            clientName:    cmd.clientName ?? "Клиент",
-            carBrand:      cmd.carBrand   ?? undefined,
-            carModel:      cmd.carModel   ?? undefined,
-            date:          cmd.date ?? new Date().toISOString().slice(0, 10),
-            time:          cmd.time ?? "09:00",
-            type:          apptType,
-            assignees,
-            assigneeNames,
-            status:        "pending" as const,
-            note:          cmd.note || undefined,
-            createdBy:     user?.uid ?? "",
-            createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
-          }));
-        } catch (fbErr) {
-          // debug 3: ошибка Firestore
-          flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
-          setState("error");
-          setTimeout(() => setState("idle"), 3500);
-          return;
-        }
-        // debug 3: успешная запись в Firestore
-        flash("✅ Запись создана в Firestore ✅");
-        setState("done");
-        setTimeout(() => setState("idle"), 1500);
-        return;
-      }
 
       // Найти существующего клиента для "add_task"
       if (cmd.action === "add_task") {
