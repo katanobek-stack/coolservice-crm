@@ -51,7 +51,9 @@ interface VoiceCmd {
   carModel?: string;
   date?: string;
   time?: string;
-  appointmentType?: "diagnostics" | "repair" | "consultation";
+  type?: "diagnostics" | "repair" | "consultation";        // новый формат
+  appointmentType?: "diagnostics" | "repair" | "consultation"; // старый формат (совместимость)
+  assigneeQuery?: string;  // имя механика/менеджера из нового формата
   note?: string;
 }
 
@@ -95,7 +97,28 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 - Если нет телефона — не включай поле phone
 - Если нет авто — не включай поле vehicle
 - Если упоминается имя механика/мастера ("назначь на ...", "... займётся") — извлеки в mechanic: {"name":"имя"}
-- Если механик не упомянут — не включай поле mechanic`;
+- Если механик не упомянут — не включай поле mechanic
+
+---
+Ты умеешь создавать записи на приём в сервис. Когда пользователь говорит что-то вроде:
+- "создай запись на диагностику"
+- "запишись на Toyota Mark 2"
+- "запись на 10 утра Петя"
+- "новая запись"
+- "запиши машину"
+
+Ответь ТОЛЬКО валидным JSON без markdown, без объяснений, без \`\`\`json блоков, просто голый JSON:
+{"action":"create_appointment","clientName":"Клиент","carBrand":"Toyota","carModel":"Mark 2","date":"YYYY-MM-DD","time":"10:00","type":"diagnostics","assigneeQuery":"Петя"}
+
+Правила заполнения:
+- date: если не сказана — сегодняшняя дата в формате YYYY-MM-DD
+- time: если не сказано — "09:00"
+- type: "diagnostics" если сказано "диагностика", "repair" если "ремонт", "consultation" если "консультация". По умолчанию "diagnostics"
+- clientName: если имя клиента не сказано — "Клиент"
+- carBrand: марка авто заглавной буквой на английском (Toyota, Nissan, Honda...)
+- carModel: модель как сказано
+- assigneeQuery: имя механика или менеджера если сказано, иначе пустая строка ""
+---`;
 
 async function callClaude(text: string): Promise<VoiceCmd> {
   const key = import.meta.env.VITE_ANTHROPIC_API_KEY;
@@ -123,8 +146,9 @@ async function callClaude(text: string): Promise<VoiceCmd> {
   }
 
   const d = await r.json() as { content: Array<{ type: string; text: string }> };
-  const raw = d.content.find((b) => b.type === "text")?.text ?? "";
-  const m = raw.match(/\{[\s\S]*\}/);
+  const raw     = d.content.find((b) => b.type === "text")?.text ?? "";
+  const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+  const m = cleaned.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("Неверный ответ Claude");
   return JSON.parse(m[0]) as VoiceCmd;
 }
@@ -236,8 +260,10 @@ export function FloatingMicButton() {
       if (cmd.action === "create_appointment") {
         const assignees: string[]     = [];
         const assigneeNames: string[] = [];
-        if (cmd.mechanic?.name) {
-          const n = cmd.mechanic.name.toLowerCase();
+        // Поддерживаем оба формата: новый assigneeQuery и старый mechanic.name
+        const assigneeSearch = cmd.assigneeQuery || cmd.mechanic?.name;
+        if (assigneeSearch) {
+          const n = assigneeSearch.toLowerCase().trim();
           const found = staff.find((s) => {
             const sn = (s.name ?? s.email ?? "").toLowerCase();
             return sn.includes(n) || n.includes((sn || "").split(" ")[0]);
@@ -247,13 +273,15 @@ export function FloatingMicButton() {
             assigneeNames.push(found.name ?? found.email ?? found.id);
           }
         }
+        // Поддерживаем оба поля: новый "type" и старый "appointmentType"
+        const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
         await addAppointment(clean({
-          clientName:    cmd.clientName ?? "Неизвестно",
+          clientName:    cmd.clientName ?? "Клиент",
           carBrand:      cmd.carBrand   ?? undefined,
           carModel:      cmd.carModel   ?? undefined,
           date:          cmd.date ?? new Date().toISOString().slice(0, 10),
-          time:          cmd.time ?? "",
-          type:          cmd.appointmentType ?? "diagnostics",
+          time:          cmd.time ?? "09:00",
+          type:          apptType,
           assignees,
           assigneeNames,
           status:        "pending" as const,
@@ -261,7 +289,10 @@ export function FloatingMicButton() {
           createdBy:     user?.uid ?? "",
           createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
         }));
-        flash(`📅 Запись создана: ${cmd.clientName ?? ""}`);
+        const apptLabel = cmd.clientName && cmd.clientName !== "Клиент"
+          ? cmd.clientName
+          : cmd.carBrand ? `${cmd.carBrand} ${cmd.carModel ?? ""}`.trim() : "Запись";
+        flash(`📅 Запись создана: ${apptLabel}`);
         setState("done");
         setTimeout(() => setState("idle"), 1500);
         return;
