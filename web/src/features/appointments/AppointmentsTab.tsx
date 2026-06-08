@@ -691,6 +691,27 @@ export function AppointmentsTab() {
     await deleteAppointment(appt.id);
   }
 
+  // ── Тест-запись (только owner) — прямая запись в Firestore для диагностики ──
+  async function handleTestWrite() {
+    try {
+      const ref = await addAppointment({
+        clientName:    "ТЕСТ " + new Date().toLocaleTimeString("ru"),
+        date:          new Date().toISOString().slice(0, 10),
+        time:          "09:00",
+        type:          "diagnostics",
+        assignees:     [],
+        assigneeNames: [],
+        status:        "pending",
+        createdBy:     user?.uid ?? "test",
+        createdByName: myProfile?.name ?? "Тест",
+      });
+      alert("✅ Запись создана! ID: " + ref.id + "\n\nЕсли вы её видите в списке — Firestore работает.");
+    } catch (e) {
+      console.error("[TestWrite] Firestore error:", e);
+      alert("❌ Ошибка записи:\n" + (e as Error).message + "\nСм. консоль браузера.");
+    }
+  }
+
   return (
     <>
       {/* Pulse animation keyframe */}
@@ -706,7 +727,22 @@ export function AppointmentsTab() {
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20,
         }}>
-          <div />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Тест-кнопка — только для owner, временная диагностика */}
+            {role === "owner" && (
+              <button
+                type="button"
+                onClick={() => void handleTestWrite()}
+                style={{
+                  background: "#f59e0b", color: "#000", border: "none",
+                  borderRadius: 8, padding: "6px 14px", fontSize: 13,
+                  fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                🧪 Тест запись
+              </button>
+            )}
+          </div>
           {canCreate && (
             <button
               type="button"

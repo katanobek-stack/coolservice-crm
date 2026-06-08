@@ -265,7 +265,9 @@ export function FloatingMicButton() {
           setState("done");
           setTimeout(() => setState("idle"), 1500);
         } catch (fbErr) {
-          flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
+          console.error("[VoiceAgent] Firestore write error (keyword fallback):", fbErr);
+          const code = (fbErr as { code?: string })?.code ?? "";
+          flash("❌ Firestore: " + code + " " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
           setState("error");
           setTimeout(() => setState("idle"), 3500);
         }
@@ -317,7 +319,9 @@ export function FloatingMicButton() {
           createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
         }));
       } catch (fbErr) {
-        flash("❌ Firestore: " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
+        console.error("[VoiceAgent] Firestore write error (AI appointment):", fbErr);
+        const code = (fbErr as { code?: string })?.code ?? "";
+        flash("❌ Firestore: " + code + " " + (fbErr instanceof Error ? fbErr.message : String(fbErr)), false);
         setState("error");
         setTimeout(() => setState("idle"), 3500);
         return;
