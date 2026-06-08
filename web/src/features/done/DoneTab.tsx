@@ -52,6 +52,7 @@ interface DoneItem {
   client:        Client;
   vehicle?:      Vehicle;
   assigneeNames: string;
+  createdByName: string;
   mk:            string;
 }
 
@@ -146,8 +147,13 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
         )}
 
         {assigneeNames && (
-          <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 2 }}>
             👨‍🔧 {assigneeNames}
+          </div>
+        )}
+        {item.createdByName && item.createdByName !== "—" && (
+          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10, opacity: 0.7 }}>
+            🖊 Создал: {item.createdByName}
           </div>
         )}
 
@@ -270,6 +276,12 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>👨‍🔧 Механик</span>
             <span style={{ color: "var(--text)" }}>{assigneeNames}</span>
+          </div>
+        )}
+        {item.createdByName && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>🖊 Создал</span>
+            <span style={{ color: "var(--text)", opacity: 0.8 }}>{item.createdByName}</span>
           </div>
         )}
         {repair.freonType && (
@@ -611,6 +623,9 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {assigneeNames && (
               <span style={{ fontSize: 11.5, color: "var(--text3)" }}>👨‍🔧 {assigneeNames}</span>
+            )}
+            {item.createdByName && item.createdByName !== "—" && (
+              <span style={{ fontSize: 11, color: "var(--text3)", opacity: 0.7 }}>🖊 {item.createdByName}</span>
             )}
             <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
           </div>
@@ -1210,7 +1225,8 @@ export function DoneTab() {
           .filter(Boolean)
           .join(", ");
 
-        result.push({ repair: r, client: c, vehicle, assigneeNames, mk });
+        const createdByName = r.createdByName ?? "—";
+        result.push({ repair: r, client: c, vehicle, assigneeNames, createdByName, mk });
       });
     });
     return result.sort((a, b) => (b.repair.date ?? "").localeCompare(a.repair.date ?? ""));
@@ -1304,7 +1320,7 @@ export function DoneTab() {
       (i.repair.tasks ?? []).forEach((t) => addFreon(freonMap, t.freonType, t.freonKg));
     });
 
-    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
+    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Создал заявку", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repRows: any[][] = monthItems.map((i) => {
       const freonType = i.repair.freonType ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType ?? "";
@@ -1317,6 +1333,7 @@ export function DoneTab() {
         i.repair.date ?? "",
         i.repair.closedAt?.slice(0, 10) ?? "",
         i.assigneeNames,
+        i.createdByName,
         freonType,
         freonAmt,
         parseFloat(i.repair.cost ?? "0") || 0,
@@ -1324,10 +1341,10 @@ export function DoneTab() {
       ];
     });
     const totalRevenue = monthItems.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0);
-    if (monthItems.length > 0) repRows.push(["", "", "", "", "", "", "", "", "ИТОГО:", totalRevenue, ""]);
+    if (monthItems.length > 0) repRows.push(["", "", "", "", "", "", "", "", "", "ИТОГО:", totalRevenue, ""]);
 
     const ws1 = XLSX.utils.aoa_to_sheet([repHeaders, ...repRows]);
-    ws1["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:22},{wch:10},{wch:10},{wch:12},{wch:30}];
+    ws1["!cols"] = [{wch:20},{wch:14},{wch:18},{wch:12},{wch:12},{wch:14},{wch:22},{wch:16},{wch:10},{wch:10},{wch:12},{wch:30}];
 
     // ── Лист 2: Расходы ────────────────────────────────────────────────────────
     const elecBills  = (finance.elecBills  ?? {}) as Record<string, number>;

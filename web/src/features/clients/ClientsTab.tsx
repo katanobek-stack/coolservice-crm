@@ -416,6 +416,7 @@ const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 
 function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
   const { staff } = useData();
+  const { user, myProfile } = useAuth();
   const [vehicleId,         setVehicleId]         = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
   const [newPlate,          setNewPlate]          = useState("");
   const [serviceType,       setServiceType]       = useState<ServiceType>("refrigerator");
@@ -476,6 +477,8 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
         photos: [],
         tasks,
         mechanics: selectedMechanics,
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
       };
       await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
@@ -772,6 +775,11 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
       {(repair.mechanics ?? []).length > 0 && (
         <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 5 }}>
           👨‍🔧 {(repair.mechanics ?? []).map((uid) => staff.find((s) => s.id === uid)?.name ?? uid).join(", ")}
+        </div>
+      )}
+      {repair.createdByName && (
+        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3, opacity: 0.7 }}>
+          🖊 Создал: {repair.createdByName}
         </div>
       )}
       {repair.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6 }}>{repair.description}</div>}

@@ -48,6 +48,8 @@ export interface Repair {
   photos?: Photo[];
   tasks: RepairTask[];
   mechanics?: string[];
+  createdBy?: string;
+  createdByName?: string;
   editedBy?: string;
   editedAt?: string;
 }
