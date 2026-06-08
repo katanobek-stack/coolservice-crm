@@ -416,17 +416,41 @@ const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 
 function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
   const { staff } = useData();
-  const { myProfile } = useAuth();
-  const [vehicleId,   setVehicleId]   = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
-  const [newPlate,    setNewPlate]    = useState("");
-  const [serviceType, setServiceType] = useState<ServiceType>("refrigerator");
-  const [desc,        setDesc]        = useState("");
-  const [date,        setDate]        = useState(new Date().toISOString().slice(0, 10));
-  const [assignee,    setAssignee]    = useState("");
-  const [taskDesc,    setTaskDesc]    = useState("");
-  const [saving,      setSaving]      = useState(false);
+  const [vehicleId,         setVehicleId]         = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
+  const [newPlate,          setNewPlate]          = useState("");
+  const [serviceType,       setServiceType]       = useState<ServiceType>("refrigerator");
+  const [desc,              setDesc]              = useState("");
+  const [date,              setDate]              = useState(new Date().toISOString().slice(0, 10));
+  const [selectedMechanics, setSelectedMechanics] = useState<string[]>([]);
+  const [mechanicsOpen,     setMechanicsOpen]     = useState(false);
+  const [mechError,         setMechError]         = useState("");
+  const [taskDesc,          setTaskDesc]          = useState("");
+  const [saving,            setSaving]            = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mechanicsOpen) return;
+    function handler(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setMechanicsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [mechanicsOpen]);
+
+  function toggleMechanic(uid: string) {
+    setMechError("");
+    setSelectedMechanics((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid],
+    );
+  }
 
   async function handleSave() {
+    if (selectedMechanics.length === 0) {
+      setMechError("Выберите хотя бы одного механика");
+      return;
+    }
     setSaving(true);
     try {
       let finalVehicleId = vehicleId;
@@ -437,14 +461,12 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
         finalVehicleId = newV.id;
         await updateClient(client.id, { vehicles });
       }
-      // Freon-задача создаётся автоматически при каждом новом ремонте
       const tasks: RepairTask[] = [
-        { id: genId(), description: "Заправка фреона", assignees: [], doneBy: [], status: "in_progress", freonTask: true },
+        { id: genId(), description: "Заправка фреона", assignees: selectedMechanics, doneBy: [], status: "in_progress", freonTask: true },
         ...(taskDesc.trim()
-          ? [{ id: genId(), description: taskDesc.trim(), assignees: assignee ? [assignee] : [], doneBy: [], status: "in_progress" as const }]
+          ? [{ id: genId(), description: taskDesc.trim(), assignees: selectedMechanics, doneBy: [], status: "in_progress" as const }]
           : []),
       ];
-      // Firestore rejects undefined values — only include defined fields
       const repair: Repair = {
         id: genId(),
         serviceType,
@@ -453,9 +475,9 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
         status: "in_progress",
         photos: [],
         tasks,
+        mechanics: selectedMechanics,
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
       };
-      console.log("[AddRepairModal] saving repair:", repair);
       await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
       onClose();
     } catch (err) {
@@ -463,6 +485,11 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
       setSaving(false);
     }
   }
+
+  const selectedNames = selectedMechanics
+    .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Modal title="Новый ремонт" onClose={onClose}>
@@ -485,15 +512,116 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
       </FormGroup>
       <FormGroup label="Описание"><Textarea placeholder="Что нужно сделать..." value={desc} onChange={(e) => setDesc(e.target.value)} /></FormGroup>
       <FormGroup label="Дата"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></FormGroup>
+
+      {/* ── Механики (мультиселект) ── */}
+      <FormGroup label="Механики *">
+        <div ref={dropdownRef} style={{ position: "relative" }}>
+          {/* Trigger */}
+          <button
+            type="button"
+            onClick={() => setMechanicsOpen((o) => !o)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", borderRadius: 10,
+              background: "var(--bg3)",
+              border: `1px solid ${mechError ? "#f87171" : mechanicsOpen ? "var(--accent)" : "var(--border2)"}`,
+              color: selectedMechanics.length ? "var(--text)" : "var(--text3)",
+              fontSize: 13, cursor: "pointer", fontFamily: "Manrope, sans-serif", textAlign: "left",
+            }}
+          >
+            <span>{selectedMechanics.length === 0 ? "Выберите механиков..." : selectedNames}</span>
+            <span style={{ fontSize: 10, color: "var(--text3)", transition: "transform 0.18s", transform: mechanicsOpen ? "rotate(180deg)" : "none", flexShrink: 0 }}>▼</span>
+          </button>
+
+          {/* Dropdown list */}
+          {mechanicsOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
+              background: "var(--bg2)", border: "1px solid var(--border2)",
+              borderRadius: 12, overflow: "hidden",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+            }}>
+              {staff.map((s) => {
+                const selected = selectedMechanics.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleMechanic(s.id)}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 10,
+                      padding: "11px 14px",
+                      background: selected ? "rgba(59,130,246,0.12)" : "transparent",
+                      border: "none", borderBottom: "1px solid var(--border)",
+                      color: selected ? "var(--accent2)" : "var(--text)",
+                      fontSize: 13, fontWeight: selected ? 600 : 400,
+                      cursor: "pointer", textAlign: "left", fontFamily: "Manrope, sans-serif",
+                    }}
+                  >
+                    <span style={{
+                      width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                      border: `2px solid ${selected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
+                      background: selected ? "rgba(59,130,246,0.25)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, color: selected ? "#93c5fd" : "transparent",
+                    }}>
+                      {selected && "✓"}
+                    </span>
+                    {s.name ?? s.email}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setMechanicsOpen(false)}
+                style={{
+                  width: "100%", padding: "10px 14px",
+                  background: "var(--bg3)", border: "none",
+                  color: "var(--accent2)", fontSize: 13, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                }}
+              >
+                ✓ Готово
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Validation error */}
+        {mechError && (
+          <div style={{ marginTop: 5, fontSize: 12, color: "#f87171", fontWeight: 600 }}>⚠ {mechError}</div>
+        )}
+
+        {/* Selected chips */}
+        {selectedMechanics.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+            {selectedMechanics.map((uid) => {
+              const s = staff.find((m) => m.id === uid);
+              return (
+                <span key={uid} style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 6px 3px 10px", borderRadius: 14,
+                  background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)",
+                  color: "var(--accent2)", fontSize: 12, fontWeight: 600,
+                }}>
+                  {s?.name ?? s?.email ?? uid}
+                  <button
+                    type="button"
+                    onClick={() => toggleMechanic(uid)}
+                    style={{
+                      background: "transparent", border: "none",
+                      color: "rgba(147,197,253,0.7)", cursor: "pointer",
+                      fontSize: 15, lineHeight: 1, padding: "0 2px",
+                    }}
+                  >×</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </FormGroup>
+
       <FormGroup label="Задача механику"><Textarea placeholder="Необязательно" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} /></FormGroup>
-      {taskDesc.trim() && (
-        <FormGroup label="Назначить">
-          <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-            <option value="">— не назначен —</option>
-            {staff.map((s) => <option key={s.id} value={s.id}>{s.name ?? s.email}</option>)}
-          </Select>
-        </FormGroup>
-      )}
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : "Создать заявку"}</Button>
     </Modal>
   );
@@ -564,6 +692,7 @@ function EditRepairModal({ client, repair, onClose }: { client: Client; repair: 
 function RepairCard({ client, repair, isAdmin, isHistory }: {
   client: Client; repair: Repair; isAdmin: boolean; isHistory?: boolean;
 }) {
+  const { staff }   = useData();
   const vehicle     = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
   const status      = repairStatus(repair);
   const svc         = SERVICE_TYPES.find((s) => s.id === repair.serviceType) ?? SERVICE_TYPES[3];
@@ -639,6 +768,11 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
 
       {vehicle && (
         <span style={{ fontSize: 11.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{vehicle.plate}</span>
+      )}
+      {(repair.mechanics ?? []).length > 0 && (
+        <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 5 }}>
+          👨‍🔧 {(repair.mechanics ?? []).map((uid) => staff.find((s) => s.id === uid)?.name ?? uid).join(", ")}
+        </div>
       )}
       {repair.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6 }}>{repair.description}</div>}
 

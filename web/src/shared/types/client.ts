@@ -47,6 +47,7 @@ export interface Repair {
   freonAmount?: string;
   photos?: Photo[];
   tasks: RepairTask[];
+  mechanics?: string[];
   editedBy?: string;
   editedAt?: string;
 }
