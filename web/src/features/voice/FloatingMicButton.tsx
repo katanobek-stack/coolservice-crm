@@ -202,9 +202,6 @@ export function FloatingMicButton() {
     if (!transcript.trim()) { setState("idle"); return; }
     setState("processing");
 
-    // ── debug 1: что услышали ─────────────────────────────────────────────────
-    flash("👂 " + transcript.slice(0, 80));
-
     // ── Claude API (мягкий catch — fallback по ключевым словам ниже) ──────────
     let cmd: VoiceCmd | null = null;
     let rawAI = "";
@@ -215,14 +212,6 @@ export function FloatingMicButton() {
     } catch (claudeErr) {
       rawAI = claudeErr instanceof Error ? claudeErr.message : "Ошибка Claude";
     }
-
-    // ── debug 2: сырой ответ AI ───────────────────────────────────────────────
-    await new Promise<void>((resolve) => setTimeout(resolve, 600));
-    flash("🤖 AI: " + rawAI.slice(0, 100));
-
-    // ── debug 3: что распознал как action ─────────────────────────────────────
-    await new Promise<void>((resolve) => setTimeout(resolve, 600));
-    flash("🔎 action: " + (cmd?.action ?? "нет"));
 
     // ── KEYWORD FALLBACK ──────────────────────────────────────────────────────
     // Если AI не вернул create_appointment — определяем по тексту сами
