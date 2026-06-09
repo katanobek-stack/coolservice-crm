@@ -224,6 +224,67 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
   );
 }
 
+// ─── History rating modal ─────────────────────────────────────────────────────
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function HistoryRatingModal({ onClose, months, staffMap, showAmounts }: {
+  onClose: () => void;
+  months: Array<{
+    month: string;
+    label: string;
+    entries: Array<{ uid: string; rank: number; total: number; isTied: boolean }>;
+  }>;
+  staffMap: Map<string, StaffMember>;
+  showAmounts: boolean;
+}) {
+  return (
+    <Modal title="📊 История рейтинга" onClose={onClose}>
+      {months.length === 0 ? (
+        <div style={{ textAlign: "center", color: "var(--text3)", padding: "24px 0", fontSize: 13 }}>
+          Нет данных за прошлые месяцы
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {months.map(({ month, label, entries }) => (
+            <div key={month}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: "var(--text2)",
+                textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8,
+              }}>
+                {label}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {entries.map(({ uid, rank, total, isTied }) => {
+                  const name  = staffMap.get(uid)?.name ?? uid;
+                  const medal = MEDALS[rank - 1] ?? null;
+                  return (
+                    <div key={uid} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 18, width: 26, textAlign: "center", flexShrink: 0, lineHeight: 1 }}>
+                        {medal ?? `${rank}.`}
+                      </span>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                        {name}
+                      </span>
+                      {showAmounts ? (
+                        <span style={{ fontSize: 12, color: "var(--text2)", fontWeight: 600 }}>
+                          {Math.round(total).toLocaleString("ru-RU")} ₽{isTied && " (ничья)"}
+                        </span>
+                      ) : isTied ? (
+                        <span style={{ fontSize: 11, color: "var(--text3)" }}>(ничья)</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StaffTab() {
@@ -232,7 +293,8 @@ export function StaffTab() {
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "owner";
 
-  const [editing, setEditing] = useState<StaffMember | null>(null);
+  const [editing,     setEditing]     = useState<StaffMember | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const now          = new Date();
   const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -263,6 +325,53 @@ export function StaffTab() {
       result.set(uid, { rank: r, total, crownColor, isTied: (rankFreq.get(r) ?? 1) > 1 });
     });
     return result;
+  }, [clients, curMonthKey]);
+
+  const staffMap = useMemo(() => {
+    const map = new Map<string, StaffMember>();
+    staff.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [staff]);
+
+  const historyByMonth = useMemo(() => {
+    const months: string[] = [];
+    const [y, mo] = curMonthKey.split("-").map(Number);
+    for (let i = 1; i <= 6; i++) {
+      const d = new Date(y, mo - 1 - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    const allRepairs = clients.flatMap((c) => c.repairs ?? []);
+    return months.map((month) => {
+      const totals = new Map<string, number>();
+      allRepairs.forEach((r) => {
+        if (r.status === "cancelled") return;
+        if (!isClosedThisMonth(r, month)) return;
+        const cost = parseFloat(r.cost ?? "0") || 0;
+        const mechs = getMechanics(r);
+        if (cost <= 0 || mechs.length === 0) return;
+        const share = cost / mechs.length;
+        mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));
+      });
+      const sortedM = [...totals.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+      let rank = 1;
+      const interimM: Array<{ uid: string; rank: number; total: number }> = [];
+      sortedM.forEach(([uid, total], i) => {
+        if (i > 0 && total < sortedM[i - 1][1]) rank = i + 1;
+        interimM.push({ uid, rank, total });
+      });
+      const rankFreqM = new Map<number, number>();
+      interimM.forEach(({ rank: r }) => rankFreqM.set(r, (rankFreqM.get(r) ?? 0) + 1));
+      return {
+        month,
+        label: new Date(month + "-01").toLocaleString("ru", { month: "long", year: "numeric" }),
+        entries: interimM.map(({ uid, rank: r, total }) => ({
+          uid,
+          rank: r,
+          total,
+          isTied: (rankFreqM.get(r) ?? 1) > 1,
+        })),
+      };
+    }).filter((m) => m.entries.length > 0);
   }, [clients, curMonthKey]);
 
   const sorted = [...staff].sort((a, b) => {
@@ -334,7 +443,37 @@ export function StaffTab() {
         )}
       </div>
 
+      {(isOwner || isAdmin) && (
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            style={{
+              background: "var(--accent)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              padding: "9px 20px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(59,130,246,0.25)",
+            }}
+          >
+            📊 История рейтинга
+          </button>
+        </div>
+      )}
+
       {editing && <EditStaffModal member={editing} onClose={() => setEditing(null)} />}
+      {showHistory && (
+        <HistoryRatingModal
+          onClose={() => setShowHistory(false)}
+          months={historyByMonth}
+          staffMap={staffMap}
+          showAmounts={isOwner || isAdmin}
+        />
+      )}
     </div>
   );
 }
