@@ -808,6 +808,31 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       .sort((a,b) => (b.closed+b.active) - (a.closed+a.active));
   }, [clients, tasks, staff]);
 
+  // ── Mechanic crown rating (current month revenue share) ───────────────────
+  const mechRating = useMemo(() => {
+    const totals = new Map<string, number>();
+    doneRepairs.forEach((r) => {
+      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
+      const cost  = parseFloat(r.cost ?? "0") || 0;
+      const mechs = r.mechanics ?? [];
+      if (cost <= 0 || mechs.length === 0) return;
+      const share = cost / mechs.length;
+      mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));
+    });
+    const sorted = [...totals.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+    let rank = 1;
+    return sorted.map(([uid, total], i) => {
+      if (i > 0 && total < sorted[i - 1][1]) rank = i + 1;
+      return {
+        uid,
+        name: staff.find((s) => s.id === uid)?.name ?? "Механик",
+        rank,
+        total,
+        crownColor: rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : null,
+      };
+    });
+  }, [doneRepairs, curMonthKey, staff]);
+
   // ── Customer loyalty ──────────────────────────────────────────────────────
   const loyalty = useMemo(() => {
     const withRepairs = clients.filter((c) => (c.repairs ?? []).filter((r) => repairStatus(r) === "done").length > 0);
@@ -934,6 +959,50 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           ))
         )}
       </Section>
+
+      {/* Crown rating */}
+      {mechRating.filter((e) => role !== "mechanic" || e.uid === myProfile?.id).length > 0 && (
+        <Section title={`Рейтинг механиков — ${MONTH_NAMES_FULL[now.getMonth()]}`} icon="ti-trophy">
+          <div style={{ padding: "8px 16px 12px" }}>
+            {mechRating
+              .filter((e) => role !== "mechanic" || e.uid === myProfile?.id)
+              .slice(0, 3)
+              .map((entry) => {
+                const initials = (entry.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+                return (
+                  <div key={entry.uid} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 0", borderBottom: "1px solid var(--border)",
+                  }}>
+                    <div style={{ width: 24, textAlign: "center", flexShrink: 0, lineHeight: 1 }}>
+                      {entry.crownColor
+                        ? <span style={{ fontSize: 17, color: entry.crownColor }}>👑</span>
+                        : <span style={{ fontSize: 13, color: "var(--text3)", fontWeight: 700 }}>{entry.rank}</span>
+                      }
+                    </div>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                      background: "rgba(34,197,94,0.12)", color: "#16a34a",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 700,
+                    }}>
+                      {initials}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {entry.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text3)" }}>{entry.rank} место</div>
+                    </div>
+                    <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#16a34a", flexShrink: 0 }}>
+                      {fmtMoney(Math.round(entry.total))}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </Section>
+      )}
 
       {/* Finance: Revenue chart + mechanics */}
       {showFinance && (

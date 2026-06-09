@@ -1,6 +1,7 @@
-﻿import { useState } from "react";
+﻿import { useState, useMemo } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
+import { fmtMoney } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
@@ -156,8 +157,10 @@ function PermissionToggles({ member }: { member: StaffMember }) {
 
 // ─── Staff card ───────────────────────────────────────────────────────────────
 
-function StaffCard({ member, canEdit, isOwner, onClick }: {
+function StaffCard({ member, canEdit, isOwner, onClick, rating, monthLabel }: {
   member: StaffMember; canEdit: boolean; isOwner: boolean; onClick: () => void;
+  rating?: { rank: number; total: number; crownColor: string | null };
+  monthLabel?: string;
 }) {
   const role   = member.role ?? "mechanic";
   const colors = ROLE_COLORS[role];
@@ -190,6 +193,22 @@ function StaffCard({ member, canEdit, isOwner, onClick }: {
         </span>
       </div>
 
+      {role === "mechanic" && rating?.crownColor && (
+        <div style={{
+          marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>👑</span>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: rating.crownColor }}>
+              {rating.rank} место · {fmtMoney(Math.round(rating.total))}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+              Выручка за {monthLabel}
+            </div>
+          </div>
+        </div>
+      )}
       {showPerms && <PermissionToggles member={member} />}
     </div>
   );
@@ -197,13 +216,44 @@ function StaffCard({ member, canEdit, isOwner, onClick }: {
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
+const MONTH_NAMES_STAFF = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
 export function StaffTab() {
-  const { staff } = useData();
+  const { staff, clients } = useData();
   const { myProfile, isOwner } = useAuth();
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "owner";
 
   const [editing, setEditing] = useState<StaffMember | null>(null);
+
+  const now          = new Date();
+  const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const curMonthLabel = MONTH_NAMES_STAFF[now.getMonth()];
+
+  const staffRating = useMemo(() => {
+    const totals = new Map<string, number>();
+    clients.flatMap((c) => c.repairs ?? []).forEach((r) => {
+      if (r.status === "cancelled") return;
+      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
+      const cost  = parseFloat(r.cost ?? "0") || 0;
+      const mechs = r.mechanics ?? [];
+      if (cost <= 0 || mechs.length === 0) return;
+      const share = cost / mechs.length;
+      mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));
+    });
+    const sorted = [...totals.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+    let rank = 1;
+    const result = new Map<string, { rank: number; total: number; crownColor: string | null }>();
+    sorted.forEach(([uid, total], i) => {
+      if (i > 0 && total < sorted[i - 1][1]) rank = i + 1;
+      result.set(uid, {
+        rank,
+        total,
+        crownColor: rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : null,
+      });
+    });
+    return result;
+  }, [clients, curMonthKey]);
 
   const sorted = [...staff].sort((a, b) => {
     return (ROLE_ORDER[a.role ?? "mechanic"] ?? 3) - (ROLE_ORDER[b.role ?? "mechanic"] ?? 3);
@@ -261,6 +311,8 @@ export function StaffTab() {
                 canEdit={canEditMember(s)}
                 isOwner={isOwner}
                 onClick={() => setEditing(s)}
+                rating={staffRating.get(s.id)}
+                monthLabel={curMonthLabel}
               />
             ))}
           </div>
