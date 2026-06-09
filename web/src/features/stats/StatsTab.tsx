@@ -1051,6 +1051,43 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </div>
       )}
 
+      {/* Finance: Mechanic revenue breakdown — owner only */}
+      {isOwner && mechRating.length > 0 && (
+        <>
+          <style>{`@keyframes glow{0%,100%{text-shadow:0 0 6px #FFD700,0 0 12px #FFD700}50%{text-shadow:0 0 2px #FFD700}}`}</style>
+          <Section
+            title={`Выручка механиков — ${MONTH_NAMES_FULL[now.getMonth()]}`}
+            icon="ti-currency-ruble"
+            count={`${mechRating.length} чел.`}
+          >
+            <div style={{ padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {mechRating.map((m) => (
+                <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    fontSize: 12, color: "var(--text3)", width: 20,
+                    textAlign: "right", flexShrink: 0, fontFamily: "JetBrains Mono, monospace",
+                  }}>
+                    {m.rank}.
+                  </span>
+                  <span style={
+                    m.rank === 1
+                      ? { flex: 1, fontSize: 13.5, fontWeight: 700, animation: "glow 1.5s ease-in-out infinite", color: "#FFD700" }
+                      : m.rank === 2
+                      ? { flex: 1, fontSize: 13.5, fontWeight: 700, border: "1.5px solid #C0C0C0", borderRadius: "6px", padding: "1px 6px", color: "#C0C0C0" }
+                      : { flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text)" }
+                  }>
+                    {m.name}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                    {Math.round(m.total).toLocaleString("ru-RU")} ₽
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </>
+      )}
+
       {/* Finance: Top clients */}
       {showAmounts && topClients.length > 0 && (
         <Section title="Топ клиентов по выручке" icon="ti-trophy" count={`${topClients.length}`}>
