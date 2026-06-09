@@ -854,11 +854,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const mechRating = useMemo(() => {
     const mechRevenueMap = new Map<string, number>();
     const closedThisMonthAll = allRepairs.filter((r) => {
-      if (!r.closedAt) return false;
-      const month = typeof r.closedAt === "string"
-        ? r.closedAt.slice(0, 7)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        : (r.closedAt as any)?.toDate?.()?.toISOString?.()?.slice(0, 7) ?? "";
+      const month = typeof r.date === "string" ? r.date.slice(0, 7) : "";
       return month === curMonthKey;
     });
     closedThisMonthAll.forEach((r) => {
