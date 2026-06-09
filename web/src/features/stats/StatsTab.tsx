@@ -9,24 +9,21 @@ import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getRepairMonth(r: any): string {
-  if (r.closedAt?.toDate) return r.closedAt.toDate().toISOString().slice(0, 7);
-  if (typeof r.closedAt === "string" && r.closedAt.length >= 7) return r.closedAt.slice(0, 7);
-  if (r.updatedAt?.toDate) return r.updatedAt.toDate().toISOString().slice(0, 7);
-  if (typeof r.updatedAt === "string") return r.updatedAt.slice(0, 7);
-  if (typeof r.date === "string") return r.date.slice(0, 7);
-  return "";
+function isClosedThisMonth(r: any, targetMonth: string): boolean {
+  if (!r.closedAt) return false;
+  return String(r.closedAt).slice(0, 7) === targetMonth;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getMechanics(r: any): string[] {
-  if (Array.isArray(r.mechanics) && r.mechanics.length > 0) {
-    return r.mechanics.map((m: any) => (typeof m === "string" ? m : m?.uid ?? "")).filter(Boolean);
+  const uids = new Set<string>();
+  for (const task of (r.tasks ?? [])) {
+    if (Array.isArray(task.assignees)) task.assignees.forEach((uid: string) => uid && uids.add(uid));
+    if (typeof task.assignee === "string" && task.assignee) uids.add(task.assignee);
   }
-  if (typeof r.mechanic === "string" && r.mechanic) return [r.mechanic];
-  if (r.mechanic?.uid) return [r.mechanic.uid];
-  if (typeof r.assignee === "string" && r.assignee) return [r.assignee];
-  return [];
+  if (uids.size === 0 && Array.isArray(r.mechanics)) r.mechanics.forEach((uid: string) => uid && uids.add(uid));
+  if (uids.size === 0 && typeof r.mechanic === "string" && r.mechanic) uids.add(r.mechanic);
+  return Array.from(uids);
 }
 
 interface EnrichedRepair extends Repair {
@@ -836,16 +833,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   // ── Mechanic monthly car count ────────────────────────────────────────────
   const mechMonthlyCars = useMemo(() => {
     const map = new Map<string, number>();
-    const closedRepairs = doneRepairs.filter((r) => getRepairMonth(r) === curMonthKey);
-    console.log("[DEBUG] sample repairs:", closedRepairs.slice(0, 3).map((r) => ({
-      id: r.id,
-      closedAt: r.closedAt,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mechanic: (r as any).mechanic,
-      mechanics: r.mechanics,
-      month: getRepairMonth(r),
-    })));
-    closedRepairs.forEach((r) => getMechanics(r).forEach((uid) => map.set(uid, (map.get(uid) ?? 0) + 1)));
+    doneRepairs
+      .filter((r) => isClosedThisMonth(r, curMonthKey))
+      .forEach((r) => getMechanics(r).forEach((uid) => map.set(uid, (map.get(uid) ?? 0) + 1)));
     return map;
   }, [doneRepairs, curMonthKey]);
 
@@ -853,7 +843,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const mechRating = useMemo(() => {
     const totals = new Map<string, number>();
     doneRepairs.forEach((r) => {
-      if (getRepairMonth(r) !== curMonthKey) return;
+      if (!isClosedThisMonth(r, curMonthKey)) return;
       const cost  = parseFloat(r.cost ?? "0") || 0;
       const mechs = getMechanics(r);
       if (cost <= 0 || mechs.length === 0) return;
