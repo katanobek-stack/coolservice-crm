@@ -203,7 +203,7 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
             )}
             {member.name ?? "(без имени)"}
           </div>
-          {role === "mechanic" && rating?.crownColor && (
+          {role === "mechanic" && rating?.crownColor && isOwner && (
             <div style={{ fontSize: 11, fontWeight: 600, color: rating.crownColor, marginTop: 1 }}>
               {rating.rank} место · {Math.round(rating.total).toLocaleString("ru-RU")} ₽
               {rating.isTied && " (ничья)"}
@@ -430,7 +430,7 @@ export function StaffTab() {
                 canEdit={canEditMember(s)}
                 isOwner={isOwner}
                 onClick={() => setEditing(s)}
-                rating={staffRating.get(s.id) ?? staffRating.get((s as any).uid)}
+                rating={staffRating.get(s.id)}
               />
             ))}
           </div>
