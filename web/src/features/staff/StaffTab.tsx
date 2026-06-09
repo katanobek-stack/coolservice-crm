@@ -176,11 +176,12 @@ function PermissionToggles({ member }: { member: StaffMember }) {
 
 function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
   member: StaffMember; canEdit: boolean; isOwner: boolean; onClick: () => void;
-  rating?: { rank: number; total: number; crownColor: string | null; isTied: boolean };
+  rating?: { rank: number; total: number; isTied: boolean };
 }) {
   const role   = member.role ?? "mechanic";
   const colors = ROLE_COLORS[role];
   const showPerms = isOwner && role === "admin";
+  const rank = role === "mechanic" ? rating?.rank : undefined;
 
   return (
     <div
@@ -197,16 +198,21 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-[#172033]" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            {role === "mechanic" && rating?.crownColor && (
-              <span style={{ fontSize: 13, color: rating.crownColor, lineHeight: 1, flexShrink: 0 }}>👑</span>
-            )}
-            {member.name ?? "(без имени)"}
+          <div className="text-sm font-semibold text-[#172033]" style={{ display: "flex", alignItems: "center" }}>
+            <span style={
+              rank === 1
+                ? { animation: "glow 1.5s ease-in-out infinite", color: "#FFD700" }
+                : rank === 2
+                ? { border: "1.5px solid #C0C0C0", borderRadius: "6px", padding: "1px 6px", color: "#C0C0C0" }
+                : undefined
+            }>
+              {member.name ?? "(без имени)"}
+            </span>
           </div>
-          {role === "mechanic" && rating?.crownColor && isOwner && (
-            <div style={{ fontSize: 11, fontWeight: 600, color: rating.crownColor, marginTop: 1 }}>
-              {rating.rank} место · {Math.round(rating.total).toLocaleString("ru-RU")} ₽
-              {rating.isTied && " (ничья)"}
+          {role === "mechanic" && rank != null && rank <= 2 && isOwner && (
+            <div style={{ fontSize: 11, fontWeight: 600, color: rank === 1 ? "#FFD700" : "#C0C0C0", marginTop: 1 }}>
+              {Math.round(rating?.total ?? 0).toLocaleString("ru-RU")} ₽
+              {rating?.isTied && " (ничья)"}
             </div>
           )}
           <div className="text-xs text-[#667085] truncate">{member.email}</div>
@@ -386,6 +392,7 @@ export function StaffTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <style>{`@keyframes glow { 0%,100%{text-shadow:0 0 6px #FFD700, 0 0 12px #FFD700} 50%{text-shadow:0 0 2px #FFD700} }`}</style>
 
       {/* KPI */}
       <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
