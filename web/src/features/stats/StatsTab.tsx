@@ -852,9 +852,16 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   // ── Mechanic crown rating (current month revenue share) ───────────────────
   const mechRating = useMemo(() => {
+    const closedThisMonth = doneRepairs.filter((r) => isClosedThisMonth(r, curMonthKey));
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG mechanic revenue]", closedThisMonth.slice(0, 5).map((r) => ({
+      id:        r.id,
+      cost:      r.cost,
+      mechanics: getMechanics(r),
+      share:     (parseFloat(r.cost ?? "0") || 0) / Math.max(getMechanics(r).length, 1),
+    })));
     const totals = new Map<string, number>();
-    doneRepairs.forEach((r) => {
-      if (!isClosedThisMonth(r, curMonthKey)) return;
+    closedThisMonth.forEach((r) => {
       const cost  = parseFloat(r.cost ?? "0") || 0;
       const mechs = getMechanics(r);
       if (cost <= 0 || mechs.length === 0) return;
@@ -1076,13 +1083,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                   }}>
                     {m.rank}.
                   </span>
-                  <span style={
-                    m.rank === 1
-                      ? { flex: 1, fontSize: 13.5, fontWeight: 700, animation: "glow 1.5s ease-in-out infinite", color: "#FFD700" }
-                      : m.rank === 2
-                      ? { flex: 1, fontSize: 13.5, fontWeight: 700, border: "1.5px solid #C0C0C0", borderRadius: "6px", padding: "1px 6px", color: "#C0C0C0" }
-                      : { flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text)" }
-                  }>
+                  <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>
                     {m.name}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
