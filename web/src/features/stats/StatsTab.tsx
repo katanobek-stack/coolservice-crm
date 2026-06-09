@@ -861,12 +861,6 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         : (r.closedAt as any)?.toDate?.()?.toISOString?.()?.slice(0, 7) ?? "";
       return month === curMonthKey;
     });
-    // eslint-disable-next-line no-console
-    closedThisMonthAll.slice(0, 3).forEach((r) => {
-      const mechs = getMechanics(r);
-      const cost  = parseFloat(String(r.cost ?? "0").replace(/\s/g, "")) || 0;
-      console.log("[SPLIT]", { id: r.id, cost, mechs, mechsCount: mechs.length, share: cost / Math.max(mechs.length, 1) });
-    });
     closedThisMonthAll.forEach((r) => {
         const cost = parseFloat(String(r.cost ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
         if (cost <= 0) return;
