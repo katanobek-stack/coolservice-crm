@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
@@ -15,10 +15,10 @@ const ROLE_LABELS: Record<StaffRole, string> = {
 };
 
 const ROLE_COLORS: Record<StaffRole, { bg: string; text: string }> = {
-  owner:    { bg: "rgba(239,68,68,0.15)",   text: "#f87171" },
-  admin:    { bg: "rgba(245,158,11,0.15)",  text: "#fbbf24" },
+  owner:    { bg: "rgba(239,68,68,0.15)",   text: "#dc2626" },
+  admin:    { bg: "rgba(245,158,11,0.15)",  text: "#b45309" },
   manager:  { bg: "rgba(59,130,246,0.15)",  text: "var(--accent2)" },
-  mechanic: { bg: "rgba(34,197,94,0.15)",   text: "#4ade80" },
+  mechanic: { bg: "rgba(34,197,94,0.15)",   text: "#16a34a" },
 };
 
 const ROLE_ORDER: Record<StaffRole, number> = {
@@ -59,7 +59,7 @@ function EditStaffModal({ member, onClose }: { member: StaffMember; onClose: () 
             background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
           }}>
             <span style={{ fontSize: 16 }}>👑</span>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#f87171" }}>Владелец</span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#dc2626" }}>Владелец</span>
             <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: "auto" }}>системная роль</span>
           </div>
         ) : (

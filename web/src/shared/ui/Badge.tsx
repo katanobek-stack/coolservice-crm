@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 type BadgeVariant = "blue" | "green" | "amber" | "red" | "gray" | "cyan" | "purple";
 
 const COLORS: Record<BadgeVariant, { bg: string; color: string }> = {
-  blue:   { bg: "rgba(59,130,246,0.12)",  color: "#60a5fa" },
-  green:  { bg: "rgba(34,197,94,0.12)",   color: "#4ade80" },
-  amber:  { bg: "rgba(245,158,11,0.12)",  color: "#fbbf24" },
-  red:    { bg: "rgba(239,68,68,0.12)",   color: "#f87171" },
-  gray:   { bg: "rgba(255,255,255,0.07)", color: "var(--text3)" },
-  cyan:   { bg: "rgba(6,182,212,0.12)",   color: "#22d3ee" },
-  purple: { bg: "rgba(139,92,246,0.12)",  color: "#a78bfa" },
+  blue:   { bg: "rgba(59,130,246,0.1)",   color: "#1d4ed8" },
+  green:  { bg: "rgba(22,163,74,0.1)",    color: "#15803d" },
+  amber:  { bg: "rgba(217,119,6,0.1)",    color: "#b45309" },
+  red:    { bg: "rgba(220,38,38,0.1)",    color: "#dc2626" },
+  gray:   { bg: "rgba(0,0,0,0.05)",       color: "var(--text3)" },
+  cyan:   { bg: "rgba(8,145,178,0.1)",    color: "#0e7490" },
+  purple: { bg: "rgba(124,58,237,0.1)",   color: "#6d28d9" },
 };
 
 export function Badge({ children, variant = "gray" }: { children: ReactNode; variant?: BadgeVariant }) {
@@ -18,7 +18,7 @@ export function Badge({ children, variant = "gray" }: { children: ReactNode; var
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "3px 10px", borderRadius: 20,
-      fontSize: 11.5, fontWeight: 600,
+      fontSize: 13, fontWeight: 600,
       background: bg, color,
       whiteSpace: "nowrap",
     }}>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
@@ -483,13 +483,13 @@ function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: () => vo
       {/* Temp + status */}
       <div style={{ display: "flex", gap: 5, marginTop: 5, flexWrap: "wrap", justifyContent: "center" }}>
         {freezer.temp && (
-          <span style={{ fontSize: 10, color: "#67e8f9", background: "rgba(6,182,212,0.12)", padding: "2px 6px", borderRadius: 5, fontWeight: 600 }}>
+          <span style={{ fontSize: 10, color: "#0e7490", background: "rgba(6,182,212,0.12)", padding: "2px 6px", borderRadius: 5, fontWeight: 600 }}>
             ❄ {freezer.temp}
           </span>
         )}
         <span style={{
           fontSize: 10,
-          color: rented ? "#93c5fd" : "#6ee7b7",
+          color: rented ? "#3b82f6" : "#16a34a",
           background: rented ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)",
           padding: "2px 6px", borderRadius: 5, fontWeight: 600,
         }}>
@@ -538,7 +538,7 @@ export function FreezersTab() {
         <div className="kpi-card green">
           <i className="ti ti-home kpi-icon" />
           <div className="kpi-label">Сдаётся</div>
-          <div className="kpi-value" style={{ color: "#4ade80" }}>{rentedCount}</div>
+          <div className="kpi-value" style={{ color: "#16a34a" }}>{rentedCount}</div>
         </div>
         <div className="kpi-card" style={{ borderTop: "2px solid var(--text3)" }}>
           <i className="ti ti-lock-open kpi-icon" />
@@ -549,7 +549,7 @@ export function FreezersTab() {
           <div className="kpi-card yellow">
             <i className="ti ti-currency-ruble kpi-icon" />
             <div className="kpi-label">Аренда / мес</div>
-            <div className="kpi-value" style={{ color: "#fbbf24" }}>
+            <div className="kpi-value" style={{ color: "#b45309" }}>
               {totalRentIncome.toLocaleString("ru-RU")}₽
             </div>
           </div>

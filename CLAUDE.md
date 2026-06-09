@@ -23,7 +23,7 @@ React + TypeScript + Vite + Firebase + Tailwind CSS
 - CRM задеплоена на GitHub Pages
 - Адрес: katanobek-stack.github.io/coolservice-crm/app
 - Старая HTML версия: katanobek-stack.github.io/coolservice-crm
-- Тёмный дизайн применён ко всем вкладкам
+- Светлая тема применена ко всем вкладкам (белый/светло-серый фон)
 
 ## Что нужно доделать
 1. Кнопка "Выйти" видна на мобиле
@@ -69,4 +69,4 @@ React + TypeScript + Vite + Firebase + Tailwind CSS
 - Тип транспорта: ТОЛЬКО Рефрижератор / Кондиционер
 - Фреон создаётся АВТОМАТИЧЕСКИ при каждом ремонте
 - Перед пушем всегда grep .split() .map() на undefined
-- Дизайн только тёмный как в crm-demo.html
+- Дизайн — светлая тема, белый/светло-серый фон

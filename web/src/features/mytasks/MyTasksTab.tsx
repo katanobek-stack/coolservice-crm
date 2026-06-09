@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { repairStatus, taskStatus, getAssignees } from "../../shared/utils/repair";
@@ -16,11 +16,11 @@ import type { RepairTask, Repair, Client } from "../../shared/types/client";
 // ─── Avatar palette for repair cards ─────────────────────────────────────────
 
 const REPAIR_AVATAR_PALETTES = [
-  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#93c5fd" },
-  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#6ee7b7" },
+  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#3b82f6" },
+  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#16a34a" },
   { bg: "rgba(245,158,11,0.18)",  border: "rgba(245,158,11,0.38)",  text: "#fcd34d" },
-  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#c4b5fd" },
-  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#67e8f9" },
+  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#6d28d9" },
+  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#0e7490" },
   { bg: "rgba(249,115,22,0.18)",  border: "rgba(249,115,22,0.38)",  text: "#fdba74" },
   { bg: "rgba(236,72,153,0.18)",  border: "rgba(236,72,153,0.38)",  text: "#f9a8d4" },
 ];
@@ -275,7 +275,7 @@ function AddRepairTaskModal({ client, repair, onClose }: {
               width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "10px 14px", borderRadius: 10,
               background: "var(--bg3)",
-              border: `1px solid ${assigneeError ? "#f87171" : assigneesOpen ? "var(--accent)" : "var(--border2)"}`,
+              border: `1px solid ${assigneeError ? "#dc2626" : assigneesOpen ? "var(--accent)" : "var(--border2)"}`,
               color: assignees.length ? "var(--text)" : "var(--text3)",
               fontSize: 13, cursor: "pointer", fontFamily: "Manrope, sans-serif", textAlign: "left",
             }}
@@ -310,10 +310,10 @@ function AddRepairTaskModal({ client, repair, onClose }: {
                   >
                     <span style={{
                       width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                      border: `2px solid ${selected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
+                      border: `2px solid ${selected ? "var(--accent)" : "rgba(0,0,0,0.15)"}`,
                       background: selected ? "rgba(59,130,246,0.25)" : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 10, color: selected ? "#93c5fd" : "transparent",
+                      fontSize: 10, color: selected ? "#3b82f6" : "transparent",
                     }}>
                       {selected && "✓"}
                     </span>
@@ -338,7 +338,7 @@ function AddRepairTaskModal({ client, repair, onClose }: {
         </div>
 
         {assigneeError && (
-          <div style={{ marginTop: 5, fontSize: 12, color: "#f87171", fontWeight: 600 }}>⚠ {assigneeError}</div>
+          <div style={{ marginTop: 5, fontSize: 12, color: "#dc2626", fontWeight: 600 }}>⚠ {assigneeError}</div>
         )}
 
         {assignees.length > 0 && (
@@ -492,9 +492,9 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
           style={{
             flexShrink: 0, marginTop: 2,
             width: 18, height: 18, borderRadius: "50%",
-            border: `2px solid ${isDone ? "#4ade80" : "rgba(255,255,255,0.2)"}`,
+            border: `2px solid ${isDone ? "#16a34a" : "rgba(0,0,0,0.15)"}`,
             background: isDone ? "rgba(34,197,94,0.15)" : "transparent",
-            color: isDone ? "#4ade80" : "transparent",
+            color: isDone ? "#16a34a" : "transparent",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", fontSize: 10, fontWeight: 700,
           }}
@@ -511,7 +511,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
           {assigneeNames && <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>👤 {assigneeNames}</div>}
           {subtask.workComment && (
             <div style={{ marginTop: 4, fontSize: 10, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 5, padding: "3px 7px" }}>
-              <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{subtask.workComment}
+              <span style={{ color: "#6d28d9", fontWeight: 600 }}>📝 </span>{subtask.workComment}
             </div>
           )}
           <PhotoGrid photos={subtask.photos ?? []} readOnly onView={setLightbox} />
@@ -522,7 +522,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
               </button>
               <DualPhotoButton onUploaded={addPhotos} />
               {isAdmin && (
-                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 10, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "2px 7px", borderRadius: 5, cursor: "pointer" }}>
+                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 10, color: "#dc2626", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "2px 7px", borderRadius: 5, cursor: "pointer" }}>
                   🗑
                 </button>
               )}
@@ -616,7 +616,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
               padding: "4px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700,
               border: `1px solid ${isDone ? "rgba(34,197,94,0.3)" : "rgba(139,92,246,0.3)"}`,
               background: isDone ? "rgba(34,197,94,0.12)" : "rgba(139,92,246,0.12)",
-              color: isDone ? "#4ade80" : "#c4b5fd",
+              color: isDone ? "#16a34a" : "#6d28d9",
               cursor: "pointer",
             }}
           >
@@ -645,7 +645,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
       {/* Work comment */}
       {task.workComment && (
         <div style={{ marginBottom: 6, fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 6, padding: "4px 8px" }}>
-          <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{task.workComment}
+          <span style={{ color: "#6d28d9", fontWeight: 600 }}>📝 </span>{task.workComment}
         </div>
       )}
 
@@ -664,7 +664,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
           </button>
           <DualPhotoButton onUploaded={addPhotos} />
           {isProject && isAdmin && (
-            <button type="button" onClick={() => setShowAddSubtask(true)} style={{ fontSize: 11, color: "#c4b5fd", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", padding: "4px 10px", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>
+            <button type="button" onClick={() => setShowAddSubtask(true)} style={{ fontSize: 11, color: "#6d28d9", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", padding: "4px 10px", borderRadius: 7, cursor: "pointer", fontWeight: 600 }}>
               + Подзадача
             </button>
           )}
@@ -801,9 +801,9 @@ function RepairTaskRow({ task, client, repair }: {
             style={{
               flexShrink: 0, marginTop: 2,
               width: 20, height: 20, borderRadius: "50%",
-              border: `2px solid ${isDone ? "#4ade80" : "rgba(255,255,255,0.3)"}`,
+              border: `2px solid ${isDone ? "#16a34a" : "rgba(0,0,0,0.15)"}`,
               background: isDone ? "rgba(34,197,94,0.15)" : "transparent",
-              color: isDone ? "#4ade80" : "transparent",
+              color: isDone ? "#16a34a" : "transparent",
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer", fontSize: 11, fontWeight: 700,
             }}
@@ -842,9 +842,9 @@ function RepairTaskRow({ task, client, repair }: {
                     style={{
                       padding: "2px 9px", borderRadius: 6,
                       fontSize: 10, fontWeight: 700, cursor: "pointer",
-                      border: `1px solid ${active ? "#22d3ee" : "var(--border)"}`,
+                      border: `1px solid ${active ? "#0891b2" : "var(--border)"}`,
                       background: active ? "rgba(6,182,212,0.2)" : "transparent",
-                      color: active ? "#22d3ee" : "var(--text3)",
+                      color: active ? "#0891b2" : "var(--text3)",
                     }}
                   >
                     {fr}
@@ -861,9 +861,9 @@ function RepairTaskRow({ task, client, repair }: {
                 style={{
                   padding: "2px 9px", borderRadius: 6,
                   fontSize: 10, fontWeight: 700, cursor: "pointer",
-                  border: `1px solid ${isCustomFreon ? "#22d3ee" : "var(--border)"}`,
+                  border: `1px solid ${isCustomFreon ? "#0891b2" : "var(--border)"}`,
                   background: isCustomFreon ? "rgba(6,182,212,0.2)" : "transparent",
-                  color: isCustomFreon ? "#22d3ee" : "var(--text3)",
+                  color: isCustomFreon ? "#0891b2" : "var(--text3)",
                 }}
               >
                 Др.
@@ -890,7 +890,7 @@ function RepairTaskRow({ task, client, repair }: {
                     fontSize: 10, fontWeight: 700,
                     background: "rgba(6,182,212,0.08)",
                     border: "1px solid rgba(6,182,212,0.4)",
-                    color: "#22d3ee", outline: "none",
+                    color: "#0891b2", outline: "none",
                   }}
                 />
               )}
@@ -901,7 +901,7 @@ function RepairTaskRow({ task, client, repair }: {
           {isFreon && !isDone && (
             <div style={{ marginTop: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "#67e8f9", fontWeight: 600 }}>кг:</span>
+                <span style={{ fontSize: 11, color: "#0e7490", fontWeight: 600 }}>кг:</span>
                 <Input
                   type="number" step="0.1" placeholder="0.0"
                   value={freonKg}
@@ -910,7 +910,7 @@ function RepairTaskRow({ task, client, repair }: {
                   style={{ width: 100 }}
                   className="!min-h-0 !py-1 !px-2 !text-sm flex-shrink-0"
                 />
-                <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#67e8f9", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
+                <button type="button" onClick={() => void saveFreon(false)} style={{ fontSize: 11, color: "#0e7490", background: "transparent", border: "1px solid rgba(6,182,212,0.3)", padding: "4px 8px", borderRadius: 6, cursor: "pointer" }}>
                   💾
                 </button>
                 <button type="button" onClick={() => void saveFreon(true)} style={{ fontSize: 11, color: "white", background: "#16a34a", border: "none", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}>
@@ -918,7 +918,7 @@ function RepairTaskRow({ task, client, repair }: {
                 </button>
               </div>
               {freonError && (
-                <div style={{ marginTop: 4, fontSize: 10, color: "#f87171", fontWeight: 600 }}>
+                <div style={{ marginTop: 4, fontSize: 10, color: "#dc2626", fontWeight: 600 }}>
                   ⚠ {freonError}
                 </div>
               )}
@@ -927,7 +927,7 @@ function RepairTaskRow({ task, client, repair }: {
 
           {/* Done freon — show kg */}
           {isFreon && isDone && task.freonKg && (
-            <div style={{ fontSize: 11, color: "#67e8f9", marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: "#0e7490", marginTop: 2 }}>
               ❄️ Заправлено: <strong>{task.freonKg} кг</strong>
             </div>
           )}
@@ -935,7 +935,7 @@ function RepairTaskRow({ task, client, repair }: {
           {/* Work comment */}
           {task.workComment && (
             <div style={{ marginTop: 6, fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)", borderRadius: 6, padding: "4px 8px" }}>
-              <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{task.workComment}
+              <span style={{ color: "#6d28d9", fontWeight: 600 }}>📝 </span>{task.workComment}
             </div>
           )}
 
@@ -951,7 +951,7 @@ function RepairTaskRow({ task, client, repair }: {
               )}
               <DualPhotoButton onUploaded={addPhotos} />
               {isAdmin && (
-                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 11, color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "3px 9px", borderRadius: 6, cursor: "pointer" }}>
+                <button type="button" onClick={() => void handleDelete()} style={{ fontSize: 11, color: "#dc2626", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", padding: "3px 9px", borderRadius: 6, cursor: "pointer" }}>
                   🗑
                 </button>
               )}
@@ -1044,7 +1044,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
             {vehicle?.plate && (
               <span style={{
                 fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
-                color: "#93c5fd", background: "rgba(59,130,246,0.12)",
+                color: "#3b82f6", background: "rgba(59,130,246,0.12)",
                 border: "1px solid rgba(59,130,246,0.25)",
                 padding: "2px 8px", borderRadius: 6,
               }}>
@@ -1054,7 +1054,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
             <span style={{
               fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
               background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)",
-              color: allDone ? "#4ade80" : "var(--accent2)",
+              color: allDone ? "#16a34a" : "var(--accent2)",
             }}>
               {allDone ? "✓ Готово" : "В работе"}
             </span>
@@ -1080,7 +1080,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
               style={{
                 padding: "5px 7px", borderRadius: 8,
                 background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
-                color: "#f87171", cursor: "pointer", fontSize: 13, lineHeight: 1,
+                color: "#dc2626", cursor: "pointer", fontSize: 13, lineHeight: 1,
               }}
             >
               <i className="ti ti-trash" />
@@ -1121,7 +1121,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
             style={{
               width: "100%", padding: "11px", borderRadius: 10, fontSize: 13, fontWeight: 700,
               background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)",
-              color: "#4ade80", cursor: "pointer",
+              color: "#16a34a", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}
           >

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
@@ -31,12 +31,12 @@ function monthLabel(mk: string): string {
 // ─── Avatar color helper ──────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  { bg: "rgba(59,130,246,0.15)",  color: "#60a5fa" },
-  { bg: "rgba(34,197,94,0.15)",   color: "#4ade80" },
-  { bg: "rgba(139,92,246,0.15)",  color: "#a78bfa" },
-  { bg: "rgba(245,158,11,0.15)",  color: "#fbbf24" },
-  { bg: "rgba(6,182,212,0.15)",   color: "#22d3ee" },
-  { bg: "rgba(239,68,68,0.15)",   color: "#f87171" },
+  { bg: "rgba(59,130,246,0.15)",  color: "#2563eb" },
+  { bg: "rgba(34,197,94,0.15)",   color: "#16a34a" },
+  { bg: "rgba(139,92,246,0.15)",  color: "#7c3aed" },
+  { bg: "rgba(245,158,11,0.15)",  color: "#b45309" },
+  { bg: "rgba(6,182,212,0.15)",   color: "#0891b2" },
+  { bg: "rgba(239,68,68,0.15)",   color: "#dc2626" },
 ];
 
 function avatarColor(str: string) {
@@ -135,7 +135,7 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
           <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>
             {brand ? `${brand} · ` : ""}{client.name}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#4ade80", background: "rgba(34,197,94,0.12)", padding: "1px 8px", borderRadius: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", background: "rgba(34,197,94,0.12)", padding: "1px 8px", borderRadius: 10 }}>
             ✓ все задачи выполнены
           </span>
         </div>
@@ -162,7 +162,7 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
           <div style={{
             marginBottom: 8, padding: "6px 10px", borderRadius: 8,
             background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
-            fontSize: 12, color: "#fbbf24", fontWeight: 600,
+            fontSize: 12, color: "#b45309", fontWeight: 600,
           }}>
             ⚠ Укажите марку фреона в задаче заправки перед закрытием
           </div>
@@ -240,7 +240,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
         <div style={{ flex: 1, minWidth: 0 }}>
           {vehicle?.plate && (
             <div style={{ marginBottom: 3 }}>
-              <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 6 }}>
+              <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#3b82f6", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 6 }}>
                 {vehicle.plate}
               </span>
             </div>
@@ -251,7 +251,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
         <span style={{
           fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, flexShrink: 0,
           background: isCancelled ? "var(--bg2)" : "rgba(34,197,94,0.15)",
-          color: isCancelled ? "var(--text3)" : "#4ade80",
+          color: isCancelled ? "var(--text3)" : "#16a34a",
           border: `1px solid ${isCancelled ? "var(--border)" : "rgba(34,197,94,0.3)"}`,
         }}>
           {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Выполнено"}
@@ -269,7 +269,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
         {repair.closedAt && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>✓ Закрыто</span>
-            <span style={{ color: "#4ade80", fontWeight: 600 }}>{fmtDate(repair.closedAt.slice(0, 10))}</span>
+            <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtDate(repair.closedAt.slice(0, 10))}</span>
           </div>
         )}
         {assigneeNames && (
@@ -287,13 +287,13 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
         {repair.freonType && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>❄️ Фреон</span>
-            <span style={{ color: "#67e8f9" }}>{repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}</span>
+            <span style={{ color: "#0e7490" }}>{repair.freonType}{repair.freonAmount ? ` · ${repair.freonAmount} кг` : ""}</span>
           </div>
         )}
         {isAdmin && showAmounts && costNum > 0 && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>💰 Итого</span>
-            <span style={{ color: "#4ade80", fontWeight: 700, fontFamily: "JetBrains Mono, monospace", fontSize: 14 }}>
+            <span style={{ color: "#16a34a", fontWeight: 700, fontFamily: "JetBrains Mono, monospace", fontSize: 14 }}>
               {fmtMoney(costNum)}
             </span>
           </div>
@@ -342,10 +342,10 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
                       }}>
                         {t.description}
                         {isFreon && t.freonType && (
-                          <span style={{ color: "#67e8f9", fontWeight: 400 }}> {t.freonType}</span>
+                          <span style={{ color: "#0e7490", fontWeight: 400 }}> {t.freonType}</span>
                         )}
                         {isFreon && t.freonKg && (
-                          <span style={{ color: "#67e8f9", fontWeight: 700 }}> · {t.freonKg} кг</span>
+                          <span style={{ color: "#0e7490", fontWeight: 700 }}> · {t.freonKg} кг</span>
                         )}
                       </div>
                       {taskNames && (
@@ -353,7 +353,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
                       )}
                       {t.workComment && (
                         <div style={{ fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", borderRadius: 5, padding: "3px 8px", marginTop: 5, border: "1px solid rgba(139,92,246,0.15)" }}>
-                          <span style={{ color: "#c4b5fd", fontWeight: 600 }}>📝 </span>{t.workComment}
+                          <span style={{ color: "#6d28d9", fontWeight: 600 }}>📝 </span>{t.workComment}
                         </div>
                       )}
                     </div>
@@ -432,10 +432,10 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
           textAlign: "center",
           marginBottom: 14,
         }}>
-          <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+          <div style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
             Итоговая сумма
           </div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+          <div style={{ fontSize: 30, fontWeight: 900, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
             {fmtMoney(costNum)}
           </div>
         </div>
@@ -469,7 +469,7 @@ function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
         const isFreon = t.freonTask === true;
         return (
           <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 5, marginBottom: 2 }}>
-            <span style={{ fontSize: 11, color: done ? "#4ade80" : "var(--text3)", flexShrink: 0, marginTop: 1 }}>
+            <span style={{ fontSize: 11, color: done ? "#16a34a" : "var(--text3)", flexShrink: 0, marginTop: 1 }}>
               {isFreon ? "❄️" : done ? "✓" : "○"}
             </span>
             <span style={{
@@ -480,7 +480,7 @@ function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
             }}>
               {t.description}
               {isFreon && t.freonType && (
-                <span style={{ color: "#67e8f9" }}> · {t.freonType}{t.freonKg ? ` ${t.freonKg} кг` : ""}</span>
+                <span style={{ color: "#0e7490" }}> · {t.freonType}{t.freonKg ? ` ${t.freonKg} кг` : ""}</span>
               )}
             </span>
           </div>
@@ -636,7 +636,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
         {/* Right: cost + badge + owner edit */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {isAdmin && showAmounts && costNum > 0 && (
-            <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
               {fmtMoney(costNum)}
             </span>
           )}
@@ -650,7 +650,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
               style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
                 background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)",
-                color: "#a78bfa", cursor: "pointer",
+                color: "#7c3aed", cursor: "pointer",
               }}
             >
               ✏️ Ред.
@@ -702,7 +702,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid 
           {tasks.length > 0 && ` · ${tasks.length} задач`}
         </span>
         {totalCost > 0 && (
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
             {fmtMoney(totalCost)}
           </span>
         )}
@@ -736,7 +736,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid 
               )}
               {t.workComment && (
                 <div style={{ marginTop: 6, fontSize: 12, color: "var(--text)", background: "var(--bg3)", borderRadius: 8, padding: "6px 10px", border: "1px solid var(--border)" }}>
-                  <span style={{ color: "#a78bfa", fontWeight: 600 }}>Отчёт: </span>{t.workComment}
+                  <span style={{ color: "#7c3aed", fontWeight: 600 }}>Отчёт: </span>{t.workComment}
                 </div>
               )}
             </div>
@@ -771,7 +771,7 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
   return (
     <Modal title={`Уточнить тип фреона · ${items.length}`} onClose={onClose}>
       {items.length === 0 ? (
-        <div style={{ padding: "24px 0", textAlign: "center", color: "#4ade80", fontWeight: 600 }}>
+        <div style={{ padding: "24px 0", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
           ✓ Все записи исправлены
         </div>
       ) : (
@@ -789,7 +789,7 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
                   {item.vehicle?.plate && (
                     <span style={{
                       fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
-                      color: "#93c5fd", background: "rgba(59,130,246,0.12)",
+                      color: "#3b82f6", background: "rgba(59,130,246,0.12)",
                       border: "1px solid rgba(59,130,246,0.25)", padding: "1px 7px", borderRadius: 5,
                     }}>
                       {item.vehicle.plate}
@@ -800,7 +800,7 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
                     {item.client.name}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: "#67e8f9", marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: "#0e7490", marginBottom: 8 }}>
                   ❄️ {item.repair.freonAmount} кг · {item.repair.date ? item.repair.date.slice(0, 10) : "—"}
                 </div>
                 {/* Badge picker */}
@@ -815,7 +815,7 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
                         padding: "3px 10px", borderRadius: 6,
                         fontSize: 11, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer",
                         border: "1px solid rgba(6,182,212,0.4)",
-                        background: "rgba(6,182,212,0.1)", color: "#22d3ee",
+                        background: "rgba(6,182,212,0.1)", color: "#0891b2",
                         opacity: isSaving ? 0.5 : 1,
                       }}
                     >
@@ -974,7 +974,7 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
                 onClick={() => removeTask(t.id)}
                 style={{
                   width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(239,68,68,0.3)",
-                  background: "rgba(239,68,68,0.08)", color: "#f87171",
+                  background: "rgba(239,68,68,0.08)", color: "#dc2626",
                   cursor: "pointer", fontSize: 16, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
@@ -1049,10 +1049,10 @@ function FreonSection({ clients }: { clients: Client[] }) {
   return (
     <div className="crm-section" style={{ animation: "fadeUp 0.5s ease 0.25s both" }}>
       <div className="section-header" style={{ background: "rgba(6,182,212,0.06)" }}>
-        <i className="ti ti-snowflake" style={{ fontSize: 17, color: "#22d3ee" }} />
+        <i className="ti ti-snowflake" style={{ fontSize: 17, color: "#0891b2" }} />
         <span className="section-title">Расход фреона</span>
         <div className="section-actions">
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>
             {stats.total.toFixed(1)} кг
           </span>
         </div>
@@ -1063,8 +1063,8 @@ function FreonSection({ clients }: { clients: Client[] }) {
         {stats.typeEntries.map(([typ, kg]) => (
           <div key={typ} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#67e8f9" }}>❄️ {typ}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#0e7490" }}>❄️ {typ}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>
                 {kg.toFixed(1)} кг
               </span>
             </div>
@@ -1094,7 +1094,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
                   style={{
                     fontSize: 10, fontWeight: 700, padding: "1px 8px", borderRadius: 5,
                     background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
-                    color: "#fbbf24", cursor: "pointer",
+                    color: "#b45309", cursor: "pointer",
                   }}
                 >
                   Исправить {stats.unknownItems.length}
@@ -1145,9 +1145,9 @@ function FreonSection({ clients }: { clients: Client[] }) {
                   <tr style={{ background: "rgba(6,182,212,0.08)" }}>
                     <th style={{ padding: "7px 16px", textAlign: "left", color: "var(--text3)", fontWeight: 600, whiteSpace: "nowrap" }}>Месяц</th>
                     {stats.allTypes.map((t) => (
-                      <th key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#67e8f9", fontWeight: 600, whiteSpace: "nowrap" }}>❄️ {t}</th>
+                      <th key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#0e7490", fontWeight: 600, whiteSpace: "nowrap" }}>❄️ {t}</th>
                     ))}
-                    <th style={{ padding: "7px 10px", textAlign: "right", color: "#22d3ee", fontWeight: 700, whiteSpace: "nowrap" }}>Итого</th>
+                    <th style={{ padding: "7px 10px", textAlign: "right", color: "#0891b2", fontWeight: 700, whiteSpace: "nowrap" }}>Итого</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1160,11 +1160,11 @@ function FreonSection({ clients }: { clients: Client[] }) {
                       <tr key={mk} style={{ borderBottom: "1px solid var(--border)" }}>
                         <td style={{ padding: "7px 16px", color: "var(--text2)", whiteSpace: "nowrap" }}>{label}</td>
                         {stats.allTypes.map((t) => (
-                          <td key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#67e8f9", fontFamily: "JetBrains Mono, monospace" }}>
+                          <td key={t} style={{ padding: "7px 10px", textAlign: "right", color: "#0e7490", fontFamily: "JetBrains Mono, monospace" }}>
                             {mData[t] ? `${mData[t].toFixed(1)} кг` : "—"}
                           </td>
                         ))}
-                        <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                        <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>
                           {mTotal.toFixed(1)} кг
                         </td>
                       </tr>
@@ -1173,13 +1173,13 @@ function FreonSection({ clients }: { clients: Client[] }) {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: "2px solid rgba(6,182,212,0.3)", background: "rgba(6,182,212,0.06)" }}>
-                    <td style={{ padding: "7px 16px", fontWeight: 700, color: "#22d3ee" }}>Итого</td>
+                    <td style={{ padding: "7px 16px", fontWeight: 700, color: "#0891b2" }}>Итого</td>
                     {stats.allTypes.map((t) => (
-                      <td key={t} style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                      <td key={t} style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>
                         {stats.byType[t].toFixed(1)} кг
                       </td>
                     ))}
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 800, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 800, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>
                       {stats.total.toFixed(1)} кг
                     </td>
                   </tr>
@@ -1424,8 +1424,8 @@ export function DoneTab() {
       {isAdmin && needsClose.length > 0 && (
         <div className="crm-section" style={{ animation: "fadeUp 0.4s ease 0.1s both" }}>
           <div className="section-header">
-            <i className="ti ti-clock-check" style={{ fontSize: 17, color: "#4ade80" }} />
-            <span className="section-title" style={{ color: "#4ade80" }}>Ожидают закрытия</span>
+            <i className="ti ti-clock-check" style={{ fontSize: 17, color: "#16a34a" }} />
+            <span className="section-title" style={{ color: "#16a34a" }}>Ожидают закрытия</span>
             <span className="section-count">{needsClose.length} нарядов</span>
           </div>
           <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1446,7 +1446,7 @@ export function DoneTab() {
           </span>
           {showAmounts && totalRevenue > 0 && (
             <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
                 {fmtMoney(totalRevenue)}
               </span>
             </div>
@@ -1476,7 +1476,7 @@ export function DoneTab() {
               style={{
                 padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
                 background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)",
-                color: "#4ade80", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+                color: "#16a34a", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
               }}
             >
               <i className="ti ti-table-export" style={{ fontSize: 14 }} /> Скачать Excel

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
@@ -108,9 +108,9 @@ function RevenueChart({ monthData, onBarClick, hideAmounts }: {
           return (
             <>
               <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", minWidth: 28 }}>{hov.label}</span>
-              <span style={{ fontSize: 11.5, color: "#60a5fa" }}>↑ {fmtK(hov.rev)}</span>
-              {hov.exp > 0 && <span style={{ fontSize: 11.5, color: "#f87171" }}>↓ {fmtK(hov.exp)}</span>}
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: profit >= 0 ? "#4ade80" : "#f87171" }}>
+              <span style={{ fontSize: 11.5, color: "#2563eb" }}>↑ {fmtK(hov.rev)}</span>
+              {hov.exp > 0 && <span style={{ fontSize: 11.5, color: "#dc2626" }}>↓ {fmtK(hov.exp)}</span>}
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: profit >= 0 ? "#16a34a" : "#dc2626" }}>
                 = {profit >= 0 ? "+" : "−"}{fmtK(Math.abs(profit))}
               </span>
               {onBarClick && (
@@ -221,7 +221,7 @@ function FreonMonthChart({ months }: { months: { key: string; total: number }[] 
         return (
           <div key={m.key} className="bar-wrap">
             {m.total > 0 && (
-              <span className="bar-value" style={{ color: "#22d3ee" }}>
+              <span className="bar-value" style={{ color: "#0891b2" }}>
                 {m.total.toFixed(1)}
               </span>
             )}
@@ -273,10 +273,10 @@ function BarRow({ label, value, maxValue, valueLabel, sub }: {
 // ─── Mechanic row ─────────────────────────────────────────────────────────────
 
 const MECH_COLORS = [
-  { bg: "rgba(59,130,246,0.15)",  color: "#60a5fa", bar: "var(--yellow)" },
-  { bg: "rgba(34,197,94,0.15)",   color: "#4ade80", bar: "var(--green)"  },
-  { bg: "rgba(139,92,246,0.15)",  color: "#a78bfa", bar: "var(--accent)" },
-  { bg: "rgba(6,182,212,0.15)",   color: "#22d3ee", bar: "var(--cyan)"   },
+  { bg: "rgba(59,130,246,0.15)",  color: "#2563eb", bar: "var(--yellow)" },
+  { bg: "rgba(34,197,94,0.15)",   color: "#16a34a", bar: "var(--green)"  },
+  { bg: "rgba(139,92,246,0.15)",  color: "#7c3aed", bar: "var(--accent)" },
+  { bg: "rgba(6,182,212,0.15)",   color: "#0891b2", bar: "var(--cyan)"   },
 ];
 
 function MechanicRow({ name, active, total, idx }: { name: string; active: number; total: number; idx: number }) {
@@ -321,7 +321,7 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
   const brand     = repair.vehicle?.brand ?? repair.vehicle?.model;
   const st        = repairStatus(repair);
   const statusLabel = st === "done" ? "Закрыто" : st === "cancelled" ? "Отказ" : "В работе";
-  const statusColor = st === "done" ? "#4ade80" : st === "cancelled" ? "var(--text3)" : "var(--accent2)";
+  const statusColor = st === "done" ? "#16a34a" : st === "cancelled" ? "var(--text3)" : "var(--accent2)";
 
   return (
     <Modal title={repair.clientName} onClose={onClose}>
@@ -338,7 +338,7 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <div>
             {repair.vehicle?.plate && (
-              <span style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{repair.vehicle.plate}</span>
+              <span style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{repair.vehicle.plate}</span>
             )}
             {brand && <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 8 }}>{brand}</span>}
           </div>
@@ -363,7 +363,7 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
 
       {/* Freon */}
       {(freonType || freonAmt) && (
-        <div style={{ fontSize: 12, color: "#67e8f9", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.18)", borderRadius: 8, padding: "6px 12px", marginBottom: 12, display: "inline-block" }}>
+        <div style={{ fontSize: 12, color: "#0e7490", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.18)", borderRadius: 8, padding: "6px 12px", marginBottom: 12, display: "inline-block" }}>
           ❄️ {freonType}{freonAmt ? ` · ${freonAmt} кг` : ""}
         </div>
       )}
@@ -375,7 +375,7 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
 
       {/* Cost */}
       {isAdmin && cost > 0 && (
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#4ade80", fontFamily: "monospace", marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#16a34a", fontFamily: "monospace", marginBottom: 12 }}>
           💰 {cost.toLocaleString("ru-RU")} ₽
         </div>
       )}
@@ -387,20 +387,20 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {(repair.tasks ?? []).map((t) => (
               <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
-                <span style={{ fontSize: 12, color: t.status === "done" ? "#4ade80" : "#fbbf24", flexShrink: 0, marginTop: 1 }}>
+                <span style={{ fontSize: 12, color: t.status === "done" ? "#16a34a" : "#b45309", flexShrink: 0, marginTop: 1 }}>
                   {t.status === "done" ? "✓" : "●"}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: 12, color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>{t.description}</span>
-                  {t.freonType && <span style={{ fontSize: 11, color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
-                  {t.freonKg   && <span style={{ fontSize: 11, color: "#67e8f9" }}> {t.freonKg} кг</span>}
+                  {t.freonType && <span style={{ fontSize: 11, color: "#0e7490" }}> · ❄️ {t.freonType}</span>}
+                  {t.freonKg   && <span style={{ fontSize: 11, color: "#0e7490" }}> {t.freonKg} кг</span>}
                   {(t.assignees ?? []).length > 0 && (
                     <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
                       👤 {(t.assignees ?? []).map((uid) => staff.find((s) => s.id === uid)?.name ?? "").filter(Boolean).join(", ")}
                     </div>
                   )}
                   {t.workComment && (
-                    <div style={{ fontSize: 10, color: "#c4b5fd", marginTop: 2 }}>📝 {t.workComment}</div>
+                    <div style={{ fontSize: 10, color: "#6d28d9", marginTop: 2 }}>📝 {t.workComment}</div>
                   )}
                 </div>
               </div>
@@ -498,7 +498,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
                 <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8, fontSize: 12.5 }}>
                   {c.name}
                 </span>
-                <span style={{ color: "#4ade80", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
+                <span style={{ color: "#16a34a", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
                   {fmtMoney(c.amount)}
                 </span>
               </div>
@@ -506,7 +506,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
           )}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0 0", borderTop: "1px solid var(--border2)", marginTop: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalRevenue)}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalRevenue)}</span>
           </div>
         </div>
 
@@ -521,13 +521,13 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
             expenseRows.map((e) => (
               <div key={e.label} style={rowStyle}>
                 <span style={{ color: "var(--text)", fontSize: 12.5 }}>{e.icon} {e.label}</span>
-                <span style={{ color: "#f87171", fontFamily: "JetBrains Mono, monospace", fontWeight: 700 }}>{fmtMoney(e.amount)}</span>
+                <span style={{ color: "#dc2626", fontFamily: "JetBrains Mono, monospace", fontWeight: 700 }}>{fmtMoney(e.amount)}</span>
               </div>
             ))
           )}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0 0", borderTop: "1px solid var(--border2)", marginTop: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalExpenses)}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(totalExpenses)}</span>
           </div>
         </div>
       </div>
@@ -540,7 +540,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
         border: `1px solid ${profit >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
       }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Чистая прибыль</span>
-        <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: profit >= 0 ? "#4ade80" : "#f87171" }}>
+        <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: profit >= 0 ? "#16a34a" : "#dc2626" }}>
           {profit >= 0 ? "+" : ""}{fmtMoney(profit)}
         </span>
       </div>
@@ -576,12 +576,12 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 const AVATAR_COLORS = [
-  { bg: "rgba(239,68,68,0.15)",   color: "#f87171" },
-  { bg: "rgba(59,130,246,0.15)",  color: "#60a5fa" },
-  { bg: "rgba(34,197,94,0.15)",   color: "#4ade80" },
-  { bg: "rgba(139,92,246,0.15)",  color: "#a78bfa" },
-  { bg: "rgba(6,182,212,0.15)",   color: "#22d3ee" },
-  { bg: "rgba(245,158,11,0.15)",  color: "#fbbf24" },
+  { bg: "rgba(239,68,68,0.15)",   color: "#dc2626" },
+  { bg: "rgba(59,130,246,0.15)",  color: "#2563eb" },
+  { bg: "rgba(34,197,94,0.15)",   color: "#16a34a" },
+  { bg: "rgba(139,92,246,0.15)",  color: "#7c3aed" },
+  { bg: "rgba(6,182,212,0.15)",   color: "#0891b2" },
+  { bg: "rgba(245,158,11,0.15)",  color: "#b45309" },
 ];
 
 function repairPriority(date?: string): { color: string; shadow?: string } {
@@ -642,7 +642,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
       </div>
       <span className={`status-badge ${s.cls}`}>{s.label}</span>
       {isAdmin && costNum > 0 && (
-        <span className="mono" style={{ color: "#4ade80", flexShrink: 0 }}>{fmtMoney(costNum)}</span>
+        <span className="mono" style={{ color: "#16a34a", flexShrink: 0 }}>{fmtMoney(costNum)}</span>
       )}
       {date && (
         <span style={{ fontSize: 11.5, color: "var(--text3)", flexShrink: 0 }}>{fmtDate(date)}</span>
@@ -882,19 +882,19 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         />
         {showAmounts && (
           <KpiCard
-            label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#4ade80"
+            label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#16a34a"
             value={curMonthRev > 0 ? fmtMoney(curMonthRev) : "—"}
             delta={revDiff !== null ? `${revDiff >= 0 ? "+" : ""}${revDiff}% к пр. мес` : undefined}
             deltaUp={revDiff !== null ? revDiff >= 0 : undefined}
           />
         )}
         <KpiCard
-          label="Закрыто сегодня" icon="ti-clock" accent="yellow" color="#fbbf24"
+          label="Закрыто сегодня" icon="ti-clock" accent="yellow" color="#b45309"
           value={doneToday}
           delta={doneRepairs.length > 0 ? `всего ${doneRepairs.length}` : undefined}
         />
         <KpiCard
-          label="Клиентов" icon="ti-users" accent="purple" color="#a78bfa"
+          label="Клиентов" icon="ti-users" accent="purple" color="#7c3aed"
           value={clients.length}
           delta={`${inProgressRepairs.length} в ремонте`}
         />
@@ -945,7 +945,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
               <span className="section-title">Выручка по месяцам</span>
               {revDiff !== null && (
                 <div className="section-actions">
-                  <span style={{ fontSize: 12, color: revDiff >= 0 ? "#4ade80" : "#f87171", fontFamily: "JetBrains Mono, monospace" }}>
+                  <span style={{ fontSize: 12, color: revDiff >= 0 ? "#16a34a" : "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>
                     {revDiff >= 0 ? "↑" : "↓"} {Math.abs(revDiff)}%
                   </span>
                 </div>
@@ -956,7 +956,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
               <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
                 <div>
                   <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#4ade80", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#16a34a", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
@@ -1033,8 +1033,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
               {[
                 { n: loyalty.total,   label: "Всего",     color: "var(--accent2)" },
-                { n: loyalty.repeats, label: "Повторно",  color: "#4ade80"        },
-                { n: `${loyalty.pct}%`, label: "Возврат", color: "#a78bfa"        },
+                { n: loyalty.repeats, label: "Повторно",  color: "#16a34a"        },
+                { n: `${loyalty.pct}%`, label: "Возврат", color: "#7c3aed"        },
               ].map((item) => (
                 <div key={item.label} style={{
                   background: "var(--bg3)", borderRadius: 10, padding: "12px 8px",
@@ -1105,12 +1105,12 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                   <div key={m.key} style={{ background: "var(--bg3)", borderRadius: 10, padding: "8px 12px", border: "1px solid var(--border)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: m.types.length > 1 ? 4 : 0 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{freonMonthLabel(m.key)}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#22d3ee", fontFamily: "JetBrains Mono, monospace" }}>{m.total.toFixed(1)} кг</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#0891b2", fontFamily: "JetBrains Mono, monospace" }}>{m.total.toFixed(1)} кг</span>
                     </div>
                     {m.types.length > 1 && m.types.map((t) => (
                       <div key={t.type} style={{ display: "flex", justifyContent: "space-between", padding: "2px 6px", fontSize: 11 }}>
                         <span style={{ color: "var(--text3)" }}>❄️ {t.type}</span>
-                        <span style={{ color: "#67e8f9" }}>{t.kg.toFixed(1)} кг</span>
+                        <span style={{ color: "#0e7490" }}>{t.kg.toFixed(1)} кг</span>
                       </div>
                     ))}
                   </div>

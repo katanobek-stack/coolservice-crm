@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type CSSProperties } from "react";
+﻿import { useState, useMemo, useEffect, useRef, type CSSProperties } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
@@ -527,7 +527,7 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
               width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "10px 14px", borderRadius: 10,
               background: "var(--bg3)",
-              border: `1px solid ${mechError ? "#f87171" : mechanicsOpen ? "var(--accent)" : "var(--border2)"}`,
+              border: `1px solid ${mechError ? "#dc2626" : mechanicsOpen ? "var(--accent)" : "var(--border2)"}`,
               color: selectedMechanics.length ? "var(--text)" : "var(--text3)",
               fontSize: 13, cursor: "pointer", fontFamily: "Manrope, sans-serif", textAlign: "left",
             }}
@@ -563,10 +563,10 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
                   >
                     <span style={{
                       width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                      border: `2px solid ${selected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
+                      border: `2px solid ${selected ? "var(--accent)" : "rgba(0,0,0,0.15)"}`,
                       background: selected ? "rgba(59,130,246,0.25)" : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 10, color: selected ? "#93c5fd" : "transparent",
+                      fontSize: 10, color: selected ? "#3b82f6" : "transparent",
                     }}>
                       {selected && "✓"}
                     </span>
@@ -592,7 +592,7 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
 
         {/* Validation error */}
         {mechError && (
-          <div style={{ marginTop: 5, fontSize: 12, color: "#f87171", fontWeight: 600 }}>⚠ {mechError}</div>
+          <div style={{ marginTop: 5, fontSize: 12, color: "#dc2626", fontWeight: 600 }}>⚠ {mechError}</div>
         )}
 
         {/* Selected chips */}
@@ -760,7 +760,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
               <button type="button" onClick={() => void setRepairStatus("in_progress")} style={{ fontSize: 11, color: "#fcd34d", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>↩ Вернуть</button>
             ) : status === "in_progress" ? (
               <>
-                <button type="button" onClick={() => void setRepairStatus("done")} style={{ fontSize: 11, color: "#6ee7b7", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>Закрыть</button>
+                <button type="button" onClick={() => void setRepairStatus("done")} style={{ fontSize: 11, color: "#16a34a", background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>Закрыть</button>
                 <button type="button" onClick={() => void setRepairStatus("cancelled")} style={{ fontSize: 11, color: "var(--text2)", background: "var(--bg3)", border: "1px solid var(--border)", padding: "2px 7px", borderRadius: 7, cursor: "pointer" }}>Отказ</button>
               </>
             ) : null}
@@ -770,7 +770,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
       </div>
 
       {vehicle && (
-        <span style={{ fontSize: 11.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{vehicle.plate}</span>
+        <span style={{ fontSize: 11.5, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{vehicle.plate}</span>
       )}
       {(repair.mechanics ?? []).length > 0 && (
         <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 5 }}>
@@ -786,11 +786,11 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
-        {repair.cost && isAdmin && <span style={{ fontSize: 13, fontWeight: 700, color: "#4ade80" }}>{repair.cost} ₽</span>}
+        {repair.cost && isAdmin && <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a" }}>{repair.cost} ₽</span>}
       </div>
 
       {(repair.freonType || repair.freonAmount) && (
-        <div style={{ marginTop: 8, fontSize: 11.5, color: "#67e8f9", background: "rgba(6,182,212,0.10)", border: "1px solid rgba(6,182,212,0.20)", borderRadius: 8, padding: "4px 10px", display: "inline-block" }}>
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "#0e7490", background: "rgba(6,182,212,0.10)", border: "1px solid rgba(6,182,212,0.20)", borderRadius: 8, padding: "4px 10px", display: "inline-block" }}>
           ❄️ {repair.freonType} {repair.freonAmount && `${repair.freonAmount} кг`}
         </div>
       )}
@@ -810,11 +810,11 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
             return (
               <div key={t.id} style={{ background: "var(--bg3)", borderRadius: 8, padding: "6px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <span style={{ color: ts === "done" ? "#4ade80" : "#fbbf24" }}>{ts === "done" ? "✓" : "●"}</span>
+                  <span style={{ color: ts === "done" ? "#16a34a" : "#b45309" }}>{ts === "done" ? "✓" : "●"}</span>
                   <span style={{ color: "var(--text)", flex: 1 }}>{t.description}</span>
-                  {t.freonType && <span style={{ fontSize: 10, color: "#67e8f9", fontWeight: 700 }}>❄️ {t.freonType}</span>}
-                  {t.freonKg   && <span style={{ fontSize: 10, color: "#67e8f9" }}>{t.freonKg} кг</span>}
-                  {t.workComment && <span style={{ fontSize: 10, color: "#c4b5fd" }}>📝</span>}
+                  {t.freonType && <span style={{ fontSize: 10, color: "#0e7490", fontWeight: 700 }}>❄️ {t.freonType}</span>}
+                  {t.freonKg   && <span style={{ fontSize: 10, color: "#0e7490" }}>{t.freonKg} кг</span>}
+                  {t.workComment && <span style={{ fontSize: 10, color: "#6d28d9" }}>📝</span>}
                 </div>
                 {t.freonTask && ts !== "done" && (
                   <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
@@ -828,9 +828,9 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
                           style={{
                             padding: "2px 8px", borderRadius: 6,
                             fontSize: 10, fontWeight: 700, cursor: "pointer",
-                            border: `1px solid ${active ? "#22d3ee" : "var(--border)"}`,
+                            border: `1px solid ${active ? "#0891b2" : "var(--border)"}`,
                             background: active ? "rgba(6,182,212,0.2)" : "transparent",
-                            color: active ? "#22d3ee" : "var(--text3)",
+                            color: active ? "#0891b2" : "var(--text3)",
                             fontFamily: "Manrope, sans-serif",
                           }}
                         >
@@ -912,7 +912,7 @@ function CollapsibleMonth({ label, count, isAdmin, client, repairs }: {
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>{label}</span>
         <span style={{ fontSize: 11, color: "var(--text3)" }}>{count} ремонтов</span>
         {totalCost > 0 && isAdmin && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#4ade80" }}>{totalCost.toLocaleString("ru-RU")} ₽</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{totalCost.toLocaleString("ru-RU")} ₽</span>
         )}
       </button>
       {open && (
@@ -990,7 +990,7 @@ function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: ()
         <span style={{ fontSize: 22, flexShrink: 0 }}>{vehicleTypeIcon(vehicle.serviceType)}</span>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
+        <div style={{ fontSize: 13.5, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{vehicle.plate}</div>
         {brand && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 1 }}>{brand}</div>}
       </div>
       {onView && (
@@ -1034,7 +1034,7 @@ function VehiclePickerModal({ client, onPick, onClose }: {
                 <span style={{ fontSize: 24, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
               )}
               <div>
-                <div style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{v.plate}</div>
+                <div style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{v.plate}</div>
                 {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
               </div>
             </button>
@@ -1094,8 +1094,8 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
   function statusInfo(repair: Repair): { label: string; color: string; bg: string } {
     const st = repairStatus(repair);
     if (st === "cancelled")              return { label: "Отказ",     color: "var(--text3)", bg: "var(--bg3)" };
-    if (st === "done" && repair.closedByManager) return { label: "Закрыто",   color: "#4ade80",     bg: "rgba(34,197,94,0.15)" };
-    if (st === "done")                   return { label: "Выполнено", color: "#4ade80",     bg: "rgba(34,197,94,0.15)" };
+    if (st === "done" && repair.closedByManager) return { label: "Закрыто",   color: "#16a34a",     bg: "rgba(34,197,94,0.15)" };
+    if (st === "done")                   return { label: "Выполнено", color: "#16a34a",     bg: "rgba(34,197,94,0.15)" };
     return { label: "В работе", color: "var(--accent2)", bg: "rgba(59,130,246,0.15)" };
   }
 
@@ -1115,7 +1115,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 12px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
         {!vehicle.photo && <span style={{ fontSize: 24 }}>{vehicleTypeIcon(vehicle.serviceType)}</span>}
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#93c5fd" }}>{vehicle.plate}</div>
+          <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#3b82f6" }}>{vehicle.plate}</div>
           {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
         </div>
         <div style={{ fontSize: 12, color: "var(--text3)" }}>
@@ -1146,7 +1146,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                     {si.label}
                   </span>
                   {isAdmin && cost > 0 && (
-                    <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#4ade80", fontFamily: "monospace" }}>
+                    <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#16a34a", fontFamily: "monospace" }}>
                       {cost.toLocaleString("ru-RU")} ₽
                     </span>
                   )}
@@ -1162,7 +1162,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                   const fkg = r.freonAmount || (r.tasks ?? []).find((t) => t.freonTask && t.freonKg)?.freonKg      || "";
                   if (!ft && !fkg) return null;
                   return (
-                    <div style={{ fontSize: 11.5, color: "#67e8f9", marginBottom: 5 }}>
+                    <div style={{ fontSize: 11.5, color: "#0e7490", marginBottom: 5 }}>
                       ❄️ {ft}{fkg ? ` · ${fkg} кг` : ""}
                     </div>
                   );
@@ -1183,13 +1183,13 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {(r.tasks ?? []).map((t) => (
                       <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12 }}>
-                        <span style={{ color: t.status === "done" ? "#4ade80" : "#fbbf24", flexShrink: 0, marginTop: 1 }}>
+                        <span style={{ color: t.status === "done" ? "#16a34a" : "#b45309", flexShrink: 0, marginTop: 1 }}>
                           {t.status === "done" ? "✓" : "●"}
                         </span>
                         <span style={{ color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>
                           {t.description}
-                          {t.freonType && <span style={{ color: "#67e8f9" }}> · ❄️ {t.freonType}</span>}
-                          {t.freonKg   && <span style={{ color: "#67e8f9" }}> {t.freonKg} кг</span>}
+                          {t.freonType && <span style={{ color: "#0e7490" }}> · ❄️ {t.freonType}</span>}
+                          {t.freonKg   && <span style={{ color: "#0e7490" }}> {t.freonKg} кг</span>}
                         </span>
                       </div>
                     ))}
@@ -1279,7 +1279,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         )}
         {client.inn           && <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 3 }}>ИНН: {client.inn}</div>}
         {client.contactPerson && <div style={{ fontSize: 12, color: "var(--text2)" }}>👤 {client.contactPerson}</div>}
-        {client.subscription  && <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 600, marginTop: 5 }}>💰 Абонплата: {client.subscription} ₽/мес</div>}
+        {client.subscription  && <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 5 }}>💰 Абонплата: {client.subscription} ₽/мес</div>}
         {client.note          && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6, fontStyle: "italic" }}>{client.note}</div>}
         {client.convertedFrom === "individual" && client.previousName && (
           <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
@@ -1299,7 +1299,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
             </button>
           )}
           {isOwner && isIndividual && (
-            <button type="button" onClick={() => setShowConvert(true)} style={{ fontSize: 11.5, color: "#c4b5fd", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+            <button type="button" onClick={() => setShowConvert(true)} style={{ fontSize: 11.5, color: "#6d28d9", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
               🏢 Перевести в юр. лицо
             </button>
           )}
@@ -1321,7 +1321,7 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
             onClick={() => setShowAddVehicle(true)}
             style={{
               width: "100%", padding: "11px 0", borderRadius: 12,
-              border: "1.5px dashed rgba(255,255,255,0.15)",
+              border: "1.5px dashed rgba(0,0,0,0.12)",
               background: "transparent", color: "var(--text3)",
               fontSize: 13, fontWeight: 600, cursor: "pointer",
               fontFamily: "Manrope, sans-serif",
@@ -1443,12 +1443,12 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
 // ─── Client cards ─────────────────────────────────────────────────────────────
 
 const AVATAR_PALETTES = [
-  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#93c5fd" },
-  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#6ee7b7" },
+  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#3b82f6" },
+  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#16a34a" },
   { bg: "rgba(245,158,11,0.18)",  border: "rgba(245,158,11,0.38)",  text: "#fcd34d" },
   { bg: "rgba(239,68,68,0.18)",   border: "rgba(239,68,68,0.38)",   text: "#fca5a5" },
-  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#c4b5fd" },
-  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#67e8f9"  },
+  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#6d28d9" },
+  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#0e7490"  },
   { bg: "rgba(249,115,22,0.18)",  border: "rgba(249,115,22,0.38)",  text: "#fdba74" },
   { bg: "rgba(236,72,153,0.18)",  border: "rgba(236,72,153,0.38)",  text: "#f9a8d4" },
 ];
@@ -1509,7 +1509,7 @@ function PhysClientCard({ client, onClick }: { client: Client; onClick: () => vo
           {activeRepairs > 0 && (
             <span style={{
               fontSize: 9.5, fontWeight: 700, flexShrink: 0,
-              color: "#fbbf24", background: "rgba(251,191,36,0.12)",
+              color: "#b45309", background: "rgba(251,191,36,0.12)",
               border: "1px solid rgba(251,191,36,0.22)",
               padding: "2px 6px", borderRadius: 6,
             }}>
@@ -1542,7 +1542,7 @@ function PhysClientCard({ client, onClick }: { client: Client; onClick: () => vo
                   ) : (
                     <span style={{ fontSize: 13, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
                   )}
-                  <span style={{ fontSize: 10.5, fontFamily: "monospace", fontWeight: 700, color: "#93c5fd" }}>{v.plate}</span>
+                  <span style={{ fontSize: 10.5, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{v.plate}</span>
                   {brand && <span style={{ fontSize: 10, color: "var(--text3)" }}>{brand}</span>}
                 </div>
               );
@@ -1598,7 +1598,7 @@ function LegalClientCard({ client, onClick }: { client: Client; onClick: () => v
           {activeRepairs > 0 && (
             <span style={{
               fontSize: 9.5, fontWeight: 700, flexShrink: 0,
-              color: "#fbbf24", background: "rgba(251,191,36,0.12)",
+              color: "#b45309", background: "rgba(251,191,36,0.12)",
               border: "1px solid rgba(251,191,36,0.22)",
               padding: "2px 6px", borderRadius: 6,
             }}>

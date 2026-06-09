@@ -1,4 +1,4 @@
-import { useEffect, useState, Component, type ReactNode, type ErrorInfo } from "react";
+﻿import { useEffect, useState, Component, type ReactNode, type ErrorInfo } from "react";
 import { isFirebaseConfigured } from "../shared/config/env";
 import { initFirebase } from "../shared/firebase";
 import {
@@ -36,7 +36,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
             background: "var(--bg2)", border: "1px solid rgba(239,68,68,0.3)",
             borderRadius: 16, padding: "28px 32px", maxWidth: 520, width: "100%",
           }}>
-            <h2 style={{ color: "#f87171", marginBottom: 12, fontSize: 18 }}>
+            <h2 style={{ color: "#dc2626", marginBottom: 12, fontSize: 18 }}>
               Ошибка приложения
             </h2>
             <pre style={{

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { repairStatus } from "../../shared/utils/repair";
@@ -258,7 +258,7 @@ export function PnlTab() {
         <div className="kpi-card green">
           <i className="ti ti-trending-up kpi-icon" />
           <div className="kpi-label">Доходы / {MONTH_NAMES[now.getMonth()]}</div>
-          <div className="kpi-value" style={{ color: "#4ade80" }}>{fmtMoney(curIncome)}</div>
+          <div className="kpi-value" style={{ color: "#16a34a" }}>{fmtMoney(curIncome)}</div>
           <div className="kpi-delta muted">
             Рем. {fmtMoney(curMonthRev)} + Аренда {fmtMoney(rentalIncome)}
           </div>
@@ -266,13 +266,13 @@ export function PnlTab() {
         <div className="kpi-card" style={{ borderTop: "2px solid var(--red)" }}>
           <i className="ti ti-trending-down kpi-icon" />
           <div className="kpi-label">Расходы</div>
-          <div className="kpi-value" style={{ color: "#f87171" }}>{fmtMoney(totalExpenses + curPurTotal + curCommTotal)}</div>
+          <div className="kpi-value" style={{ color: "#dc2626" }}>{fmtMoney(totalExpenses + curPurTotal + curCommTotal)}</div>
           <div className="kpi-delta muted">Пост. + закупки + ком.</div>
         </div>
         <div className="kpi-card blue" style={{ gridColumn: "span 2" }}>
           <i className={`ti ${curProfit >= 0 ? "ti-trophy" : "ti-alert-circle"} kpi-icon`} />
           <div className="kpi-label">Прибыль / {CURMONTH_LABEL}</div>
-          <div className="kpi-value" style={{ color: curProfit >= 0 ? "#4ade80" : "#f87171" }}>
+          <div className="kpi-value" style={{ color: curProfit >= 0 ? "#16a34a" : "#dc2626" }}>
             {curProfit >= 0 ? "+" : ""}{fmtMoney(curProfit)}
           </div>
           <button
@@ -292,12 +292,12 @@ export function PnlTab() {
       {/* ── Закупки и материалы ──────────────────────────────────────────── */}
       <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
         <div className="section-header" style={{ background: "rgba(139,92,246,0.06)" }}>
-          <i className="ti ti-shopping-cart" style={{ fontSize: 17, color: "#a78bfa" }} />
+          <i className="ti ti-shopping-cart" style={{ fontSize: 17, color: "#7c3aed" }} />
           <span className="section-title">Закупки и материалы</span>
           <span className="section-count">{CURMONTH_LABEL}</span>
           {curPurTotal > 0 && (
             <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace" }}>
                 {fmtMoney(curPurTotal)}
               </span>
             </div>
@@ -337,7 +337,7 @@ export function PnlTab() {
             style={{
               padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
               background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.3)",
-              color: "#a78bfa", cursor: savingPur ? "not-allowed" : "pointer",
+              color: "#7c3aed", cursor: savingPur ? "not-allowed" : "pointer",
             }}
           >
             {savingPur ? "..." : "+ Добавить"}
@@ -363,7 +363,7 @@ export function PnlTab() {
               >
                 <div style={{
                   width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                  background: "rgba(139,92,246,0.12)", color: "#a78bfa",
+                  background: "rgba(139,92,246,0.12)", color: "#7c3aed",
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
                 }}>
                   🛒
@@ -376,7 +376,7 @@ export function PnlTab() {
                     {fmtDate(p.date)}{p.addedByName ? ` · ${p.addedByName}` : ""}
                   </div>
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
                   {fmtMoney(p.amount)}
                 </span>
                 <button
@@ -391,7 +391,7 @@ export function PnlTab() {
             {curPurTotal > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderTop: "1px solid var(--border2)" }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого закупки</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: "#a78bfa", fontFamily: "JetBrains Mono, monospace" }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace" }}>
                   {fmtMoney(curPurTotal)}
                 </span>
               </div>
@@ -403,12 +403,12 @@ export function PnlTab() {
       {/* ── Комиссионные ────────────────────────────────────────────────── */}
       <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.25s both" }}>
         <div className="section-header" style={{ background: "rgba(245,158,11,0.06)" }}>
-          <i className="ti ti-handshake" style={{ fontSize: 17, color: "#fbbf24" }} />
+          <i className="ti ti-handshake" style={{ fontSize: 17, color: "#b45309" }} />
           <span className="section-title">Комиссионные</span>
           <span className="section-count">{CURMONTH_LABEL}</span>
           {curCommTotal > 0 && (
             <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#b45309", fontFamily: "JetBrains Mono, monospace" }}>
                 {fmtMoney(curCommTotal)}
               </span>
             </div>
@@ -463,7 +463,7 @@ export function PnlTab() {
             style={{
               padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
               background: "rgba(245,158,11,0.18)", border: "1px solid rgba(245,158,11,0.35)",
-              color: "#fbbf24", cursor: savingCom ? "not-allowed" : "pointer",
+              color: "#b45309", cursor: savingCom ? "not-allowed" : "pointer",
             }}
           >
             {savingCom ? "..." : "+ Добавить"}
@@ -489,7 +489,7 @@ export function PnlTab() {
               >
                 <div style={{
                   width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                  background: "rgba(245,158,11,0.12)", color: "#fbbf24",
+                  background: "rgba(245,158,11,0.12)", color: "#b45309",
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
                 }}>
                   🤝
@@ -504,7 +504,7 @@ export function PnlTab() {
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#b45309", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
                   {fmtMoney(e.amount)}
                 </span>
                 <button
@@ -532,13 +532,13 @@ export function PnlTab() {
             {(finance.boxes ?? []).filter((b) => b.cost > 0).map((b) => (
               <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <span style={{ fontSize: 13.5, color: "var(--text)" }}>🏠 {b.name || "Бокс"}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(b.cost)}/мес</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(b.cost)}/мес</span>
               </div>
             ))}
             {(finance.salaries ?? []).filter((s) => s.salary > 0).map((s) => (
               <div key={s.uid} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <span style={{ fontSize: 13.5, color: "var(--text)" }}>👤 {s.name || "Сотрудник"}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(s.salary)}/мес</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(s.salary)}/мес</span>
               </div>
             ))}
           </div>
@@ -584,7 +584,7 @@ export function PnlTab() {
           {Object.entries(elecBills).filter(([, v]) => v > 0).sort(([a],[b]) => b.localeCompare(a)).slice(0, 4).map(([mk, v]) => (
             <div key={mk} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
               <span style={{ fontSize: 13, color: "var(--text2)" }}>{mkLabel(mk)}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#f87171", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(v as number)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(v as number)}</span>
             </div>
           ))}
         </div>
@@ -596,7 +596,7 @@ export function PnlTab() {
           <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
           <span className="section-title">Выручка по месяцам</span>
           <div className="section-actions">
-            <span style={{ fontSize: 12, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ fontSize: 12, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
               {fmtMoney(totalRevenue)}
             </span>
           </div>
@@ -622,7 +622,7 @@ export function PnlTab() {
                   <i className="ti ti-tools" style={{ fontSize: 10 }} /> {m.repairs} ремонтов
                 </div>
               </div>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
                 {fmtMoney(m.revenue)}
               </span>
             </div>
@@ -633,7 +633,7 @@ export function PnlTab() {
           borderTop: "1px solid var(--border2)", background: "rgba(0,0,0,0.1)",
         }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Всего выручка</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#4ade80", fontFamily: "JetBrains Mono, monospace" }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
             {fmtMoney(totalRevenue)}
           </span>
         </div>
