@@ -327,6 +327,9 @@ export function StaffTab() {
     return result;
   }, [clients, curMonthKey]);
 
+  // eslint-disable-next-line no-console
+  console.log('[STAFF] staffRating:', Object.fromEntries(staffRating), 'isOwner:', isOwner);
+
   const staffMap = useMemo(() => {
     const map = new Map<string, StaffMember>();
     staff.forEach((s) => map.set(s.id, s));
@@ -423,16 +426,20 @@ export function StaffTab() {
           </div>
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
-            {sorted.map((s) => (
-              <StaffCard
-                key={s.id}
-                member={s}
-                canEdit={canEditMember(s)}
-                isOwner={isOwner}
-                onClick={() => setEditing(s)}
-                rating={staffRating.get(s.id)}
-              />
-            ))}
+            {sorted.map((s) => {
+              // eslint-disable-next-line no-console
+              if (s.role === "mechanic") console.log('[MECHANIC ROW]', s.id, s.name, 'rating:', staffRating.get(s.id));
+              return (
+                <StaffCard
+                  key={s.id}
+                  member={s}
+                  canEdit={canEditMember(s)}
+                  isOwner={isOwner}
+                  onClick={() => setEditing(s)}
+                  rating={staffRating.get(s.id)}
+                />
+              );
+            })}
           </div>
         )}
 
