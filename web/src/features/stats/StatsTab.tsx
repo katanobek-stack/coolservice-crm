@@ -297,8 +297,9 @@ const MECH_COLORS = [
   { bg: "rgba(6,182,212,0.15)",   color: "#0891b2", bar: "var(--cyan)"   },
 ];
 
-function MechanicRow({ name, monthlyCars, monthLabel, idx }: {
+function MechanicRow({ name, monthlyCars, monthLabel, idx, crownColor }: {
   name: string; monthlyCars: number; monthLabel: string; idx: number;
+  crownColor?: string | null;
 }) {
   const c        = MECH_COLORS[idx % MECH_COLORS.length];
   const initials = (name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -306,7 +307,10 @@ function MechanicRow({ name, monthlyCars, monthLabel, idx }: {
     <div className="mechanic-row" style={{ animationDelay: `${0.5 + idx * 0.06}s` }}>
       <div className="mech-avatar" style={{ background: c.bg, color: c.color }}>{initials}</div>
       <div className="mech-info">
-        <div className="mech-name">{name}</div>
+        <div className="mech-name" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {crownColor && <span style={{ fontSize: 13, color: crownColor, lineHeight: 1, flexShrink: 0 }}>👑</span>}
+          {name}
+        </div>
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: monthlyCars > 0 ? "var(--text)" : "var(--text3)" }}>
@@ -676,7 +680,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { clients, tasks, staff, finance: rawFinance, expenses } = useData();
-  const { myProfile } = useAuth();
+  const { myProfile, isOwner } = useAuth();
   const { canSeeDashboardFinancials } = usePermissions();
   const role           = myProfile?.role ?? "mechanic";
   const isAdmin        = role === "admin" || role === "owner";
@@ -991,50 +995,6 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         )}
       </Section>
 
-      {/* Crown rating */}
-      {mechRating.filter((e) => role !== "mechanic" || e.uid === myProfile?.id).length > 0 && (
-        <Section title={`Рейтинг механиков — ${MONTH_NAMES_FULL[now.getMonth()]}`} icon="ti-trophy">
-          <div style={{ padding: "8px 16px 12px" }}>
-            {mechRating
-              .filter((e) => role !== "mechanic" || e.uid === myProfile?.id)
-              .slice(0, 3)
-              .map((entry) => {
-                const initials = (entry.name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-                return (
-                  <div key={entry.uid} style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "9px 0", borderBottom: "1px solid var(--border)",
-                  }}>
-                    <div style={{ width: 24, textAlign: "center", flexShrink: 0, lineHeight: 1 }}>
-                      {entry.crownColor
-                        ? <span style={{ fontSize: 17, color: entry.crownColor }}>👑</span>
-                        : <span style={{ fontSize: 13, color: "var(--text3)", fontWeight: 700 }}>{entry.rank}</span>
-                      }
-                    </div>
-                    <div style={{
-                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                      background: "rgba(34,197,94,0.12)", color: "#16a34a",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700,
-                    }}>
-                      {initials}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {entry.name}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--text3)" }}>{entry.rank} место</div>
-                    </div>
-                    <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#16a34a", flexShrink: 0 }}>
-                      {fmtMoney(Math.round(entry.total))}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </Section>
-      )}
-
       {/* Finance: Revenue chart + mechanics */}
       {showFinance && (
         <div className="bottom-grid">
@@ -1066,8 +1026,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             )}
           </div>
 
-          {/* Mechanic productivity */}
-          {mechanicStats.length > 0 && (
+          {/* Mechanic productivity — owner only */}
+          {isOwner && mechanicStats.length > 0 && (
             <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
               <div className="section-header">
                 <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
@@ -1082,6 +1042,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                     monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
                     monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
                     idx={i}
+                    crownColor={mechRating.find((e) => e.uid === m.uid)?.crownColor}
                   />
                 ))}
               </div>
