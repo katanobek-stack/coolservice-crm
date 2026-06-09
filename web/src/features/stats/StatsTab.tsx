@@ -1009,59 +1009,56 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         )}
       </Section>
 
-      {/* Finance: Revenue chart + mechanics */}
+      {/* Finance: Revenue chart */}
       {showFinance && (
-        <div className="bottom-grid">
-          {/* Revenue chart */}
-          <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
-            <div className="section-header">
-              <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
-              <span className="section-title">Выручка по месяцам</span>
-              {revDiff !== null && (
-                <div className="section-actions">
-                  <span style={{ fontSize: 12, color: revDiff >= 0 ? "#16a34a" : "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>
-                    {revDiff >= 0 ? "↑" : "↓"} {Math.abs(revDiff)}%
-                  </span>
-                </div>
-              )}
-            </div>
-            <RevenueChart monthData={monthData} onBarClick={showAmounts ? setSelectedMonthKey : undefined} hideAmounts={!showAmounts} />
-            {showAmounts && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
-                <div>
-                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#16a34a", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text3)", marginTop: 2 }}>{fmtMoney(prevMonthRev)}</div>
-                </div>
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
+          <div className="section-header">
+            <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Выручка по месяцам</span>
+            {revDiff !== null && (
+              <div className="section-actions">
+                <span style={{ fontSize: 12, color: revDiff >= 0 ? "#16a34a" : "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>
+                  {revDiff >= 0 ? "↑" : "↓"} {Math.abs(revDiff)}%
+                </span>
               </div>
             )}
           </div>
-
-          {/* Mechanic productivity — owner only */}
-          {isOwner && mechanicStats.length > 0 && (
-            <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
-              <div className="section-header">
-                <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
-                <span className="section-title">Механики</span>
-                <span className="section-count">нагрузка</span>
+          <RevenueChart monthData={monthData} onBarClick={showAmounts ? setSelectedMonthKey : undefined} hideAmounts={!showAmounts} />
+          {showAmounts && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
+                <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#16a34a", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
               </div>
-              <div className="mechanic-list">
-                {(mechanicStats || []).slice(0, 4).map((m, i) => (
-                  <MechanicRow
-                    key={m.uid}
-                    name={m.name}
-                    monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
-                    monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
-                    idx={i}
-                    crownColor={mechRating.find((e) => e.uid === m.uid)?.crownColor}
-                  />
-                ))}
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
+                <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text3)", marginTop: 2 }}>{fmtMoney(prevMonthRev)}</div>
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Mechanic productivity — all users */}
+      {mechanicStats.length > 0 && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
+          <div className="section-header">
+            <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Механики</span>
+            <span className="section-count">нагрузка</span>
+          </div>
+          <div className="mechanic-list">
+            {(mechanicStats || []).slice(0, 4).map((m, i) => (
+              <MechanicRow
+                key={m.uid}
+                name={m.name}
+                monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
+                monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
+                idx={i}
+                crownColor={mechRating.find((e) => e.uid === m.uid)?.crownColor}
+              />
+            ))}
+          </div>
         </div>
       )}
 
