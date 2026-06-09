@@ -852,23 +852,27 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   // ── Mechanic crown rating (current month revenue share) ───────────────────
   const mechRating = useMemo(() => {
-    const closedThisMonth = doneRepairs.filter((r) => isClosedThisMonth(r, curMonthKey));
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG mechanic revenue]", closedThisMonth.slice(0, 5).map((r) => ({
-      id:        r.id,
-      cost:      r.cost,
-      mechanics: getMechanics(r),
-      share:     (parseFloat(r.cost ?? "0") || 0) / Math.max(getMechanics(r).length, 1),
-    })));
-    const totals = new Map<string, number>();
-    closedThisMonth.forEach((r) => {
-      const cost  = parseFloat(r.cost ?? "0") || 0;
-      const mechs = getMechanics(r);
-      if (cost <= 0 || mechs.length === 0) return;
-      const share = cost / mechs.length;
-      mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));
-    });
-    const sorted = [...totals.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+    const mechRevenueMap = new Map<string, number>();
+    allRepairs
+      .filter((r) => {
+        if (!r.closedAt) return false;
+        const month = typeof r.closedAt === "string"
+          ? r.closedAt.slice(0, 7)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          : (r.closedAt as any)?.toDate?.()?.toISOString?.()?.slice(0, 7) ?? "";
+        return month === curMonthKey;
+      })
+      .forEach((r) => {
+        const cost = parseFloat(String(r.cost ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
+        if (cost <= 0) return;
+        const mechs = getMechanics(r);
+        if (mechs.length === 0) return;
+        const share = cost / mechs.length;
+        mechs.forEach((uid) => {
+          mechRevenueMap.set(uid, (mechRevenueMap.get(uid) ?? 0) + share);
+        });
+      });
+    const sorted = [...mechRevenueMap.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
     let rank = 1;
     return sorted.map(([uid, total], i) => {
       if (i > 0 && total < sorted[i - 1][1]) rank = i + 1;
@@ -880,7 +884,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         crownColor: rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : null,
       };
     });
-  }, [doneRepairs, curMonthKey, staff]);
+  }, [allRepairs, curMonthKey, staff]);
 
   // ── Customer loyalty ──────────────────────────────────────────────────────
   const loyalty = useMemo(() => {
