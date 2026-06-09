@@ -176,7 +176,7 @@ function PermissionToggles({ member }: { member: StaffMember }) {
 
 function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
   member: StaffMember; canEdit: boolean; isOwner: boolean; onClick: () => void;
-  rating?: { rank: number; total: number; crownColor: string | null };
+  rating?: { rank: number; total: number; crownColor: string | null; isTied: boolean };
 }) {
   const role   = member.role ?? "mechanic";
   const colors = ROLE_COLORS[role];
@@ -203,6 +203,12 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
             )}
             {member.name ?? "(без имени)"}
           </div>
+          {role === "mechanic" && rating?.crownColor && (
+            <div style={{ fontSize: 11, fontWeight: 600, color: rating.crownColor, marginTop: 1 }}>
+              {rating.rank} место · {Math.round(rating.total).toLocaleString("ru-RU")} ₽
+              {rating.isTied && " (ничья)"}
+            </div>
+          )}
           <div className="text-xs text-[#667085] truncate">{member.email}</div>
         </div>
 
@@ -244,14 +250,17 @@ export function StaffTab() {
     });
     const sorted = [...totals.entries()].filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
     let rank = 1;
-    const result = new Map<string, { rank: number; total: number; crownColor: string | null }>();
+    const interim = new Map<string, { rank: number; total: number; crownColor: string | null }>();
     sorted.forEach(([uid, total], i) => {
       if (i > 0 && total < sorted[i - 1][1]) rank = i + 1;
-      result.set(uid, {
-        rank,
-        total,
-        crownColor: rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : null,
-      });
+      interim.set(uid, { rank, total, crownColor: rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : null });
+    });
+    // detect ties: count how many share each rank
+    const rankFreq = new Map<number, number>();
+    interim.forEach(({ rank: r }) => rankFreq.set(r, (rankFreq.get(r) ?? 0) + 1));
+    const result = new Map<string, { rank: number; total: number; crownColor: string | null; isTied: boolean }>();
+    interim.forEach(({ rank: r, total, crownColor }, uid) => {
+      result.set(uid, { rank: r, total, crownColor, isTied: (rankFreq.get(r) ?? 1) > 1 });
     });
     return result;
   }, [clients, curMonthKey]);
