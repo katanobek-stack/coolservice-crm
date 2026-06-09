@@ -1,7 +1,6 @@
 ﻿import { useState, useMemo } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
-import { fmtMoney } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
@@ -175,10 +174,9 @@ function PermissionToggles({ member }: { member: StaffMember }) {
 
 // ─── Staff card ───────────────────────────────────────────────────────────────
 
-function StaffCard({ member, canEdit, isOwner, onClick, rating, monthLabel }: {
+function StaffCard({ member, canEdit, isOwner, onClick, rating }: {
   member: StaffMember; canEdit: boolean; isOwner: boolean; onClick: () => void;
   rating?: { rank: number; total: number; crownColor: string | null };
-  monthLabel?: string;
 }) {
   const role   = member.role ?? "mechanic";
   const colors = ROLE_COLORS[role];
@@ -199,7 +197,12 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating, monthLabel }: {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-[#172033]">{member.name ?? "(без имени)"}</div>
+          <div className="text-sm font-semibold text-[#172033]" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {role === "mechanic" && rating?.crownColor && (
+              <span style={{ fontSize: 13, color: rating.crownColor, lineHeight: 1, flexShrink: 0 }}>👑</span>
+            )}
+            {member.name ?? "(без имени)"}
+          </div>
           <div className="text-xs text-[#667085] truncate">{member.email}</div>
         </div>
 
@@ -210,31 +213,12 @@ function StaffCard({ member, canEdit, isOwner, onClick, rating, monthLabel }: {
           {ROLE_LABELS[role]}
         </span>
       </div>
-
-      {role === "mechanic" && rating?.crownColor && (
-        <div style={{
-          marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>👑</span>
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: rating.crownColor }}>
-              {rating.rank} место · {fmtMoney(Math.round(rating.total))}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text3)" }}>
-              Выручка за {monthLabel}
-            </div>
-          </div>
-        </div>
-      )}
       {showPerms && <PermissionToggles member={member} />}
     </div>
   );
 }
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
-
-const MONTH_NAMES_STAFF = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 export function StaffTab() {
   const { staff, clients } = useData();
@@ -246,7 +230,6 @@ export function StaffTab() {
 
   const now          = new Date();
   const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const curMonthLabel = MONTH_NAMES_STAFF[now.getMonth()];
 
   const staffRating = useMemo(() => {
     const totals = new Map<string, number>();
@@ -330,7 +313,6 @@ export function StaffTab() {
                 isOwner={isOwner}
                 onClick={() => setEditing(s)}
                 rating={staffRating.get(s.id)}
-                monthLabel={curMonthLabel}
               />
             ))}
           </div>
