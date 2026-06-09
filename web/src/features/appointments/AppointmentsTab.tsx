@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
@@ -44,17 +45,19 @@ const APPT_TYPES: Record<AppointmentDoc["type"], { label: string; icon: string }
 // ─── AppointmentCard ──────────────────────────────────────────────────────────
 
 function AppointmentCard({
-  appt, myUid, role, onClose, onDelete,
+  appt, myUid, role, onClose, onDelete, onEdit,
 }: {
   appt:     AppointmentDoc;
   myUid:    string;
   role:     string;
   onClose:  (a: AppointmentDoc) => void;
   onDelete: (a: AppointmentDoc) => void;
+  onEdit:   (a: AppointmentDoc) => void;
 }) {
   const isPending  = appt.status === "pending";
   const isMine     = appt.assignees.includes(myUid);
   const canManage  = role === "admin" || role === "owner" || role === "manager";
+  const canEdit    = isPending && (canManage || (role === "mechanic" && isMine));
   const showPulse  = isPending && isMine;
   const typeInfo   = APPT_TYPES[appt.type] ?? { label: appt.type, icon: "📋" };
 
@@ -130,15 +133,20 @@ function AppointmentCard({
         </div>
       )}
 
-      {/* Creator */}
-      <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: canManage ? 10 : 0 }}>
-        🖊 {appt.createdByName}
+      {/* Creator + editor */}
+      <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: (canManage || canEdit) ? 10 : 0 }}>
+        🖊 Создал: {appt.createdByName}
+        {appt.updatedByName && (
+          <span style={{ display: "block", marginTop: 2 }}>
+            ✏️ Изменил: {appt.updatedByName}
+          </span>
+        )}
       </div>
 
       {/* Actions */}
-      {canManage && (
-        <div style={{ display: "flex", gap: 8 }}>
-          {isPending && (
+      {(canManage || canEdit) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {isPending && canManage && (
             <button
               type="button"
               onClick={() => onClose(appt)}
@@ -151,16 +159,33 @@ function AppointmentCard({
               Закрыть запись
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onDelete(appt)}
-            style={{
-              background: "transparent", color: "var(--text3)", border: "1px solid var(--border)",
-              borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer",
-            }}
-          >
-            Удалить
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(appt)}
+              style={{
+                background: "var(--bg3)", color: "var(--text2)",
+                border: "1px solid var(--border)",
+                borderRadius: 8, padding: "6px 12px", fontSize: 13,
+                fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 4,
+              }}
+            >
+              ✏️ Редактировать
+            </button>
+          )}
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => onDelete(appt)}
+              style={{
+                background: "transparent", color: "var(--text3)", border: "1px solid var(--border)",
+                borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer",
+              }}
+            >
+              Удалить
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -435,6 +460,281 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── EditAppointmentModal ─────────────────────────────────────────────────────
+
+function EditAppointmentModal({
+  appt, onClose,
+}: {
+  appt:    AppointmentDoc;
+  onClose: () => void;
+}) {
+  const { user, myProfile } = useAuth();
+  const { staff } = useData();
+
+  const [clientName,  setClientName]  = useState(appt.clientName);
+  const [carBrand,    setCarBrand]    = useState(appt.carBrand ?? "");
+  const [carModel,    setCarModel]    = useState(appt.carModel ?? "");
+  const [date,        setDate]        = useState(appt.date);
+  const [time,        setTime]        = useState(appt.time);
+  const [apptType,    setApptType]    = useState<AppointmentDoc["type"]>(appt.type);
+  const [note,        setNote]        = useState(appt.note ?? "");
+  const [selectedMechanics, setSelectedMechanics] = useState<string[]>(appt.assignees);
+  const [mechanicsOpen,     setMechanicsOpen]     = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setMechanicsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function toggleMechanic(uid: string) {
+    setSelectedMechanics((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid],
+    );
+  }
+
+  async function handleSave() {
+    setError("");
+    if (!clientName.trim())        { setError("Введите ФИО клиента"); return; }
+    if (!date)                     { setError("Укажите дату"); return; }
+    if (!time)                     { setError("Укажите время"); return; }
+    if (selectedMechanics.length === 0) { setError("Выберите хотя бы одного ответственного"); return; }
+
+    const assigneeNames = selectedMechanics.map((uid) => {
+      const s = staff.find((m) => m.id === uid);
+      return s?.name ?? s?.email ?? uid;
+    });
+
+    setSaving(true);
+    try {
+      await updateAppointment(appt.id, clean({
+        clientName:    clientName.trim(),
+        carBrand:      carBrand.trim() || undefined,
+        carModel:      carModel.trim() || undefined,
+        date,
+        time,
+        type:          apptType,
+        assignees:     selectedMechanics,
+        assigneeNames,
+        note:          note.trim() || undefined,
+        updatedAt:     serverTimestamp() as unknown as AppointmentDoc["updatedAt"],
+        updatedBy:     user?.uid ?? "",
+        updatedByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+      }));
+      onClose();
+    } catch (e) {
+      setError("Ошибка сохранения");
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const mechanics = staff.filter((s) => s.name || s.email);
+
+  return (
+    <Modal onClose={onClose} title="Редактировать запись">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* ФИО */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            ФИО клиента *
+          </label>
+          <input
+            className="input"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            placeholder="Иван Петров"
+          />
+        </div>
+
+        {/* Авто */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Марка авто
+            </label>
+            <input
+              className="input"
+              value={carBrand}
+              onChange={(e) => setCarBrand(e.target.value)}
+              placeholder="Toyota"
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Модель
+            </label>
+            <input
+              className="input"
+              value={carModel}
+              onChange={(e) => setCarModel(e.target.value)}
+              placeholder="Hiace"
+            />
+          </div>
+        </div>
+
+        {/* Дата + время */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Дата *
+            </label>
+            <input
+              type="date"
+              className="input"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Время *
+            </label>
+            <input
+              type="time"
+              className="input"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Тип */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Тип записи
+          </label>
+          <select
+            className="input"
+            value={apptType}
+            onChange={(e) => setApptType(e.target.value as AppointmentDoc["type"])}
+          >
+            <option value="diagnostics">🔍 Диагностика</option>
+            <option value="repair">🔧 Ремонт</option>
+            <option value="consultation">💬 Консультация</option>
+          </select>
+        </div>
+
+        {/* Ответственные (multi-select) */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Ответственные *
+          </label>
+          <div ref={dropdownRef} style={{ position: "relative" }}>
+            <div
+              onClick={() => setMechanicsOpen((p) => !p)}
+              style={{
+                border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px",
+                cursor: "pointer", background: "var(--bg2)", minHeight: 38,
+                display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6,
+              }}
+            >
+              {selectedMechanics.length === 0 ? (
+                <span style={{ color: "var(--text3)", fontSize: 13 }}>Выберите сотрудников...</span>
+              ) : (
+                selectedMechanics.map((uid) => {
+                  const s = staff.find((m) => m.id === uid);
+                  return (
+                    <span key={uid} style={{
+                      background: "var(--accent)", color: "#fff",
+                      borderRadius: 6, padding: "2px 8px", fontSize: 12,
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      {s?.name ?? s?.email ?? uid}
+                      <span
+                        style={{ cursor: "pointer", fontWeight: 700 }}
+                        onClick={(e) => { e.stopPropagation(); toggleMechanic(uid); }}
+                      >
+                        ×
+                      </span>
+                    </span>
+                  );
+                })
+              )}
+            </div>
+            {mechanicsOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+                background: "var(--bg2)", border: "1px solid var(--border)",
+                borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                zIndex: 100, maxHeight: 200, overflowY: "auto",
+              }}>
+                {mechanics.map((m) => {
+                  const selected = selectedMechanics.includes(m.id);
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => toggleMechanic(m.id)}
+                      style={{
+                        padding: "10px 14px", cursor: "pointer", display: "flex",
+                        alignItems: "center", gap: 10, fontSize: 14,
+                        background: selected ? "rgba(59,130,246,0.08)" : "transparent",
+                      }}
+                    >
+                      <span style={{ width: 18, textAlign: "center", color: "var(--accent)" }}>
+                        {selected ? "✓" : ""}
+                      </span>
+                      {m.name ?? m.email}
+                    </div>
+                  );
+                })}
+                <div
+                  onClick={() => setMechanicsOpen(false)}
+                  style={{
+                    padding: "8px 14px", cursor: "pointer", fontWeight: 700,
+                    borderTop: "1px solid var(--border)", fontSize: 13,
+                    color: "var(--accent)", textAlign: "right",
+                  }}
+                >
+                  Готово ✓
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Примечание */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Примечание
+          </label>
+          <textarea
+            className="input"
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Доп. информация..."
+            style={{ resize: "none" }}
+          />
+        </div>
+
+        {error && (
+          <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>
+        )}
+
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          style={{ alignSelf: "flex-end" }}
+        >
+          {saving ? "Сохранение..." : "Сохранить изменения"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── CloseAppointmentModal ────────────────────────────────────────────────────
 
 function CloseAppointmentModal({
@@ -655,8 +955,9 @@ export function AppointmentsTab() {
   const { myProfile, user } = useAuth();
   const { appointments }    = useData();
 
-  const [showAdd,     setShowAdd]     = useState(false);
-  const [closingAppt, setClosingAppt] = useState<AppointmentDoc | null>(null);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [closingAppt,  setClosingAppt]  = useState<AppointmentDoc | null>(null);
+  const [editingAppt,  setEditingAppt]  = useState<AppointmentDoc | null>(null);
 
   const role     = myProfile?.role ?? "mechanic";
   const uid      = user?.uid ?? "";
@@ -743,6 +1044,7 @@ export function AppointmentsTab() {
                 role={role}
                 onClose={setClosingAppt}
                 onDelete={(appt) => void handleDelete(appt)}
+                onEdit={setEditingAppt}
               />
             ))
           )}
@@ -767,6 +1069,7 @@ export function AppointmentsTab() {
                 role={role}
                 onClose={setClosingAppt}
                 onDelete={(appt) => void handleDelete(appt)}
+                onEdit={setEditingAppt}
               />
             ))
           )}
@@ -780,6 +1083,12 @@ export function AppointmentsTab() {
         <CloseAppointmentModal
           appt={closingAppt}
           onClose={() => setClosingAppt(null)}
+        />
+      )}
+      {editingAppt && (
+        <EditAppointmentModal
+          appt={editingAppt}
+          onClose={() => setEditingAppt(null)}
         />
       )}
     </>

@@ -18,4 +18,7 @@ export interface AppointmentDoc {
   clientId?: string;
   repairId?: string;
   outcome?: "repair" | "declined";
+  updatedAt?: Timestamp;
+  updatedBy?: string;
+  updatedByName?: string;
 }
