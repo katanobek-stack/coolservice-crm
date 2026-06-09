@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { repairStatus, taskStatus, getAssignees } from "../../shared/utils/repair";
@@ -176,19 +176,44 @@ function AddRepairTaskModal({ client, repair, onClose }: {
 }) {
   const { staff } = useData();
   const { myProfile } = useAuth();
-  const [desc,      setDesc]      = useState("");
-  const [assignee,  setAssignee]  = useState(myProfile?.id ?? "");
-  const [isFreon,   setIsFreon]   = useState(false);
-  const [freonType, setFreonType] = useState(repair.freonType ?? "");
-  const [saving,    setSaving]    = useState(false);
+  const [desc,          setDesc]          = useState("");
+  const [assignees,     setAssignees]     = useState<string[]>(myProfile?.id ? [myProfile.id] : []);
+  const [assigneesOpen, setAssigneesOpen] = useState(false);
+  const [assigneeError, setAssigneeError] = useState("");
+  const [isFreon,       setIsFreon]       = useState(false);
+  const [freonType,     setFreonType]     = useState(repair.freonType ?? "");
+  const [saving,        setSaving]        = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!assigneesOpen) return;
+    function handler(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setAssigneesOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [assigneesOpen]);
+
+  function toggleAssignee(uid: string) {
+    setAssigneeError("");
+    setAssignees((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid],
+    );
+  }
 
   async function handleSave() {
     if (!desc.trim() && !isFreon) return;
+    if (assignees.length === 0) {
+      setAssigneeError("Выберите хотя бы одного исполнителя");
+      return;
+    }
     setSaving(true);
     const newTask: RepairTask = {
       id:          genId(),
       description: isFreon ? `Заправка фреоном ${freonType || ""}`.trim() : desc.trim(),
-      assignees:   assignee ? [assignee] : [],
+      assignees,
       doneBy:      [],
       status:      "in_progress",
       freonTask:   isFreon,
@@ -201,6 +226,12 @@ function AddRepairTaskModal({ client, repair, onClose }: {
     await updateClientArray(client.id, "repairs", repairs);
     onClose();
   }
+
+  const assignableStaff = staff.filter((s) => s.role !== "owner");
+  const selectedNames = assignees
+    .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Modal title="Добавить задачу к ремонту" onClose={onClose}>
@@ -233,12 +264,111 @@ function AddRepairTaskModal({ client, repair, onClose }: {
           <Textarea placeholder="Что нужно сделать..." value={desc} onChange={(e) => setDesc(e.target.value)} autoFocus />
         </FormGroup>
       )}
-      <FormGroup label="Исполнитель">
-        <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          <option value="">— не назначен —</option>
-          {staff.map((s) => <option key={s.id} value={s.id}>{s.name ?? s.email}</option>)}
-        </Select>
+
+      {/* ── Исполнители (мультиселект) ── */}
+      <FormGroup label="Исполнители *">
+        <div ref={dropdownRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setAssigneesOpen((o) => !o)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", borderRadius: 10,
+              background: "var(--bg3)",
+              border: `1px solid ${assigneeError ? "#f87171" : assigneesOpen ? "var(--accent)" : "var(--border2)"}`,
+              color: assignees.length ? "var(--text)" : "var(--text3)",
+              fontSize: 13, cursor: "pointer", fontFamily: "Manrope, sans-serif", textAlign: "left",
+            }}
+          >
+            <span>{assignees.length === 0 ? "Выберите исполнителей..." : selectedNames}</span>
+            <span style={{ fontSize: 10, color: "var(--text3)", transition: "transform 0.18s", transform: assigneesOpen ? "rotate(180deg)" : "none", flexShrink: 0 }}>▼</span>
+          </button>
+
+          {assigneesOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
+              background: "var(--bg2)", border: "1px solid var(--border2)",
+              borderRadius: 12, overflow: "hidden",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+            }}>
+              {assignableStaff.map((s) => {
+                const selected = assignees.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleAssignee(s.id)}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 10,
+                      padding: "11px 14px",
+                      background: selected ? "rgba(59,130,246,0.12)" : "transparent",
+                      border: "none", borderBottom: "1px solid var(--border)",
+                      color: selected ? "var(--accent2)" : "var(--text)",
+                      fontSize: 13, fontWeight: selected ? 600 : 400,
+                      cursor: "pointer", textAlign: "left", fontFamily: "Manrope, sans-serif",
+                    }}
+                  >
+                    <span style={{
+                      width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                      border: `2px solid ${selected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
+                      background: selected ? "rgba(59,130,246,0.25)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, color: selected ? "#93c5fd" : "transparent",
+                    }}>
+                      {selected && "✓"}
+                    </span>
+                    {s.name ?? s.email}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setAssigneesOpen(false)}
+                style={{
+                  width: "100%", padding: "10px 14px",
+                  background: "var(--bg3)", border: "none",
+                  color: "var(--accent2)", fontSize: 13, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                }}
+              >
+                ✓ Готово
+              </button>
+            </div>
+          )}
+        </div>
+
+        {assigneeError && (
+          <div style={{ marginTop: 5, fontSize: 12, color: "#f87171", fontWeight: 600 }}>⚠ {assigneeError}</div>
+        )}
+
+        {assignees.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+            {assignees.map((uid) => {
+              const s = staff.find((m) => m.id === uid);
+              return (
+                <span key={uid} style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 6px 3px 10px", borderRadius: 14,
+                  background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)",
+                  color: "var(--accent2)", fontSize: 12, fontWeight: 600,
+                }}>
+                  {s?.name ?? s?.email ?? uid}
+                  <button
+                    type="button"
+                    onClick={() => toggleAssignee(uid)}
+                    style={{
+                      background: "transparent", border: "none",
+                      color: "rgba(147,197,253,0.7)", cursor: "pointer",
+                      fontSize: 15, lineHeight: 1, padding: "0 2px",
+                    }}
+                  >×</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
       </FormGroup>
+
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "Сохранение..." : "Добавить задачу"}
       </Button>
@@ -574,9 +704,10 @@ function RepairTaskRow({ task, client, repair }: {
   const [showComment,  setShowComment]  = useState(false);
   const [lightbox,     setLightbox]     = useState<string | null>(null);
 
-  const assigneeNames = getAssignees(task)
-    .map((id) => staff.find((s) => s.id === id)?.name ?? id)
-    .join(", ");
+  const legacyTask = task as RepairTask & { assignee?: string };
+  const assigneeNames = task.assignees?.length
+    ? task.assignees.map((uid) => staff.find((s) => s.id === uid)?.name ?? uid).join(", ")
+    : legacyTask.assignee ? (staff.find((s) => s.id === legacyTask.assignee)?.name ?? legacyTask.assignee) : "";
 
   async function patchTask(patch: Partial<RepairTask>) {
     const repairs = (client.repairs ?? []).map((r) => {
