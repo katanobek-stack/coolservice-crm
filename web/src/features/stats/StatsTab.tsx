@@ -307,9 +307,16 @@ function MechanicRow({ name, monthlyCars, monthLabel, idx, crownColor }: {
     <div className="mechanic-row" style={{ animationDelay: `${0.5 + idx * 0.06}s` }}>
       <div className="mech-avatar" style={{ background: c.bg, color: c.color }}>{initials}</div>
       <div className="mech-info">
-        <div className="mech-name" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {crownColor && <span style={{ fontSize: 13, color: crownColor, lineHeight: 1, flexShrink: 0 }}>👑</span>}
-          {name}
+        <div className="mech-name">
+          <span style={
+            crownColor === "#FFD700"
+              ? { animation: "glow 1.5s ease-in-out infinite", color: "#FFD700" }
+              : crownColor === "#C0C0C0"
+              ? { border: "1.5px solid #C0C0C0", borderRadius: "6px", padding: "1px 6px", color: "#C0C0C0" }
+              : undefined
+          }>
+            {name}
+          </span>
         </div>
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
