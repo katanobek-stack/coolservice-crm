@@ -47,6 +47,7 @@ interface VoiceCmd {
   mechanic?: { name: string };
   // for create_appointment:
   clientName?: string;
+  clientPhone?: string;
   carBrand?: string;
   carModel?: string;
   date?: string;
@@ -77,7 +78,7 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 Из голосовой команды извлеки данные и верни ТОЛЬКО JSON без пояснений и форматирования.
 
 ЕСЛИ речь о записи на приём (слова: "запиши", "запись", "записать", "назначь визит", "визит"):
-{"action":"create_appointment","clientName":"Иван Петров","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","appointmentType":"diagnostics","note":"","mechanic":{"name":"Сергей"}}
+{"action":"create_appointment","clientName":"Иван Петров","clientPhone":"+79147771234","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","appointmentType":"diagnostics","note":"","mechanic":{"name":"Сергей"}}
 
 ЕСЛИ речь о ремонте/заявке (по умолчанию):
 {"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}],"mechanic":{"name":"Сергей"}}
@@ -90,7 +91,7 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 - clientType "individual" — физлицо; "company" — юрлицо (ООО, ИП)
 - appointmentType: "diagnostics" — диагностика; "repair" — ремонт; "consultation" — консультация
 - type "repair" — ремонт, неисправность; "service" — плановое ТО
-- phone — только цифры без пробелов и знаков
+- phone (для клиента ремонта) и clientPhone (для записи на приём) — формат +7XXXXXXXXXX
 - plate — кириллица+цифры без пробелов
 - date — формат YYYY-MM-DD; если не указана дата явно — используй сегодняшнюю из начала сообщения
 - Если задач нет — tasks:[]
@@ -294,9 +295,10 @@ export function FloatingMicButton() {
       const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
       try {
         await addAppointment(clean({
-          clientName:    cmd.clientName ?? "Клиент",
-          carBrand:      cmd.carBrand   ?? undefined,
-          carModel:      cmd.carModel   ?? undefined,
+          clientName:    cmd.clientName  ?? "Клиент",
+          clientPhone:   cmd.clientPhone ?? undefined,
+          carBrand:      cmd.carBrand    ?? undefined,
+          carModel:      cmd.carModel    ?? undefined,
           date:          cmd.date ?? new Date().toISOString().slice(0, 10),
           time:          cmd.time ?? "09:00",
           type:          apptType,

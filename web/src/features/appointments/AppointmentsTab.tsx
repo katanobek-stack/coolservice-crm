@@ -84,7 +84,7 @@ function AppointmentCard({
       </div>
 
       {/* Client + car */}
-      <div style={{ fontSize: 14, marginBottom: 5 }}>
+      <div style={{ fontSize: 14, marginBottom: appt.clientPhone ? 3 : 5 }}>
         <span style={{ fontWeight: 600 }}>{appt.clientName}</span>
         {(appt.carBrand || appt.carModel) && (
           <span style={{ color: "var(--text2)", marginLeft: 8 }}>
@@ -92,6 +92,18 @@ function AppointmentCard({
           </span>
         )}
       </div>
+
+      {/* Phone */}
+      {appt.clientPhone && (
+        <div style={{ marginBottom: 5 }}>
+          <a
+            href={`tel:${appt.clientPhone}`}
+            style={{ fontSize: 13, color: "var(--accent2)", textDecoration: "none", fontWeight: 500 }}
+          >
+            📞 {appt.clientPhone}
+          </a>
+        </div>
+      )}
 
       {/* Type + outcome badges */}
       <div style={{ marginBottom: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -200,6 +212,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const [clientName,  setClientName]  = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [carBrand,    setCarBrand]    = useState("");
   const [carModel,    setCarModel]    = useState("");
   const [date,        setDate]        = useState(today);
@@ -243,6 +256,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
     try {
       await addAppointment(clean({
         clientName:    clientName.trim(),
+        clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
         carModel:      carModel.trim() || undefined,
         date,
@@ -280,6 +294,20 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
             value={clientName}
             onChange={(e) => setClientName(e.target.value)}
             placeholder="Иван Петров"
+          />
+        </div>
+
+        {/* Телефон */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Телефон клиента
+          </label>
+          <input
+            type="tel"
+            className="input"
+            value={clientPhone}
+            onChange={(e) => setClientPhone(e.target.value)}
+            placeholder="+7 (___) ___-__-__"
           />
         </div>
 
@@ -472,6 +500,7 @@ function EditAppointmentModal({
   const { staff } = useData();
 
   const [clientName,  setClientName]  = useState(appt.clientName);
+  const [clientPhone, setClientPhone] = useState(appt.clientPhone ?? "");
   const [carBrand,    setCarBrand]    = useState(appt.carBrand ?? "");
   const [carModel,    setCarModel]    = useState(appt.carModel ?? "");
   const [date,        setDate]        = useState(appt.date);
@@ -516,6 +545,7 @@ function EditAppointmentModal({
     try {
       await updateAppointment(appt.id, clean({
         clientName:    clientName.trim(),
+        clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
         carModel:      carModel.trim() || undefined,
         date,
@@ -553,6 +583,20 @@ function EditAppointmentModal({
             value={clientName}
             onChange={(e) => setClientName(e.target.value)}
             placeholder="Иван Петров"
+          />
+        </div>
+
+        {/* Телефон */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Телефон клиента
+          </label>
+          <input
+            type="tel"
+            className="input"
+            value={clientPhone}
+            onChange={(e) => setClientPhone(e.target.value)}
+            placeholder="+7 (___) ___-__-__"
           />
         </div>
 
@@ -749,7 +793,7 @@ function CloseAppointmentModal({
   const [error,  setError]  = useState("");
 
   const [clientName,       setClientName]       = useState(appt.clientName);
-  const [phone,            setPhone]            = useState("");
+  const [phone,            setPhone]            = useState(appt.clientPhone ?? "");
   const [plate,            setPlate]            = useState("");
   const [createdClientId,  setCreatedClientId]  = useState<string | null>(null);
   const [createdVehicleId, setCreatedVehicleId] = useState<string | null>(null);
