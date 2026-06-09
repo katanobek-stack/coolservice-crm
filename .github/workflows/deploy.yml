@@ -57,13 +57,12 @@ jobs:
         run: |
           mkdir -p _site/app
 
-          # ── Root: preserve the original CRM page ──────────────────────────
-          cp index.html            _site/
-          cp firebase-messaging-sw.js _site/
-          # Copy any other root HTML files that should remain accessible
+          # ── Root: copy any existing root files ────────────────────────────
+          [ -f index.html ]             && cp index.html             _site/ || true
+          [ -f firebase-messaging-sw.js ] && cp firebase-messaging-sw.js _site/ || true
+          # Copy any other root HTML files that may exist
           for f in *.html; do
-            [ "$f" = "index.html" ] && continue
-            cp "$f" _site/ 2>/dev/null || true
+            [ -f "$f" ] && cp "$f" _site/ 2>/dev/null || true
           done
 
           # ── /app: the new React CRM ────────────────────────────────────────
