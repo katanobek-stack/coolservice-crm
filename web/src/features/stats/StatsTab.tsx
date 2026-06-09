@@ -279,19 +279,22 @@ const MECH_COLORS = [
   { bg: "rgba(6,182,212,0.15)",   color: "#0891b2", bar: "var(--cyan)"   },
 ];
 
-function MechanicRow({ name, active, total, idx }: { name: string; active: number; total: number; idx: number }) {
-  const c      = MECH_COLORS[idx % MECH_COLORS.length];
+function MechanicRow({ name, monthlyCars, monthLabel, idx }: {
+  name: string; monthlyCars: number; monthLabel: string; idx: number;
+}) {
+  const c        = MECH_COLORS[idx % MECH_COLORS.length];
   const initials = (name || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-  const pct    = total > 0 ? Math.round((active / total) * 100) : 0;
   return (
     <div className="mechanic-row" style={{ animationDelay: `${0.5 + idx * 0.06}s` }}>
       <div className="mech-avatar" style={{ background: c.bg, color: c.color }}>{initials}</div>
       <div className="mech-info">
         <div className="mech-name">{name}</div>
-        <div className="mech-tasks">{active} в работе · {total - active} закрыто</div>
       </div>
-      <div className="progress-bar">
-        <div className="progress-fill" style={{ width: `${pct}%`, background: c.bar }} />
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: monthlyCars > 0 ? "var(--text)" : "var(--text3)" }}>
+          🔧 {monthlyCars} машин
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{monthLabel}</div>
       </div>
     </div>
   );
@@ -803,10 +806,21 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       });
     });
 
-    return Array.from(map.values())
-      .filter((s) => s.closed > 0 || s.active > 0)
-      .sort((a,b) => (b.closed+b.active) - (a.closed+a.active));
+    return Array.from(map.entries())
+      .filter(([, s]) => s.closed > 0 || s.active > 0)
+      .sort(([, a], [, b]) => (b.closed+b.active) - (a.closed+a.active))
+      .map(([uid, s]) => ({ uid, ...s }));
   }, [clients, tasks, staff]);
+
+  // ── Mechanic monthly car count ────────────────────────────────────────────
+  const mechMonthlyCars = useMemo(() => {
+    const map = new Map<string, number>();
+    doneRepairs.forEach((r) => {
+      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
+      (r.mechanics ?? []).forEach((uid) => map.set(uid, (map.get(uid) ?? 0) + 1));
+    });
+    return map;
+  }, [doneRepairs, curMonthKey]);
 
   // ── Mechanic crown rating (current month revenue share) ───────────────────
   const mechRating = useMemo(() => {
@@ -1046,10 +1060,10 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
               <div className="mechanic-list">
                 {(mechanicStats || []).slice(0, 4).map((m, i) => (
                   <MechanicRow
-                    key={m.name}
+                    key={m.uid}
                     name={m.name}
-                    active={m.active}
-                    total={m.active + m.closed}
+                    monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
+                    monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
                     idx={i}
                   />
                 ))}
