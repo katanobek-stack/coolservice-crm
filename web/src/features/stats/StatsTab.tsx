@@ -9,9 +9,16 @@ import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function closedAtMonth(r: any): string {
+  if (!r.closedAt) return "";
+  if (typeof r.closedAt === "string") return r.closedAt.slice(0, 7);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (r.closedAt as any)?.toDate?.()?.toISOString?.()?.slice(0, 7) ?? "";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isClosedThisMonth(r: any, targetMonth: string): boolean {
-  if (!r.closedAt) return false;
-  return String(r.closedAt).slice(0, 7) === targetMonth;
+  return closedAtMonth(r) === targetMonth;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -482,7 +489,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
   // Revenue by client
   const clientRevMap = new Map<string, { name: string; amount: number }>();
   doneRepairs
-    .filter((r) => r.date?.slice(0, 7) === mk)
+    .filter((r) => closedAtMonth(r) === mk)
     .forEach((r) => {
       const prev = clientRevMap.get(r.clientId) ?? { name: r.clientName, amount: 0 };
       clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
@@ -763,10 +770,10 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       map.set(mk, { rev: 0, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
-      const mk = r.date?.slice(0, 7);
+      const mk = closedAtMonth(r);
       if (!mk || !map.has(mk)) return;
       const prev = map.get(mk)!;
-      map.set(mk, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
+      map.set(mk, { ...prev, rev: prev.rev + (parseFloat(String(r.cost ?? "0").replace(/\s/g,"").replace(",",".")) || 0), cnt: prev.cnt + 1 });
     });
     return Array.from(map.entries()).map(([mk, v]) => ({
       mk,
@@ -775,10 +782,10 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     }));
   }, [doneRepairs, rawFinance, expenses]);
 
-  const curMonthRev  = doneRepairs.filter((r) => r.date?.slice(0,7) === curMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
-  const prevMonthRev = doneRepairs.filter((r) => r.date?.slice(0,7) === prevMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
+  const curMonthRev  = doneRepairs.filter((r) => isClosedThisMonth(r, curMonthKey))
+    .reduce((s,r) => s + (parseFloat(String(r.cost ?? "0").replace(/\s/g,"").replace(",",".")) || 0), 0);
+  const prevMonthRev = doneRepairs.filter((r) => isClosedThisMonth(r, prevMonthKey))
+    .reduce((s,r) => s + (parseFloat(String(r.cost ?? "0").replace(/\s/g,"").replace(",",".")) || 0), 0);
   const revDiff = prevMonthRev > 0 ? Math.round(((curMonthRev-prevMonthRev)/prevMonthRev)*100) : null;
 
   // ── Top clients ───────────────────────────────────────────────────────────
