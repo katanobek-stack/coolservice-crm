@@ -8,6 +8,13 @@ import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
 
+function getMechanics(r: Repair): string[] {
+  if (r.mechanics && r.mechanics.length > 0) return r.mechanics;
+  if ((r as unknown as Record<string, unknown>)["mechanic"]) return [(r as unknown as Record<string, string>)["mechanic"]];
+  if ((r as unknown as Record<string, unknown>)["assignee"]) return [(r as unknown as Record<string, string>)["assignee"]];
+  return [];
+}
+
 interface EnrichedRepair extends Repair {
   clientId:   string;
   clientName: string;
@@ -816,8 +823,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const mechMonthlyCars = useMemo(() => {
     const map = new Map<string, number>();
     doneRepairs.forEach((r) => {
-      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
-      (r.mechanics ?? []).forEach((uid) => map.set(uid, (map.get(uid) ?? 0) + 1));
+      const dateStr = r.closedAt ?? (r as unknown as Record<string, string>)["updatedAt"] ?? r.date ?? "";
+      if (!dateStr || dateStr.slice(0, 7) !== curMonthKey) return;
+      getMechanics(r).forEach((uid) => map.set(uid, (map.get(uid) ?? 0) + 1));
     });
     return map;
   }, [doneRepairs, curMonthKey]);
@@ -826,9 +834,10 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const mechRating = useMemo(() => {
     const totals = new Map<string, number>();
     doneRepairs.forEach((r) => {
-      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
+      const dateStr = r.closedAt ?? (r as unknown as Record<string, string>)["updatedAt"] ?? r.date ?? "";
+      if (!dateStr || dateStr.slice(0, 7) !== curMonthKey) return;
       const cost  = parseFloat(r.cost ?? "0") || 0;
-      const mechs = r.mechanics ?? [];
+      const mechs = getMechanics(r);
       if (cost <= 0 || mechs.length === 0) return;
       const share = cost / mechs.length;
       mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));

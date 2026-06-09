@@ -7,6 +7,14 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
 import { saveStaffProfile, saveStaffPermissions } from "../../shared/firebase/firestore";
 import type { StaffMember, StaffRole, StaffPermissions } from "../../shared/types/staff";
+import type { Repair } from "../../shared/types/client";
+
+function getMechanics(r: Repair): string[] {
+  if (r.mechanics && r.mechanics.length > 0) return r.mechanics;
+  if ((r as unknown as Record<string, unknown>)["mechanic"]) return [(r as unknown as Record<string, string>)["mechanic"]];
+  if ((r as unknown as Record<string, unknown>)["assignee"]) return [(r as unknown as Record<string, string>)["assignee"]];
+  return [];
+}
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   owner:    "Владелец",
@@ -234,9 +242,10 @@ export function StaffTab() {
     const totals = new Map<string, number>();
     clients.flatMap((c) => c.repairs ?? []).forEach((r) => {
       if (r.status === "cancelled") return;
-      if (!r.closedAt || r.closedAt.slice(0, 7) !== curMonthKey) return;
+      const dateStr = r.closedAt ?? (r as unknown as Record<string, string>)["updatedAt"] ?? r.date ?? "";
+      if (!dateStr || dateStr.slice(0, 7) !== curMonthKey) return;
       const cost  = parseFloat(r.cost ?? "0") || 0;
-      const mechs = r.mechanics ?? [];
+      const mechs = getMechanics(r);
       if (cost <= 0 || mechs.length === 0) return;
       const share = cost / mechs.length;
       mechs.forEach((uid) => totals.set(uid, (totals.get(uid) ?? 0) + share));
