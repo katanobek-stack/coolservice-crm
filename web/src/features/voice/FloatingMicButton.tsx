@@ -78,7 +78,7 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 Из голосовой команды извлеки данные и верни ТОЛЬКО JSON без пояснений и форматирования.
 
 ЕСЛИ речь о записи на приём (слова: "запиши", "запись", "записать", "назначь визит", "визит"):
-{"action":"create_appointment","clientName":"Иван Петров","clientPhone":"+79147771234","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","appointmentType":"diagnostics","note":"","mechanic":{"name":"Сергей"}}
+{"action":"create_appointment","clientName":"Иван Петров","clientPhone":"+79147771234","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","type":"diagnostics","assigneeQuery":"Сергей","note":""}
 
 ЕСЛИ речь о ремонте/заявке (по умолчанию):
 {"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}],"mechanic":{"name":"Сергей"}}
@@ -118,7 +118,9 @@ const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сер
 - clientName: если имя клиента не сказано — "Клиент"
 - carBrand: марка авто заглавной буквой на английском (Toyota, Nissan, Honda...)
 - carModel: модель как сказано
-- assigneeQuery: имя механика или менеджера если сказано, иначе пустая строка ""
+- assigneeQuery: имя механика или администратора если упомянуто в речи.
+  Примеры фраз: "назначить на Петю", "запиши на Вову", "механик Сергей", "отдай Пете"
+  Если механик не упомянут — пустая строка ""
 ---`;
 
 async function callClaude(text: string): Promise<{ cmd: VoiceCmd; raw: string; cleaned: string }> {
@@ -317,7 +319,16 @@ export function FloatingMicButton() {
         setTimeout(() => setState("idle"), 3500);
         return;
       }
-      flash("✅ Запись создана в Firestore ✅");
+      // Формируем информативный toast
+      const carStr = [cmd.carBrand, cmd.carModel].filter(Boolean).join(" ");
+      let successMsg = "✅ Запись создана";
+      if (carStr) successMsg += `: ${carStr}`;
+      if (assigneeSearch && assigneeNames.length === 0) {
+        successMsg += ` (механик не найден: '${assigneeSearch}')`;
+      } else if (assigneeNames.length > 0) {
+        successMsg += ` → ${assigneeNames[0]}`;
+      }
+      flash(successMsg);
       setState("done");
       setTimeout(() => setState("idle"), 1500);
       return;
