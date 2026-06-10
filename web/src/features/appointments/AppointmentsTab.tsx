@@ -794,6 +794,8 @@ function CloseAppointmentModal({
 
   const [clientName,       setClientName]       = useState(appt.clientName);
   const [phone,            setPhone]            = useState(appt.clientPhone ?? "");
+  const [carBrand,         setCarBrand]         = useState(appt.carBrand ?? "");
+  const [carModel,         setCarModel]         = useState(appt.carModel ?? "");
   const [plate,            setPlate]            = useState("");
   const [createdClientId,  setCreatedClientId]  = useState<string | null>(null);
   const [createdVehicleId, setCreatedVehicleId] = useState<string | null>(null);
@@ -807,8 +809,8 @@ function CloseAppointmentModal({
       const vehicle: Vehicle = clean({
         id:    vId,
         plate: plate.trim() || "—",
-        brand: appt.carBrand || undefined,
-        model: appt.carModel || undefined,
+        brand: carBrand.trim() || undefined,
+        model: carModel.trim() || undefined,
       });
       const ref = await addClient(clean({
         name:         clientName.trim(),
@@ -925,6 +927,31 @@ function CloseAppointmentModal({
               onChange={(e) => setPhone(e.target.value)}
               placeholder="89147771234"
             />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+                Марка авто
+              </label>
+              <input
+                className="input"
+                value={carBrand}
+                onChange={(e) => setCarBrand(e.target.value)}
+                placeholder="Toyota"
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+                Модель
+              </label>
+              <input
+                className="input"
+                value={carModel}
+                onChange={(e) => setCarModel(e.target.value)}
+                placeholder="Land Cruiser 200"
+              />
+            </div>
           </div>
 
           <div>
