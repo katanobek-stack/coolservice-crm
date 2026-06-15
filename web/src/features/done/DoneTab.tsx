@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
-import { repairStatus } from "../../shared/utils/repair";
+import { repairStatus, taskStatus } from "../../shared/utils/repair";
 import { fmtDate, fmtMoney } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
@@ -60,14 +60,15 @@ interface DoneItem {
 
 function NeedsCloseCard({ item }: { item: DoneItem }) {
   const { repair, client, vehicle, assigneeNames } = item;
-  const [closeSum, setCloseSum] = useState(repair.cost ?? "");
-  const [closing, setClosing]   = useState(false);
+  const { staff } = useData();
+  const [closeSum,     setCloseSum]     = useState(repair.cost ?? "");
+  const [closing,      setClosing]      = useState(false);
+  const [reopeningId,  setReopeningId]  = useState<string | null>(null);
 
   const av       = avatarColor(client.id);
   const brand    = vehicle?.brand ?? "";
   const initials = brand.slice(0, 2).toUpperCase() || (vehicle?.plate ?? client.name).slice(0, 2).toUpperCase();
 
-  // Block close if any freon task has kg > 0 but no type selected
   const unresolvedFreon = (repair.tasks ?? []).some(
     (t: RepairTask) => t.freonTask && parseFloat(t.freonKg ?? "0") > 0 && !t.freonType,
   );
@@ -87,6 +88,20 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
     );
     await updateClientArray(client.id, "repairs", repairs);
     setClosing(false);
+  }
+
+  async function handleReopenTask(taskId: string) {
+    setReopeningId(taskId);
+    const repairs = (client.repairs ?? []).map((r) =>
+      r.id !== repair.id ? r : {
+        ...r,
+        tasks: (r.tasks ?? []).map((t) =>
+          t.id !== taskId ? t : { ...t, status: "in_progress" as const, doneBy: [] },
+        ),
+      },
+    );
+    await updateClientArray(client.id, "repairs", repairs);
+    setReopeningId(null);
   }
 
   return (
@@ -152,8 +167,71 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
           </div>
         )}
         {item.createdByName && item.createdByName !== "—" && (
-          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10, opacity: 0.7 }}>
+          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8, opacity: 0.7 }}>
             🖊 Создал: {item.createdByName}
+          </div>
+        )}
+
+        {/* Task list with reopen buttons */}
+        {(repair.tasks ?? []).length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+            {(repair.tasks ?? []).map((t) => {
+              const isDone    = taskStatus(t) === "done";
+              const isFreon   = t.freonTask === true;
+              const isLoading = reopeningId === t.id;
+              const names     = (t.assignees ?? [])
+                .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
+                .filter(Boolean).join(", ");
+              return (
+                <div key={t.id} style={{
+                  display:    "flex",
+                  alignItems: "center",
+                  gap:        8,
+                  background: isDone ? "rgba(34,197,94,0.05)" : "var(--bg3)",
+                  borderRadius: 8,
+                  padding:    "6px 10px",
+                  border:     `1px solid ${isDone ? "rgba(34,197,94,0.2)" : "var(--border)"}`,
+                }}>
+                  <span style={{ fontSize: 13, color: isDone ? "#16a34a" : "var(--text3)", flexShrink: 0 }}>
+                    {isFreon ? "❄️" : isDone ? "✓" : "○"}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 12.5,
+                      color: isDone ? "var(--text2)" : "var(--text)",
+                      textDecoration: isDone && !isFreon ? "line-through" : "none",
+                    }}>
+                      {t.description}
+                      {isFreon && t.freonType && (
+                        <span style={{ color: "#0e7490" }}> {t.freonType}{t.freonKg ? ` · ${t.freonKg} кг` : ""}</span>
+                      )}
+                    </div>
+                    {names && (
+                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
+                    )}
+                  </div>
+                  {isDone && (
+                    <button
+                      type="button"
+                      onClick={() => void handleReopenTask(t.id)}
+                      disabled={!!reopeningId}
+                      title="Вернуть задачу в работу"
+                      style={{
+                        padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                        color: "#b45309",
+                        cursor: reopeningId ? "not-allowed" : "pointer",
+                        opacity: reopeningId && !isLoading ? 0.4 : 1,
+                        flexShrink: 0,
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      {isLoading ? "..." : "↩"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
