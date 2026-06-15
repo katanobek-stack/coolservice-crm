@@ -925,10 +925,29 @@ function RepairTaskRow({ task, client, repair }: {
             </div>
           )}
 
-          {/* Done freon — show kg */}
-          {isFreon && isDone && task.freonKg && (
-            <div style={{ fontSize: 11, color: "#0e7490", marginTop: 2 }}>
-              ❄️ Заправлено: <strong>{task.freonKg} кг</strong>
+          {/* Done freon — show kg + reopen button */}
+          {isFreon && isDone && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+              {task.freonKg && (
+                <span style={{ fontSize: 11, color: "#0e7490" }}>
+                  ❄️ Заправлено: <strong>{task.freonKg} кг</strong>
+                  {task.freonType && <span> ({task.freonType})</span>}
+                </span>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => void patchTask({ status: "in_progress", doneBy: [] })}
+                  title="Вернуть задачу в работу"
+                  style={{
+                    padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
+                    color: "#b45309", cursor: "pointer",
+                  }}
+                >
+                  ↩ Вернуть
+                </button>
+              )}
             </div>
           )}
 
