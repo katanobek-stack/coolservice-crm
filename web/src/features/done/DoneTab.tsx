@@ -516,17 +516,36 @@ function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
 
 // ─── Repair card (closed history) ────────────────────────────────────────────
 
-function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
+function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn }: {
   item:        DoneItem;
   isAdmin:     boolean;
   showAmounts: boolean;
   isOwner:     boolean;
   ownerUid:    string;
+  canReturn:   boolean;
 }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
   const [showEdit,   setShowEdit]   = useState(false);
+  const [returning,  setReturning]  = useState(false);
   const isCancelled = repairStatus(repair) === "cancelled";
+
+  async function handleReturn(e: React.MouseEvent) {
+    e.stopPropagation();
+    const label = vehicle?.plate ?? client.name;
+    if (!window.confirm(`Вернуть заявку «${label}» обратно в ремонт?`)) return;
+    setReturning(true);
+    const repairs = (client.repairs ?? []).map((r) =>
+      r.id !== repair.id ? r : {
+        ...r,
+        status:          "in_progress" as const,
+        closedByManager: false,
+        closedAt:        undefined,
+      },
+    );
+    await updateClientArray(client.id, "repairs", repairs);
+    setReturning(false);
+  }
 
   function openDetail() {
     setShowDetail(true);
@@ -643,6 +662,22 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
           <Badge variant={isCancelled ? "gray" : "green"}>
             {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Готово"}
           </Badge>
+          {canReturn && (
+            <button
+              type="button"
+              onClick={(e) => void handleReturn(e)}
+              disabled={returning}
+              style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: returning ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.12)",
+                border: "1px solid rgba(245,158,11,0.3)",
+                color: "#b45309", cursor: returning ? "not-allowed" : "pointer",
+                opacity: returning ? 0.6 : 1,
+              }}
+            >
+              {returning ? "..." : "↩ В ремонт"}
+            </button>
+          )}
           {isOwner && (
             <button
               type="button"
@@ -666,7 +701,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid }: {
 
 // ─── Month block (collapsible) ────────────────────────────────────────────────
 
-function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid }: {
+function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid, canReturn }: {
   mk:          string;
   items:       DoneItem[];
   tasks:       ServiceTask[];
@@ -674,6 +709,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid 
   showAmounts: boolean;
   isOwner:     boolean;
   ownerUid:    string;
+  canReturn:   boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -711,7 +747,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid 
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((i) => (
-            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} />
+            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} />
           ))}
           {tasks.map((t) => (
             <div
@@ -1201,6 +1237,7 @@ export function DoneTab() {
   const { canSeeReportsAmounts }       = usePermissions();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
   const showAmounts = isAdmin && canSeeReportsAmounts;
+  const canReturn = isOwner || myProfile?.role === "admin";
   const ownerUid  = user?.uid ?? "";
   const [search, setSearch] = useState("");
 
@@ -1500,7 +1537,7 @@ export function DoneTab() {
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
             {byMonth.map(([mk, { items, tasks: mTasks }]) => (
-              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} />
+              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} />
             ))}
           </div>
         )}
