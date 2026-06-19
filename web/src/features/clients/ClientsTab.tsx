@@ -10,8 +10,9 @@ import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
-import { addClient, updateClient, deleteClient, updateClientArray } from "../../shared/firebase/firestore";
+import { addClient, updateClient, deleteClient, updateClientArray, addAppointment } from "../../shared/firebase/firestore";
 import type { Appointment, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
+import type { AppointmentDoc } from "../../shared/types/appointment";
 import { uploadPhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
@@ -373,23 +374,59 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
 // ─── Add Appointment Modal ────────────────────────────────────────────────────
 
 function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () => void }) {
+  const { user, myProfile } = useAuth();
   const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate]   = useState(today);
-  const [time, setTime]   = useState("");
-  const [desc, setDesc]   = useState("");
-  const [vId,  setVId]    = useState(client.vehicles[0]?.id ?? "");
+  const [date,   setDate]   = useState(today);
+  const [time,   setTime]   = useState("");
+  const [desc,   setDesc]   = useState("");
+  const [vId,    setVId]    = useState(client.vehicles[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState("");
 
   async function handleSave() {
+    setError("");
     setSaving(true);
-    const appt: Appointment & { vehicleId?: string } = {
-      id:          genId(),
-      date:        time ? `${date}T${time}:00` : date,
-      description: desc.trim() || undefined,
-      vehicleId:   vId || undefined,
-    };
-    await updateClientArray(client.id, "appointments", [...(client.appointments ?? []), appt]);
-    onClose();
+    try {
+      const vehicle = (client.vehicles ?? []).find((v) => v.id === vId);
+
+      // Write to global appointments collection so AppointmentsTab shows it
+      const globalApptData: Omit<AppointmentDoc, "id" | "createdAt"> = {
+        clientName:    client.name,
+        date,
+        time:          time || "",
+        type:          "diagnostics",
+        assignees:     [],
+        assigneeNames: [],
+        status:        "pending",
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        clientId:      client.id,
+      };
+      if (client.phone)   globalApptData.clientPhone = client.phone;
+      if (vehicle?.brand) globalApptData.carBrand    = vehicle.brand;
+      if (vehicle?.model) globalApptData.carModel    = vehicle.model;
+      if (desc.trim())    globalApptData.note        = desc.trim();
+      await addAppointment(globalApptData);
+
+      // Also write to client.appointments[] for backward-compat (client card list)
+      const localAppt: Record<string, unknown> = {
+        id:   genId(),
+        date: time ? `${date}T${time}:00` : date,
+      };
+      if (desc.trim()) localAppt.description = desc.trim();
+      if (vId)         localAppt.vehicleId   = vId;
+      await updateClientArray(client.id, "appointments", [
+        ...(client.appointments ?? []),
+        localAppt as unknown as Appointment,
+      ]);
+
+      onClose();
+    } catch (e) {
+      setError("Ошибка создания записи");
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -405,6 +442,7 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
         </FormGroup>
       )}
       <FormGroup label="Описание"><Textarea placeholder="Что планируется..." value={desc} onChange={(e) => setDesc(e.target.value)} /></FormGroup>
+      {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 4 }}>{error}</div>}
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : "Создать запись"}</Button>
     </Modal>
   );

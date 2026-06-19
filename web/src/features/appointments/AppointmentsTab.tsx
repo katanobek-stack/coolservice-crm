@@ -45,14 +45,16 @@ const APPT_TYPES: Record<AppointmentDoc["type"], { label: string; icon: string }
 // ─── AppointmentCard ──────────────────────────────────────────────────────────
 
 function AppointmentCard({
-  appt, myUid, role, onClose, onDelete, onEdit,
+  appt, myUid, role, onClose, onDelete, onEdit, onCreateRepair, creatingRepair,
 }: {
-  appt:     AppointmentDoc;
-  myUid:    string;
-  role:     string;
-  onClose:  (a: AppointmentDoc) => void;
-  onDelete: (a: AppointmentDoc) => void;
-  onEdit:   (a: AppointmentDoc) => void;
+  appt:            AppointmentDoc;
+  myUid:           string;
+  role:            string;
+  onClose:         (a: AppointmentDoc) => void;
+  onDelete:        (a: AppointmentDoc) => void;
+  onEdit:          (a: AppointmentDoc) => void;
+  onCreateRepair:  (a: AppointmentDoc) => void;
+  creatingRepair:  string | null;
 }) {
   const isPending  = appt.status === "pending";
   const isMine     = appt.assignees.includes(myUid);
@@ -60,6 +62,7 @@ function AppointmentCard({
   const canEdit    = isPending && (canManage || (role === "mechanic" && isMine));
   const showPulse  = isPending && isMine;
   const typeInfo   = APPT_TYPES[appt.type] ?? { label: appt.type, icon: "📋" };
+  const isCreating = creatingRepair === appt.id;
 
   return (
     <div style={{
@@ -156,8 +159,24 @@ function AppointmentCard({
       </div>
 
       {/* Actions */}
-      {(canManage || canEdit) && (
+      {(canManage || canEdit || (isPending && isMine)) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {isPending && (canManage || isMine) && (
+            <button
+              type="button"
+              onClick={() => onCreateRepair(appt)}
+              disabled={isCreating}
+              style={{
+                background: "#16a34a", color: "#fff", border: "none",
+                borderRadius: 8, padding: "6px 14px", fontSize: 13,
+                fontWeight: 600, cursor: isCreating ? "default" : "pointer",
+                opacity: isCreating ? 0.7 : 1,
+                display: "flex", alignItems: "center", gap: 4,
+              }}
+            >
+              {isCreating ? "Создание..." : "🔧 Создать заявку на ремонт"}
+            </button>
+          )}
           {isPending && canManage && (
             <button
               type="button"
@@ -1024,15 +1043,107 @@ function CloseAppointmentModal({
 
 export function AppointmentsTab() {
   const { myProfile, user } = useAuth();
-  const { appointments }    = useData();
+  const { appointments, clients } = useData();
 
-  const [showAdd,      setShowAdd]      = useState(false);
-  const [closingAppt,  setClosingAppt]  = useState<AppointmentDoc | null>(null);
-  const [editingAppt,  setEditingAppt]  = useState<AppointmentDoc | null>(null);
+  const [showAdd,        setShowAdd]        = useState(false);
+  const [closingAppt,    setClosingAppt]    = useState<AppointmentDoc | null>(null);
+  const [editingAppt,    setEditingAppt]    = useState<AppointmentDoc | null>(null);
+  const [creatingRepair, setCreatingRepair] = useState<string | null>(null);
 
-  const role     = myProfile?.role ?? "mechanic";
-  const uid      = user?.uid ?? "";
+  const role      = myProfile?.role ?? "mechanic";
+  const uid       = user?.uid ?? "";
   const canCreate = role === "admin" || role === "owner" || role === "manager";
+
+  async function handleCreateRepair(appt: AppointmentDoc) {
+    if (creatingRepair) return;
+    setCreatingRepair(appt.id);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      let clientId: string | null = appt.clientId ?? null;
+      let vehicleId: string = "";
+
+      // Build a Vehicle object without undefined fields
+      function makeVehicle(id: string): Vehicle {
+        const v: Vehicle = { id, plate: "—" };
+        if (appt.carBrand) v.brand = appt.carBrand;
+        if (appt.carModel) v.model = appt.carModel;
+        return v;
+      }
+
+      if (clientId) {
+        const existingClient = clients.find((c) => c.id === clientId);
+        if (existingClient) {
+          const matchVehicle = existingClient.vehicles.find(
+            (v) =>
+              (!appt.carBrand || v.brand === appt.carBrand) &&
+              (!appt.carModel || v.model === appt.carModel),
+          );
+          if (matchVehicle) {
+            vehicleId = matchVehicle.id;
+          } else {
+            vehicleId = genId();
+            await updateClient(clientId, {
+              vehicles: [...existingClient.vehicles, makeVehicle(vehicleId)],
+            });
+          }
+        } else {
+          clientId = null;
+        }
+      }
+
+      if (!clientId) {
+        vehicleId = genId();
+        const newVehicle = makeVehicle(vehicleId);
+        const ref = await addClient(clean({
+          name:         appt.clientName,
+          phone:        appt.clientPhone,
+          clientType:   "phys" as const,
+          vehicles:     [newVehicle],
+          repairs:      [],
+          appointments: [],
+        }));
+        clientId = ref.id;
+      }
+
+      const repairId = genId();
+      const freonTask: RepairTask = {
+        id:          genId(),
+        description: "Заправка фреона",
+        assignees:   appt.assignees,
+        doneBy:      [],
+        status:      "in_progress",
+        freonTask:   true,
+      };
+      const repair: Repair = clean({
+        id:            repairId,
+        vehicleId,
+        serviceType:   "refrigerator" as const,
+        date:          today,
+        status:        "in_progress" as const,
+        tasks:         [freonTask],
+        mechanics:     appt.assignees,
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+      });
+
+      const finalClient = clients.find((c) => c.id === clientId);
+      await updateClient(clientId!, {
+        repairs: [...(finalClient?.repairs ?? []), repair],
+      });
+
+      await updateAppointment(appt.id, {
+        status:   "closed",
+        outcome:  "repair",
+        clientId: clientId!,
+        repairId,
+      });
+    } catch (e) {
+      console.error("[handleCreateRepair]", e);
+      alert("Ошибка создания заявки на ремонт");
+    } finally {
+      setCreatingRepair(null);
+    }
+  }
 
   const visibleAppts = useMemo(() => {
     if (role === "mechanic") {
@@ -1116,6 +1227,8 @@ export function AppointmentsTab() {
                 onClose={setClosingAppt}
                 onDelete={(appt) => void handleDelete(appt)}
                 onEdit={setEditingAppt}
+                onCreateRepair={(appt) => void handleCreateRepair(appt)}
+                creatingRepair={creatingRepair}
               />
             ))
           )}
@@ -1141,6 +1254,8 @@ export function AppointmentsTab() {
                 onClose={setClosingAppt}
                 onDelete={(appt) => void handleDelete(appt)}
                 onEdit={setEditingAppt}
+                onCreateRepair={(appt) => void handleCreateRepair(appt)}
+                creatingRepair={creatingRepair}
               />
             ))
           )}
