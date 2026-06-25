@@ -5,6 +5,7 @@ export interface AppointmentDoc {
   clientName: string;
   carBrand?: string;
   carModel?: string;
+  carPlate?: string;
   date: string;               // "YYYY-MM-DD"
   time: string;               // "HH:MM"
   type: "diagnostics" | "repair" | "consultation";

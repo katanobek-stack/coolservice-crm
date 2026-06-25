@@ -11,7 +11,7 @@ import {
 import { genId } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import type { AppointmentDoc } from "../../shared/types/appointment";
-import type { Repair, RepairTask, Vehicle } from "../../shared/types/client";
+import type { Client, Repair, RepairTask, Vehicle } from "../../shared/types/client";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -225,15 +225,20 @@ function AppointmentCard({
 
 // ─── AddAppointmentModal ──────────────────────────────────────────────────────
 
+function normalizePhone(p: string) { return p.replace(/\D/g, ""); }
+function normalizePlate(p: string) { return p.replace(/\s/g, "").toUpperCase(); }
+
 function AddAppointmentModal({ onClose }: { onClose: () => void }) {
   const { user, myProfile } = useAuth();
-  const { staff } = useData();
+  const { staff, clients } = useData();
 
   const today = new Date().toISOString().slice(0, 10);
   const [clientName,  setClientName]  = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [carBrand,    setCarBrand]    = useState("");
   const [carModel,    setCarModel]    = useState("");
+  const [carPlate,    setCarPlate]    = useState("");
+  const [clientId,    setClientId]    = useState<string | null>(null);
   const [date,        setDate]        = useState(today);
   const [time,        setTime]        = useState("");
   const [apptType,    setApptType]    = useState<AppointmentDoc["type"]>("diagnostics");
@@ -243,6 +248,44 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const matched = useMemo<{ client: Client; vehicle?: Vehicle } | null>(() => {
+    if (clientId) return null;
+    const normPhone = normalizePhone(clientPhone);
+    const normPlate = normalizePlate(carPlate);
+    const phoneOk = normPhone.length >= 4;
+    const plateOk = normPlate.length >= 3;
+    if (!phoneOk && !plateOk) return null;
+
+    for (const c of clients) {
+      if (phoneOk && c.phone) {
+        const cp = normalizePhone(c.phone);
+        if (cp.length >= 4 && (cp.includes(normPhone) || normPhone.includes(cp))) {
+          return { client: c, vehicle: c.vehicles?.[0] };
+        }
+      }
+      if (plateOk && c.vehicles?.length) {
+        const v = c.vehicles.find((veh) => {
+          const vp = normalizePlate(veh.plate ?? "");
+          return vp.length >= 3 && (vp.includes(normPlate) || normPlate.includes(vp));
+        });
+        if (v) return { client: c, vehicle: v };
+      }
+    }
+    return null;
+  }, [clients, clientPhone, carPlate, clientId]);
+
+  function applyMatch(m: { client: Client; vehicle?: Vehicle }) {
+    setClientName(m.client.name);
+    if (m.client.phone) setClientPhone(m.client.phone);
+    const v = m.vehicle ?? m.client.vehicles?.[0];
+    if (v) {
+      if (v.brand) setCarBrand(v.brand);
+      if (v.model) setCarModel(v.model);
+      if (v.plate && v.plate !== "—") setCarPlate(v.plate);
+    }
+    setClientId(m.client.id);
+  }
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -278,6 +321,8 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
         clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
         carModel:      carModel.trim() || undefined,
+        carPlate:      carPlate.trim() || undefined,
+        clientId:      clientId ?? undefined,
         date,
         time,
         type:          apptType,
@@ -355,6 +400,72 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
             />
           </div>
         </div>
+
+        {/* Гос. номер */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 }}>
+            Гос. номер
+          </label>
+          <input
+            className="input"
+            value={carPlate}
+            onChange={(e) => setCarPlate(e.target.value)}
+            placeholder="А123ВС125"
+          />
+        </div>
+
+        {/* Подсказка совпадения */}
+        {matched && !clientId && (
+          <div style={{
+            background: "rgba(22,163,74,0.08)", border: "1px solid #16a34a",
+            borderRadius: 8, padding: "10px 14px",
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+          }}>
+            <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+              <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ Найден клиент: </span>
+              <span style={{ fontWeight: 600 }}>{matched.client.name}</span>
+              {matched.vehicle && (
+                <span style={{ color: "var(--text2)" }}>
+                  {" · "}{[matched.vehicle.brand, matched.vehicle.model].filter(Boolean).join(" ")}
+                  {matched.vehicle.plate && matched.vehicle.plate !== "—"
+                    ? ` (${matched.vehicle.plate})` : ""}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => applyMatch(matched)}
+              style={{
+                background: "#16a34a", color: "#fff", border: "none",
+                borderRadius: 6, padding: "5px 12px", fontSize: 12,
+                fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+              }}
+            >
+              Использовать
+            </button>
+          </div>
+        )}
+        {clientId && (
+          <div style={{
+            background: "rgba(22,163,74,0.06)", border: "1px solid #16a34a",
+            borderRadius: 8, padding: "8px 14px",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            fontSize: 12, color: "#16a34a", fontWeight: 600,
+          }}>
+            <span>✓ Привязан к существующему клиенту</span>
+            <button
+              type="button"
+              onClick={() => setClientId(null)}
+              style={{
+                background: "transparent", border: "none", color: "#16a34a",
+                cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 4px",
+              }}
+              title="Отвязать"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Дата + время */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -807,7 +918,11 @@ function CloseAppointmentModal({
   onClose: () => void;
 }) {
   const { user, myProfile } = useAuth();
-  const [step,   setStep]   = useState<1 | 2>(1);
+  const { clients } = useData();
+
+  const hasExistingClient = !!appt.clientId;
+
+  const [step,   setStep]   = useState<1 | 2>(hasExistingClient ? 2 : 1);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState("");
 
@@ -815,8 +930,8 @@ function CloseAppointmentModal({
   const [phone,            setPhone]            = useState(appt.clientPhone ?? "");
   const [carBrand,         setCarBrand]         = useState(appt.carBrand ?? "");
   const [carModel,         setCarModel]         = useState(appt.carModel ?? "");
-  const [plate,            setPlate]            = useState("");
-  const [createdClientId,  setCreatedClientId]  = useState<string | null>(null);
+  const [plate,            setPlate]            = useState(appt.carPlate ?? "");
+  const [createdClientId,  setCreatedClientId]  = useState<string | null>(appt.clientId ?? null);
   const [createdVehicleId, setCreatedVehicleId] = useState<string | null>(null);
 
   async function handleNextStep() {
@@ -851,9 +966,38 @@ function CloseAppointmentModal({
   }
 
   async function handleRepair() {
-    if (!createdClientId || !createdVehicleId) return;
+    if (!createdClientId) return;
     setSaving(true);
     try {
+      let vId = createdVehicleId;
+
+      if (!vId) {
+        const existingClient = clients.find((c) => c.id === createdClientId);
+        if (existingClient) {
+          const matchV = existingClient.vehicles.find(
+            (v) =>
+              (!carBrand || v.brand === carBrand) &&
+              (!carModel || v.model === carModel),
+          );
+          if (matchV) {
+            vId = matchV.id;
+          } else {
+            vId = genId();
+            const newVehicle = clean<Vehicle>({
+              id:    vId,
+              plate: plate.trim() || "—",
+              brand: carBrand.trim() || undefined,
+              model: carModel.trim() || undefined,
+            });
+            await updateClient(createdClientId, {
+              vehicles: [...existingClient.vehicles, newVehicle],
+            });
+          }
+        }
+      }
+
+      if (!vId) { setError("Не удалось определить автомобиль"); setSaving(false); return; }
+
       const repairId = genId();
       const today    = new Date().toISOString().slice(0, 10);
 
@@ -867,7 +1011,7 @@ function CloseAppointmentModal({
       };
       const repair: Repair = clean({
         id:            repairId,
-        vehicleId:     createdVehicleId,
+        vehicleId:     vId,
         serviceType:   "refrigerator" as const,
         date:          today,
         status:        "in_progress" as const,
@@ -877,7 +1021,10 @@ function CloseAppointmentModal({
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
       });
 
-      await updateClient(createdClientId, { repairs: [repair] });
+      const finalClient = clients.find((c) => c.id === createdClientId);
+      await updateClient(createdClientId, {
+        repairs: [...(finalClient?.repairs ?? []), repair],
+      });
       await updateAppointment(appt.id, {
         status:   "closed",
         outcome:  "repair",
@@ -913,7 +1060,7 @@ function CloseAppointmentModal({
   return (
     <Modal
       onClose={onClose}
-      title={`Закрыть запись — Шаг ${step} из 2`}
+      title={hasExistingClient ? "Закрыть запись" : `Закрыть запись — Шаг ${step} из 2`}
     >
       {step === 1 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1000,7 +1147,7 @@ function CloseAppointmentModal({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ fontSize: 14, color: "var(--text2)" }}>
-            Клиент создан. Выберите исход записи:
+            {hasExistingClient ? "Выберите исход записи:" : "Клиент создан. Выберите исход записи:"}
           </div>
 
           <button
@@ -1064,7 +1211,7 @@ export function AppointmentsTab() {
 
       // Build a Vehicle object without undefined fields
       function makeVehicle(id: string): Vehicle {
-        const v: Vehicle = { id, plate: "—" };
+        const v: Vehicle = { id, plate: appt.carPlate || "—" };
         if (appt.carBrand) v.brand = appt.carBrand;
         if (appt.carModel) v.model = appt.carModel;
         return v;
