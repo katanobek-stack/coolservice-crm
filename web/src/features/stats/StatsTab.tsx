@@ -461,12 +461,13 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
 
 // ─── Month detail modal ───────────────────────────────────────────────────────
 
-function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
-  mk:          string;
-  doneRepairs: EnrichedRepair[];
-  rawFinance:  unknown;
-  expenses:    Array<{ id: string; category: string; month: string; amount: number; comment: string }>;
-  onClose:     () => void;
+function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome, onClose }: {
+  mk:            string;
+  doneRepairs:   EnrichedRepair[];
+  rawFinance:    unknown;
+  expenses:      Array<{ id: string; category: string; month: string; amount: number; comment: string }>;
+  rentalIncome:  number;
+  onClose:       () => void;
 }) {
   type FinDoc = {
     boxes?:     Array<{ id: string; name: string; cost: number }>;
@@ -488,7 +489,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
       clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
     });
   const clientRevList = Array.from(clientRevMap.values()).filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
-  const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0);
+  const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0) + rentalIncome;
 
   // Expenses
   const salary      = (fin.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
@@ -522,19 +523,29 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, onClose }: {
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
             💰 Доходы
           </div>
-          {clientRevList.length === 0 ? (
+          {clientRevList.length === 0 && rentalIncome === 0 ? (
             <div style={{ fontSize: 12, color: "var(--text3)", padding: "8px 0" }}>Нет данных</div>
           ) : (
-            clientRevList.map((c) => (
-              <div key={c.name} style={rowStyle}>
-                <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8, fontSize: 12.5 }}>
-                  {c.name}
-                </span>
-                <span style={{ color: "#16a34a", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
-                  {fmtMoney(c.amount)}
-                </span>
-              </div>
-            ))
+            <>
+              {clientRevList.map((c) => (
+                <div key={c.name} style={rowStyle}>
+                  <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8, fontSize: 12.5 }}>
+                    {c.name}
+                  </span>
+                  <span style={{ color: "#16a34a", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
+                    {fmtMoney(c.amount)}
+                  </span>
+                </div>
+              ))}
+              {rentalIncome > 0 && (
+                <div style={rowStyle}>
+                  <span style={{ color: "var(--text)", fontSize: 12.5, flex: 1, marginRight: 8 }}>🏠 Аренда камер</span>
+                  <span style={{ color: "#16a34a", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
+                    {fmtMoney(rentalIncome)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 0 0", borderTop: "1px solid var(--border2)", marginTop: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого</span>
@@ -686,7 +697,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { clients, tasks, staff, finance: rawFinance, expenses } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
   const { myProfile, isOwner } = useAuth();
   const { canSeeDashboardFinancials } = usePermissions();
   const role           = myProfile?.role ?? "mechanic";
@@ -722,6 +733,11 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const activeTasks       = tasks.filter((t) => t.status !== "done").length;
 
   const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
+
+  // ── Freezer rental income (fixed monthly) ────────────────────────────────
+  const totalRentIncome = freezers
+    .filter((f) => f.rented === true || f.status === "rented")
+    .reduce((s, f) => s + (parseFloat(String(f.rentAmount ?? 0)) || 0), 0);
 
   // ── Monthly revenue + expenses (last 6 months) ───────────────────────────
   const monthData = useMemo(() => {
@@ -760,7 +776,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       const elec  = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
       const purch = purchByMonth[mk] ?? 0;
       const comm  = commByMonth[mk] ?? 0;
-      map.set(mk, { rev: 0, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
+      map.set(mk, { rev: totalRentIncome, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
       const mk = r.date?.slice(0, 7);
@@ -773,12 +789,12 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       label: MONTH_NAMES[parseInt(mk.split("-")[1]) - 1],
       ...v,
     }));
-  }, [doneRepairs, rawFinance, expenses]);
+  }, [doneRepairs, rawFinance, expenses, totalRentIncome]);
 
   const curMonthRev  = doneRepairs.filter((r) => r.date?.slice(0,7) === curMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
+    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
   const prevMonthRev = doneRepairs.filter((r) => r.date?.slice(0,7) === prevMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
+    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
   const revDiff = prevMonthRev > 0 ? Math.round(((curMonthRev-prevMonthRev)/prevMonthRev)*100) : null;
 
   // ── Top clients ───────────────────────────────────────────────────────────
@@ -1237,6 +1253,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           doneRepairs={doneRepairs}
           rawFinance={rawFinance}
           expenses={expenses}
+          rentalIncome={totalRentIncome}
           onClose={() => setSelectedMonthKey(null)}
         />
       )}
