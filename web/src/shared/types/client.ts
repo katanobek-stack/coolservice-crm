@@ -1,5 +1,15 @@
 export type ClientType = "phys" | "legal";
 
+export interface Chamber {
+  id: string;
+  photo?: string;
+  length?: number;      // мм
+  width?: number;
+  height?: number;
+  wallThickness?: number;
+  notes?: string;
+}
+
 export interface Vehicle {
   id: string;
   plate: string;
@@ -36,6 +46,7 @@ export type ServiceType = "refrigerator" | "ac" | "freezer" | "other";
 export interface Repair {
   id: string;
   vehicleId?: string;
+  chamberId?: string;
   serviceType: ServiceType;
   description?: string;
   date?: string;
@@ -75,6 +86,7 @@ export interface Client {
   contactPerson?: string;
   subscription?: number;
   vehicles: Vehicle[];
+  chambers?: Chamber[];
   repairs: Repair[];
   appointments: Appointment[];
   createdAt?: unknown;

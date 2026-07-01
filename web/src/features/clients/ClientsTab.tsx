@@ -11,7 +11,7 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { addClient, updateClient, deleteClient, updateClientArray, addAppointment } from "../../shared/firebase/firestore";
-import type { Appointment, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
+import type { Appointment, Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
 import type { AppointmentDoc } from "../../shared/types/appointment";
 import { uploadPhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
@@ -371,6 +371,206 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
   );
 }
 
+// ─── Chamber helpers ──────────────────────────────────────────────────────────
+
+function chamberVolume(c: Pick<Chamber, "length" | "width" | "height">): number | null {
+  const l = c.length ?? 0;
+  const w = c.width  ?? 0;
+  const h = c.height ?? 0;
+  if (!l || !w || !h) return null;
+  return parseFloat(((l * w * h) / 1_000_000_000).toFixed(3));
+}
+
+function chamberLabel(c: Chamber): string {
+  const v = chamberVolume(c);
+  if (v) return `${v} м³`;
+  if (c.length || c.width || c.height) return `${c.length ?? "?"}×${c.width ?? "?"}×${c.height ?? "?"} мм`;
+  return "Камера";
+}
+
+// ─── Chamber Modal ────────────────────────────────────────────────────────────
+
+function ChamberModal({ client, chamber, onClose }: { client: Client; chamber?: Chamber; onClose: () => void }) {
+  const isEdit = !!chamber;
+  const [photo,         setPhoto]         = useState(chamber?.photo ?? "");
+  const [length,        setLength]        = useState(String(chamber?.length ?? ""));
+  const [width,         setWidth]         = useState(String(chamber?.width  ?? ""));
+  const [height,        setHeight]        = useState(String(chamber?.height ?? ""));
+  const [wallThickness, setWallThickness] = useState(String(chamber?.wallThickness ?? ""));
+  const [notes,         setNotes]         = useState(chamber?.notes ?? "");
+  const [saving,        setSaving]        = useState(false);
+  const [uploadingPhoto,setUploadingPhoto]= useState(false);
+
+  const camRef = useRef<HTMLInputElement>(null);
+  const galRef = useRef<HTMLInputElement>(null);
+
+  const l = parseFloat(length) || 0;
+  const w = parseFloat(width)  || 0;
+  const h = parseFloat(height) || 0;
+  const volumeM3 = l && w && h ? ((l * w * h) / 1_000_000_000).toFixed(3) : null;
+
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const result = await uploadPhoto(file, "chambers");
+      setPhoto(result.url ?? "");
+    } catch (err) {
+      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const data: Chamber = {
+        id: chamber?.id ?? genId(),
+        ...(photo ? { photo } : {}),
+        ...(l ? { length: l } : {}),
+        ...(w ? { width: w } : {}),
+        ...(h ? { height: h } : {}),
+        ...(parseFloat(wallThickness) ? { wallThickness: parseFloat(wallThickness) } : {}),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+      };
+      const chambers = client.chambers ?? [];
+      if (isEdit) {
+        await updateClient(client.id, { chambers: chambers.map((c) => c.id === chamber!.id ? data : c) });
+      } else {
+        await updateClient(client.id, { chambers: [...chambers, data] });
+      }
+      onClose();
+    } catch (err) {
+      console.error("[ChamberModal] handleSave failed:", err);
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!chamber || !confirm("Удалить камеру?")) return;
+    await updateClient(client.id, {
+      chambers: (client.chambers ?? []).filter((c) => c.id !== chamber.id),
+      repairs:  (client.repairs  ?? []).filter((r) => r.chamberId !== chamber.id),
+    });
+    onClose();
+  }
+
+  const btnStyle: CSSProperties = {
+    padding: "6px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer",
+    border: "1px solid var(--border2)", background: "var(--bg3)", color: "var(--text2)",
+    display: "flex", alignItems: "center", gap: 5,
+  };
+
+  const dimRow: CSSProperties = { display: "flex", gap: 8 };
+
+  return (
+    <Modal title={isEdit ? "Редактировать камеру" : "Добавить камеру"} onClose={onClose}>
+
+      {/* Photo */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+          Фото камеры
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {photo ? (
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <img src={photo} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", border: "1px solid var(--border)" }} />
+              <button type="button" onClick={() => setPhoto("")} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "var(--red)", border: "none", color: "white", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            </div>
+          ) : (
+            <div style={{ width: 72, height: 72, borderRadius: 10, flexShrink: 0, background: "var(--bg3)", border: "1.5px dashed var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>
+              🧊
+            </div>
+          )}
+          <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoFile} />
+          <input ref={galRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
+          {uploadingPhoto ? (
+            <span style={{ fontSize: 12, color: "var(--text3)" }}>⏳ Загрузка...</span>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button type="button" style={btnStyle} onClick={() => camRef.current?.click()}>📷 Камера</button>
+              <button type="button" style={btnStyle} onClick={() => galRef.current?.click()}>🖼️ Галерея</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Dimensions */}
+      <FormGroup label="Размеры (мм)">
+        <div style={dimRow}>
+          <Input type="number" placeholder="Длина" value={length} onChange={(e) => setLength(e.target.value)} />
+          <Input type="number" placeholder="Ширина" value={width}  onChange={(e) => setWidth(e.target.value)} />
+          <Input type="number" placeholder="Высота" value={height} onChange={(e) => setHeight(e.target.value)} />
+        </div>
+      </FormGroup>
+
+      <FormGroup label="Толщина стенки (мм)">
+        <Input type="number" placeholder="Например: 100" value={wallThickness} onChange={(e) => setWallThickness(e.target.value)} />
+      </FormGroup>
+
+      {/* Volume preview */}
+      {volumeM3 && (
+        <div style={{ marginBottom: 14, padding: "10px 14px", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.25)", borderRadius: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>📦</span>
+          <span style={{ fontSize: 13, color: "var(--text2)" }}>Объём: </span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#0e7490", fontFamily: "JetBrains Mono, monospace" }}>{volumeM3} м³</span>
+        </div>
+      )}
+
+      <FormGroup label="Примечание">
+        <Textarea placeholder="Необязательно" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </FormGroup>
+
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving || uploadingPhoto}>
+        {saving ? "..." : isEdit ? "Сохранить" : "Добавить"}
+      </Button>
+      {isEdit && (
+        <div className="mt-3 pt-3 border-t border-[#E2E8F0]">
+          <button type="button" onClick={() => void handleDelete()} className="text-xs text-red-400 cursor-pointer bg-transparent border-none">
+            🗑 Удалить камеру
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Chamber Row ──────────────────────────────────────────────────────────────
+
+function ChamberRow({ chamber, onEdit }: { chamber: Chamber; onEdit?: () => void }) {
+  const [imgError, setImgError] = useState(false);
+  const v = chamberVolume(chamber);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, background: "var(--bg2)", border: "1px solid var(--border)", marginBottom: 6 }}>
+      {chamber.photo && !imgError ? (
+        <img src={chamber.photo} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} onError={() => setImgError(true)} />
+      ) : (
+        <span style={{ fontSize: 22, flexShrink: 0 }}>🧊</span>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {v !== null && (
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0e7490" }}>{v} м³</div>
+        )}
+        {(chamber.length || chamber.width || chamber.height) && (
+          <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>
+            {chamber.length ?? "?"} × {chamber.width ?? "?"} × {chamber.height ?? "?"} мм
+            {chamber.wallThickness ? ` · стенка ${chamber.wallThickness} мм` : ""}
+          </div>
+        )}
+        {chamber.notes && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1, fontStyle: "italic" }}>{chamber.notes}</div>}
+      </div>
+      {onEdit && (
+        <button type="button" onClick={onEdit} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontSize: 13, color: "var(--text2)", flexShrink: 0 }}>
+          ✏️
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Add Appointment Modal ────────────────────────────────────────────────────
 
 function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () => void }) {
@@ -452,10 +652,10 @@ const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 
 // ─── Add Repair Modal ─────────────────────────────────────────────────────────
 
-function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; preVehicleId?: string; onClose: () => void }) {
+function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client: Client; preVehicleId?: string; preChamber?: Chamber; onClose: () => void }) {
   const { staff } = useData();
   const { user, myProfile } = useAuth();
-  const [vehicleId,         setVehicleId]         = useState(preVehicleId ?? client.vehicles[0]?.id ?? "");
+  const [vehicleId,         setVehicleId]         = useState(preVehicleId ?? (preChamber ? "" : (client.vehicles[0]?.id ?? "")));
   const [newPlate,          setNewPlate]          = useState("");
   const [serviceType,       setServiceType]       = useState<ServiceType>("refrigerator");
   const [desc,              setDesc]              = useState("");
@@ -518,6 +718,7 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
         createdBy:     user?.uid ?? "",
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
+        ...(preChamber ? { chamberId: preChamber.id } : {}),
       };
       await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
       onClose();
@@ -534,13 +735,27 @@ function AddRepairModal({ client, preVehicleId, onClose }: { client: Client; pre
 
   return (
     <Modal title="Новый ремонт" onClose={onClose}>
-      <FormGroup label="Автомобиль">
-        <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-          <option value="">— новый авто —</option>
-          {(client.vehicles ?? []).map((v) => <option key={v.id} value={v.id}>{v.plate}{(v.brand ?? v.model) ? ` · ${v.brand ?? v.model}` : ""}</option>)}
-        </Select>
-      </FormGroup>
-      {!vehicleId && <FormGroup label="Номер нового авто"><Input placeholder="А123БВ 125" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} /></FormGroup>}
+      {preChamber ? (
+        <div style={{ marginBottom: 14, padding: "10px 14px", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.25)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🧊</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0e7490" }}>{chamberLabel(preChamber)}</div>
+            {(preChamber.length || preChamber.width || preChamber.height) && (
+              <div style={{ fontSize: 11, color: "var(--text3)" }}>{preChamber.length ?? "?"} × {preChamber.width ?? "?"} × {preChamber.height ?? "?"} мм</div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <FormGroup label="Автомобиль">
+            <Select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+              <option value="">— новый авто —</option>
+              {(client.vehicles ?? []).map((v) => <option key={v.id} value={v.id}>{v.plate}{(v.brand ?? v.model) ? ` · ${v.brand ?? v.model}` : ""}</option>)}
+            </Select>
+          </FormGroup>
+          {!vehicleId && <FormGroup label="Номер нового авто"><Input placeholder="А123БВ 125" value={newPlate} onChange={(e) => setNewPlate(e.target.value)} /></FormGroup>}
+        </>
+      )}
       <FormGroup label="Тип услуги">
         <div className="grid grid-cols-2 gap-2">
           {SERVICE_TYPES.map((s) => (
@@ -734,7 +949,8 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
   client: Client; repair: Repair; isAdmin: boolean; isHistory?: boolean;
 }) {
   const { staff }   = useData();
-  const vehicle     = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
+  const vehicle     = (client.vehicles  ?? []).find((v) => v.id === repair.vehicleId);
+  const chamber     = (client.chambers  ?? []).find((c) => c.id === repair.chamberId);
   const status      = repairStatus(repair);
   const svc         = SERVICE_TYPES.find((s) => s.id === repair.serviceType) ?? SERVICE_TYPES[3];
   const days        = daysAgo(repair.date);
@@ -809,6 +1025,14 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
 
       {vehicle && (
         <span style={{ fontSize: 11.5, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{vehicle.plate}</span>
+      )}
+      {chamber && (
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0e7490", background: "rgba(6,182,212,0.10)", border: "1px solid rgba(6,182,212,0.25)", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>
+          🧊 {chamberLabel(chamber)}
+          {(chamber.length || chamber.width || chamber.height) && (
+            <span style={{ fontWeight: 400, marginLeft: 5 }}>{chamber.length ?? "?"} × {chamber.width ?? "?"} × {chamber.height ?? "?"} мм</span>
+          )}
+        </span>
       )}
       {(repair.mechanics ?? []).length > 0 && (
         <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 5 }}>
@@ -1043,51 +1267,85 @@ function VehicleRow({ vehicle, onEdit, onView }: { vehicle: Vehicle; onEdit?: ()
   );
 }
 
-function VehiclePickerModal({ client, onPick, onClose }: {
+type PickedObject = { kind: "vehicle"; id: string } | { kind: "chamber"; id: string } | null;
+
+function ObjectPickerModal({ client, onPick, onClose }: {
   client: Client;
-  onPick: (vehicleId: string | undefined) => void;
+  onPick: (obj: PickedObject) => void;
   onClose: () => void;
 }) {
+  const vehicles = client.vehicles ?? [];
+  const chambers = client.chambers ?? [];
+
+  const itemBtn: CSSProperties = {
+    display: "flex", alignItems: "center", gap: 14,
+    padding: "13px 16px", borderRadius: 14,
+    background: "var(--bg2)", border: "1px solid var(--border2)",
+    cursor: "pointer", textAlign: "left", fontFamily: "Manrope, sans-serif",
+    width: "100%",
+  };
+
   return (
-    <Modal title="Выберите автомобиль" onClose={onClose}>
+    <Modal title="Выберите объект ремонта" onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {(client.vehicles ?? []).map((v) => {
-          const brand = v.brand ?? v.model;
-          return (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => onPick(v.id)}
-              style={{
-                display: "flex", alignItems: "center", gap: 14,
-                padding: "13px 16px", borderRadius: 14,
-                background: "var(--bg2)", border: "1px solid var(--border2)",
-                cursor: "pointer", textAlign: "left", fontFamily: "Manrope, sans-serif",
-                transition: "border-color 0.15s, background 0.15s",
-              }}
-            >
-              {v.photo ? (
-                <img src={v.photo} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
-              ) : (
-                <span style={{ fontSize: 24, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
-              )}
-              <div>
-                <div style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{v.plate}</div>
-                {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
-              </div>
-            </button>
-          );
-        })}
+
+        {vehicles.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>Автомобили</div>
+            {vehicles.map((v) => {
+              const brand = v.brand ?? v.model;
+              return (
+                <button key={v.id} type="button" onClick={() => onPick({ kind: "vehicle", id: v.id })} style={itemBtn}>
+                  {v.photo ? (
+                    <img src={v.photo} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+                  ) : (
+                    <span style={{ fontSize: 24, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
+                  )}
+                  <div>
+                    <div style={{ fontSize: 15, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{v.plate}</div>
+                    {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{brand}</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </>
+        )}
+
+        {chambers.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: vehicles.length > 0 ? 4 : 0, marginBottom: 2 }}>Камеры</div>
+            {chambers.map((c) => {
+              const v = chamberVolume(c);
+              return (
+                <button key={c.id} type="button" onClick={() => onPick({ kind: "chamber", id: c.id })} style={itemBtn}>
+                  {c.photo ? (
+                    <img src={c.photo} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+                  ) : (
+                    <span style={{ fontSize: 24, flexShrink: 0 }}>🧊</span>
+                  )}
+                  <div>
+                    {v !== null && <div style={{ fontSize: 15, fontWeight: 700, color: "#0e7490" }}>{v} м³</div>}
+                    {(c.length || c.width || c.height) && (
+                      <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>{c.length ?? "?"} × {c.width ?? "?"} × {c.height ?? "?"} мм</div>
+                    )}
+                    {c.notes && <div style={{ fontSize: 11, color: "var(--text3)" }}>{c.notes}</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </>
+        )}
+
         <button
           type="button"
-          onClick={() => onPick(undefined)}
+          onClick={() => onPick(null)}
           style={{
             padding: "12px", borderRadius: 12, background: "transparent",
             border: "1.5px dashed var(--border2)", color: "var(--text3)",
             fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "Manrope, sans-serif",
           }}
         >
-          Без привязки к авто
+          Без привязки к объекту
         </button>
         <button
           type="button"
@@ -1263,8 +1521,8 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager" || isOwner;
 
-  const [showPickVehicle, setShowPickVehicle] = useState(false);
-  const [pickedVehicleId, setPickedVehicleId] = useState<string | undefined>();
+  const [showPickObj,     setShowPickObj]     = useState(false);
+  const [pickedObj,       setPickedObj]       = useState<PickedObject>(null);
   const [showRepair,      setShowRepair]      = useState(false);
   const [showEditClient,  setShowEditClient]  = useState(false);
   const [showAddAppt,     setShowAddAppt]     = useState(false);
@@ -1272,6 +1530,8 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const [showAddVehicle,  setShowAddVehicle]  = useState(false);
   const [historyVehicle,  setHistoryVehicle]  = useState<Vehicle | null>(null);
   const [showConvert,     setShowConvert]     = useState(false);
+  const [chamberEdit,     setChamberEdit]     = useState<Chamber | null>(null);
+  const [showAddChamber,  setShowAddChamber]  = useState(false);
 
   const isIndividual = (client.clientType ?? client.type ?? "phys") === "phys";
   const convertedByName = client.convertedBy
@@ -1280,19 +1540,20 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
 
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
   const vehicles      = client.vehicles ?? [];
+  const chambers      = client.chambers ?? [];
 
   function handleNewRepair() {
-    if (vehicles.length === 0) {
-      setPickedVehicleId(undefined);
+    if (vehicles.length === 0 && chambers.length === 0) {
+      setPickedObj(null);
       setShowRepair(true);
     } else {
-      setShowPickVehicle(true);
+      setShowPickObj(true);
     }
   }
 
-  function handleVehiclePicked(vId: string | undefined) {
-    setPickedVehicleId(vId);
-    setShowPickVehicle(false);
+  function handleObjPicked(obj: PickedObject) {
+    setPickedObj(obj);
+    setShowPickObj(false);
     setShowRepair(true);
   }
 
@@ -1370,6 +1631,32 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
           </button>
         )}
       </div>
+
+      {/* ── КАМЕРЫ ── */}
+      {(chambers.length > 0 || isAdmin) && (
+        <div style={sec}>
+          <SectionHeader title="Камеры (изготовление)" count={chambers.length > 0 ? chambers.length : undefined} />
+          {chambers.map((c) => (
+            <ChamberRow key={c.id} chamber={c} onEdit={isAdmin ? () => setChamberEdit(c) : undefined} />
+          ))}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAddChamber(true)}
+              style={{
+                width: "100%", padding: "11px 0", borderRadius: 12,
+                border: "1.5px dashed rgba(6,182,212,0.35)",
+                background: "transparent", color: "#0e7490",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+                fontFamily: "Manrope, sans-serif",
+                marginTop: chambers.length > 0 ? 4 : 0,
+              }}
+            >
+              + Добавить камеру
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── ДЕЙСТВИЯ ── */}
       {isAdmin && (
@@ -1466,14 +1753,21 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
         </div>
       )}
 
-      {showPickVehicle && <VehiclePickerModal client={client} onPick={handleVehiclePicked} onClose={() => setShowPickVehicle(false)} />}
-      {showRepair      && <AddRepairModal      client={client} preVehicleId={pickedVehicleId} onClose={() => setShowRepair(false)} />}
-      {showEditClient  && <EditClientModal     client={client} onClose={() => setShowEditClient(false)} />}
+      {showPickObj    && <ObjectPickerModal client={client} onPick={handleObjPicked} onClose={() => setShowPickObj(false)} />}
+      {showRepair     && <AddRepairModal
+        client={client}
+        preVehicleId={pickedObj?.kind === "vehicle" ? pickedObj.id : undefined}
+        preChamber={pickedObj?.kind === "chamber" ? (chambers.find((c) => c.id === pickedObj.id)) : undefined}
+        onClose={() => setShowRepair(false)}
+      />}
+      {showEditClient  && <EditClientModal    client={client} onClose={() => setShowEditClient(false)} />}
       {showAddAppt     && <AddAppointmentModal client={client} onClose={() => setShowAddAppt(false)} />}
-      {showAddVehicle  && <VehicleModal           client={client} onClose={() => setShowAddVehicle(false)} />}
-      {vehicleEdit     && <VehicleModal           client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
-      {historyVehicle  && <VehicleHistoryModal    client={client} vehicle={historyVehicle} onClose={() => setHistoryVehicle(null)} />}
-      {showConvert     && <ConvertToCompanyModal  client={client} onClose={() => setShowConvert(false)} />}
+      {showAddVehicle  && <VehicleModal        client={client} onClose={() => setShowAddVehicle(false)} />}
+      {vehicleEdit     && <VehicleModal        client={client} vehicle={vehicleEdit} onClose={() => setVehicleEdit(null)} />}
+      {historyVehicle  && <VehicleHistoryModal client={client} vehicle={historyVehicle} onClose={() => setHistoryVehicle(null)} />}
+      {showConvert     && <ConvertToCompanyModal client={client} onClose={() => setShowConvert(false)} />}
+      {showAddChamber  && <ChamberModal        client={client} onClose={() => setShowAddChamber(false)} />}
+      {chamberEdit     && <ChamberModal        client={client} chamber={chamberEdit} onClose={() => setChamberEdit(null)} />}
     </Modal>
   );
 }
