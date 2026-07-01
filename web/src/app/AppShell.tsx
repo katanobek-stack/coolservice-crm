@@ -13,6 +13,7 @@ import { DoneTab } from "../features/done/DoneTab";
 import { PnlTab } from "../features/pnl/PnlTab";
 import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
+import { ScheduleTab } from "../features/schedule/ScheduleTab";
 import { requestNotificationPermission, showBrowserNotification } from "../shared/utils/fcm";
 import { FloatingMicButton } from "../features/voice/FloatingMicButton";
 import type { StaffMember, StaffRole } from "../shared/types/staff";
@@ -20,7 +21,7 @@ import type { StaffMember, StaffRole } from "../shared/types/staff";
 export type Tab =
   | "stats" | "mytasks" | "phys" | "legal"
   | "calendar" | "freezers" | "done"
-  | "pnl" | "staff" | "backup";
+  | "pnl" | "staff" | "backup" | "schedule";
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ const TABS: TabDef[] = [
   { id: "phys",     label: "Клиенты",   icon: "ti-users",            emoji: "👤", group: "main" },
   { id: "legal",    label: "Компании",  icon: "ti-building",         emoji: "🏢", group: "main" },
   { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service" },
+  { id: "schedule", label: "График",    icon: "ti-calendar-user",    emoji: "🗓", group: "service" },
   { id: "freezers", label: "Склад",     icon: "ti-package",          emoji: "📦", group: "service" },
   { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance", roles: ["manager", "admin"] },
   { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", roles: ["manager", "admin"] },
@@ -58,6 +60,7 @@ const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   phys:     { title: "Клиенты",   sub: "физические лица" },
   legal:    { title: "Компании",  sub: "юридические лица" },
   calendar: { title: "Записи",    sub: "предстоящие визиты" },
+  schedule: { title: "График",    sub: "расписание сотрудников" },
   freezers: { title: "Склад",     sub: "камеры и аренда" },
   done:     { title: "Отчёты",    sub: "завершённые работы" },
   pnl:      { title: "P&L",       sub: "доходы и расходы" },
@@ -234,7 +237,7 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "calendar", "freezers", "done", "pnl"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "calendar", "schedule", "freezers", "done", "pnl"];
 
 function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
   tab:          Tab;
@@ -355,6 +358,7 @@ function Shell() {
       case "phys":     return <ClientsTab type="phys" />;
       case "legal":    return <ClientsTab type="legal" />;
       case "calendar": return <AppointmentsTab />;
+      case "schedule": return <ScheduleTab />;
       case "freezers": return <FreezersTab />;
       case "done":     return role !== "mechanic" ? <DoneTab />      : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
