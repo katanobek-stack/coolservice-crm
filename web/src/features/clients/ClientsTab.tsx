@@ -1977,38 +1977,62 @@ export function ClientsTab({ type }: { type: ClientType }) {
   const [showAdd,    setShowAdd]    = useState(false);
   const [selected,   setSelected]   = useState<Client | null>(null);
 
-  // Sync with sidebar navigation (desktop switches phys↔legal via tab state)
   useEffect(() => { setActiveType(type); setSearch(""); }, [type]);
 
-  const filtered = useMemo(
-    () => clients
-      .filter((c) => (c.clientType ?? c.type ?? "phys") === activeType)
-      .filter((c) => {
-        if (!search.trim()) return true;
-        const q = search.toLowerCase();
-        return (
-          c.name.toLowerCase().includes(q) ||
-          (c.phone ?? "").includes(q) ||
-          (c.vehicles ?? []).some((v) =>
-            v.plate.toLowerCase().includes(q) ||
-            (v.brand ?? v.model ?? "").toLowerCase().includes(q),
-          )
-        );
-      }),
-    [clients, activeType, search],
+  const searchQuery = search.trim().toLowerCase();
+
+  // Unified search across both types
+  const searchResults = useMemo(() => {
+    if (!searchQuery) return [];
+    return clients.filter((c) =>
+      c.name.toLowerCase().includes(searchQuery) ||
+      (c.phone ?? "").includes(searchQuery) ||
+      (c.companyName ?? "").toLowerCase().includes(searchQuery) ||
+      (c.vehicles ?? []).some((v) =>
+        v.plate.toLowerCase().includes(searchQuery) ||
+        (v.brand ?? v.model ?? "").toLowerCase().includes(searchQuery),
+      )
+    );
+  }, [clients, searchQuery]);
+
+  // Per-tab list (used only when search is empty)
+  const tabClients = useMemo(
+    () => clients.filter((c) => (c.clientType ?? c.type ?? "phys") === activeType),
+    [clients, activeType],
   );
 
   const selectedLive = selected ? (clients.find((c) => c.id === selected.id) ?? selected) : null;
+
+  const isSearching = !!searchQuery;
+
+  const typeBadge = (c: Client) => {
+    const isLegal = (c.clientType ?? c.type ?? "phys") === "legal";
+    return (
+      <span style={{
+        alignSelf: "flex-start",
+        fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
+        background: isLegal ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.10)",
+        color:      isLegal ? "#6d28d9"                 : "#3b82f6",
+        border:     `1px solid ${isLegal ? "rgba(139,92,246,0.22)" : "rgba(59,130,246,0.18)"}`,
+      }}>
+        {isLegal ? "🏢 Компания" : "👤 Физлицо"}
+      </span>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
       <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
         <div className="section-header">
-          <i className={`ti ${activeType === "phys" ? "ti-users" : "ti-building"}`} style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">{activeType === "phys" ? "Клиенты" : "Компании"}</span>
-          <span className="section-count">{filtered.length} записей</span>
-          {isAdmin && (
+          <i className="ti ti-search" style={{ fontSize: 17, color: "var(--text2)" }} />
+          <span className="section-title">
+            {isSearching ? "Результаты поиска" : activeType === "phys" ? "Клиенты" : "Компании"}
+          </span>
+          <span className="section-count">
+            {isSearching ? `${searchResults.length} записей` : `${tabClients.length} записей`}
+          </span>
+          {isAdmin && !isSearching && (
             <div className="section-actions">
               <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
                 <i className="ti ti-plus" /> {activeType === "phys" ? "Клиент" : "Компания"}
@@ -2017,44 +2041,69 @@ export function ClientsTab({ type }: { type: ClientType }) {
           )}
         </div>
 
-        {/* Физ. лица / Компании switcher */}
-        <div style={{ padding: "10px 14px 0" }}>
-          <div style={{
-            display: "flex", background: "var(--bg2)",
-            border: "1px solid var(--border)", borderRadius: 12, padding: 3,
-          }}>
-            {(["phys", "legal"] as ClientType[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => { setActiveType(t); setSearch(""); }}
-                style={{
-                  flex: 1, padding: "7px 0", borderRadius: 9, border: "none",
-                  cursor: "pointer", fontFamily: "Manrope, sans-serif",
-                  fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
-                  background: activeType === t ? "var(--accent)" : "transparent",
-                  color: activeType === t ? "#fff" : "var(--text2)",
-                }}
-              >
-                {t === "phys" ? "👤 Физ. лица" : "🏢 Компании"}
-              </button>
-            ))}
-          </div>
+        {/* Unified search — always above tabs */}
+        <div style={{ padding: "10px 16px", borderBottom: isSearching ? "1px solid var(--border)" : "none" }}>
+          <Input
+            placeholder="Поиск по имени, телефону, авто, компании..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
 
-        {/* Search */}
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
-          <Input placeholder="Поиск по имени, телефону, авто..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-
-        {filtered.length === 0 ? (
-          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            {search ? "Ничего не найдено" : `Нет ${activeType === "phys" ? "клиентов" : "компаний"}`}
-          </div>
+        {isSearching ? (
+          /* ── UNIFIED SEARCH RESULTS ── */
+          searchResults.length === 0 ? (
+            <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+              Ничего не найдено
+            </div>
+          ) : (
+            <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {searchResults.map((c) => (
+                <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {typeBadge(c)}
+                  <ClientCard client={c} onClick={() => setSelected(c)} />
+                </div>
+              ))}
+            </div>
+          )
         ) : (
-          <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-            {filtered.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
-          </div>
+          /* ── NORMAL TABS VIEW ── */
+          <>
+            {/* Физ. лица / Компании switcher */}
+            <div style={{ padding: "10px 14px 0" }}>
+              <div style={{
+                display: "flex", background: "var(--bg2)",
+                border: "1px solid var(--border)", borderRadius: 12, padding: 3,
+              }}>
+                {(["phys", "legal"] as ClientType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setActiveType(t)}
+                    style={{
+                      flex: 1, padding: "7px 0", borderRadius: 9, border: "none",
+                      cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                      fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
+                      background: activeType === t ? "var(--accent)" : "transparent",
+                      color: activeType === t ? "#fff" : "var(--text2)",
+                    }}
+                  >
+                    {t === "phys" ? "👤 Физ. лица" : "🏢 Компании"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {tabClients.length === 0 ? (
+              <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+                {`Нет ${activeType === "phys" ? "клиентов" : "компаний"}`}
+              </div>
+            ) : (
+              <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {tabClients.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
+              </div>
+            )}
+          </>
         )}
       </div>
 
