@@ -227,7 +227,7 @@ function AddRepairTaskModal({ client, repair, onClose }: {
     onClose();
   }
 
-  const assignableStaff = staff.filter((s) => s.role !== "owner");
+  const assignableStaff = staff;
   const selectedNames = assignees
     .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
     .filter(Boolean)
