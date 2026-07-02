@@ -67,5 +67,11 @@ service cloud.firestore {
       allow update: if isAuth() && isAdminOrOwner();
       allow delete: if isAuth() && isAdminOrOwner();
     }
+
+    // ─── Schedules (staff days off / vacations / sick leave) ──────────────────
+    match /schedules/{docId} {
+      allow read:   if isAuth();
+      allow write:  if isAuth() && isAdminOrOwner();
+    }
   }
 }

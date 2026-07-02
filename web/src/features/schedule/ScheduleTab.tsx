@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import {
   collection,
   onSnapshot,
-  addDoc,
+  setDoc,
   deleteDoc,
   doc,
   serverTimestamp,
@@ -12,7 +12,7 @@ import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
-import { Textarea, FormGroup } from "../../shared/ui/Input";
+import { Textarea, FormGroup, Select } from "../../shared/ui/Input";
 import type { AppointmentDoc } from "../../shared/types/appointment";
 import type { Repair } from "../../shared/types/client";
 import type { StaffMember } from "../../shared/types/staff";
@@ -22,9 +22,9 @@ import type { StaffMember } from "../../shared/types/staff";
 export type ScheduleType = "dayoff" | "vacation" | "sick";
 
 export interface ScheduleEntry {
-  id: string;
+  id: string;       // deterministic: `${staffId}_${date}`
   staffId: string;
-  date: string;
+  date: string;     // "YYYY-MM-DD"
   type: ScheduleType;
   note?: string;
   createdBy?: string;
@@ -90,22 +90,76 @@ function fmtDate(date: string): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
 }
 
+function dateRange(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const end = new Date(to + "T00:00:00");
+  const cur = new Date(from + "T00:00:00");
+  while (cur <= end) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, "0");
+    const d = String(cur.getDate()).padStart(2, "0");
+    dates.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
 // ─── Firestore helpers ────────────────────────────────────────────────────────
+// Document ID is deterministic: `${staffId}_${date}` — prevents duplicates.
+
+function schedDocId(staffId: string, date: string): string {
+  return `${staffId}_${date}`;
+}
 
 async function saveScheduleEntry(
-  existing: ScheduleEntry | undefined,
-  data: Omit<ScheduleEntry, "id">,
-) {
+  staffId: string,
+  date: string,
+  type: ScheduleType,
+  note: string | undefined,
+  createdBy: string,
+): Promise<void> {
   const db = getFirebaseDb();
-  if (existing) await deleteDoc(doc(db, "schedules", existing.id));
-  return addDoc(collection(db, "schedules"), { ...data, createdAt: serverTimestamp() });
+  await setDoc(doc(db, "schedules", schedDocId(staffId, date)), {
+    staffId,
+    date,
+    type,
+    note: note ?? null,
+    createdBy,
+    createdAt: serverTimestamp(),
+  });
 }
 
-async function removeScheduleEntry(id: string) {
-  return deleteDoc(doc(getFirebaseDb(), "schedules", id));
+async function removeScheduleEntry(staffId: string, date: string): Promise<void> {
+  await deleteDoc(doc(getFirebaseDb(), "schedules", schedDocId(staffId, date)));
 }
 
-// ─── AddScheduleModal ─────────────────────────────────────────────────────────
+// ─── TypePicker ───────────────────────────────────────────────────────────────
+
+function TypePicker({ value, onChange }: { value: ScheduleType; onChange: (t: ScheduleType) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      {SCHED_TYPES.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onChange(t.id)}
+          style={{
+            flex: 1, padding: "8px 4px", borderRadius: 10, cursor: "pointer",
+            border: `1.5px solid ${value === t.id ? t.color : "var(--border2)"}`,
+            background: value === t.id ? t.fill : "transparent",
+            color: value === t.id ? t.color : "var(--text2)",
+            fontSize: 12, fontWeight: 600, fontFamily: "Manrope, sans-serif",
+            transition: "all 0.12s",
+          }}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── AddScheduleModal (single day) ───────────────────────────────────────────
 
 function AddScheduleModal({
   day,
@@ -132,42 +186,29 @@ function AddScheduleModal({
   async function handleSave() {
     setBusy(true);
     try {
-      await saveScheduleEntry(existing, { staffId, date: day, type, note: note.trim() || undefined, createdBy });
+      await saveScheduleEntry(staffId, day, type, note.trim() || undefined, createdBy);
       onClose();
-    } catch { setBusy(false); }
+    } catch (e) {
+      console.error("schedule save failed:", e);
+      setBusy(false);
+    }
   }
 
   async function handleDelete() {
-    if (!existing) return;
     setBusy(true);
     try {
-      await removeScheduleEntry(existing.id);
+      await removeScheduleEntry(staffId, day);
       onClose();
-    } catch { setBusy(false); }
+    } catch (e) {
+      console.error("schedule delete failed:", e);
+      setBusy(false);
+    }
   }
 
   return (
     <Modal title={title} onClose={onClose}>
       <FormGroup label="Тип">
-        <div style={{ display: "flex", gap: 8 }}>
-          {SCHED_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setType(t.id)}
-              style={{
-                flex: 1, padding: "8px 4px", borderRadius: 10, cursor: "pointer",
-                border: `1.5px solid ${type === t.id ? t.color : "var(--border2)"}`,
-                background: type === t.id ? t.fill : "transparent",
-                color: type === t.id ? t.color : "var(--text2)",
-                fontSize: 12, fontWeight: 600, fontFamily: "Manrope, sans-serif",
-                transition: "all 0.12s",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <TypePicker value={type} onChange={setType} />
       </FormGroup>
       <FormGroup label="Примечание">
         <Textarea
@@ -178,7 +219,7 @@ function AddScheduleModal({
         />
       </FormGroup>
       <Button size="lg" onClick={() => void handleSave()} disabled={busy}>
-        {busy ? "..." : existing ? "Обновить" : "Добавить"}
+        {busy ? "Сохраняю..." : existing ? "Обновить" : "Добавить"}
       </Button>
       {existing && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
@@ -199,6 +240,123 @@ function AddScheduleModal({
   );
 }
 
+// ─── VacationRangeModal ───────────────────────────────────────────────────────
+
+function VacationRangeModal({
+  allStaff,
+  createdBy,
+  onClose,
+}: {
+  allStaff: StaffMember[];
+  createdBy: string;
+  onClose: () => void;
+}) {
+  const [staffId, setStaffId] = useState(allStaff[0]?.id ?? "");
+  const [type,    setType]    = useState<ScheduleType>("vacation");
+  const [from,    setFrom]    = useState("");
+  const [to,      setTo]      = useState("");
+  const [note,    setNote]    = useState("");
+  const [busy,    setBusy]    = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const days = useMemo(() => {
+    if (!from || !to || from > to) return 0;
+    return dateRange(from, to).length;
+  }, [from, to]);
+
+  const canSave = staffId && from && to && from <= to && days > 0 && days <= 365;
+
+  async function handleSave() {
+    if (!canSave) return;
+    setBusy(true);
+    setProgress(0);
+    const dates = dateRange(from, to);
+    try {
+      for (let i = 0; i < dates.length; i++) {
+        await saveScheduleEntry(staffId, dates[i], type, note.trim() || undefined, createdBy);
+        setProgress(i + 1);
+      }
+      onClose();
+    } catch (e) {
+      console.error("schedule range save failed:", e);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Отметить диапазон дат" onClose={onClose}>
+      <FormGroup label="Сотрудник">
+        <Select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+          {allStaff.map((s) => (
+            <option key={s.id} value={s.id}>{s.name ?? s.email ?? s.id}</option>
+          ))}
+        </Select>
+      </FormGroup>
+
+      <FormGroup label="Тип">
+        <TypePicker value={type} onChange={setType} />
+      </FormGroup>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <FormGroup label="С">
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            style={{
+              width: "100%", padding: "8px 10px", borderRadius: 10,
+              border: "1.5px solid var(--border2)", background: "var(--bg3)",
+              color: "var(--text)", fontSize: 13, fontFamily: "Manrope, sans-serif",
+              boxSizing: "border-box",
+            }}
+          />
+        </FormGroup>
+        <FormGroup label="По">
+          <input
+            type="date"
+            value={to}
+            min={from}
+            onChange={(e) => setTo(e.target.value)}
+            style={{
+              width: "100%", padding: "8px 10px", borderRadius: 10,
+              border: "1.5px solid var(--border2)", background: "var(--bg3)",
+              color: "var(--text)", fontSize: 13, fontFamily: "Manrope, sans-serif",
+              boxSizing: "border-box",
+            }}
+          />
+        </FormGroup>
+      </div>
+
+      {days > 0 && (
+        <div style={{
+          padding: "8px 12px", borderRadius: 10, marginTop: 4,
+          background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.2)",
+          fontSize: 12, color: "#16a34a", fontWeight: 600,
+        }}>
+          {days} {days === 1 ? "день" : days < 5 ? "дня" : "дней"} будут отмечены
+        </div>
+      )}
+
+      <FormGroup label="Примечание">
+        <Textarea
+          placeholder="Необязательно"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          style={{ minHeight: 52 }}
+        />
+      </FormGroup>
+
+      <Button size="lg" onClick={() => void handleSave()} disabled={!canSave || busy}>
+        {busy
+          ? `Сохраняю... ${progress}/${days}`
+          : canSave
+          ? `Добавить ${days} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"}`
+          : "Выберите даты"}
+      </Button>
+    </Modal>
+  );
+}
+
 // ─── DayDetailModal ───────────────────────────────────────────────────────────
 
 interface DayDetailProps {
@@ -215,22 +373,24 @@ interface DayDetailProps {
 }
 
 function DayDetailModal(props: DayDetailProps) {
-  const { day, selectedStaff, colorMap, allStaff, schedules, allRepairs, appointments, isAdmin, currentUserId, onClose } = props;
+  const {
+    day, selectedStaff, colorMap, allStaff, schedules,
+    allRepairs, appointments, isAdmin, currentUserId, onClose,
+  } = props;
   const [addFor, setAddFor] = useState<string | null>(null);
 
   const dow = DOW_FULL[new Date(day + "T00:00:00").getDay()];
-  const title = `${dow}, ${fmtDate(day)}`;
 
   return (
     <>
-      <Modal title={title} onClose={onClose}>
+      <Modal title={`${dow}, ${fmtDate(day)}`} onClose={onClose}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "65vh", overflowY: "auto" }}>
           {selectedStaff.map((uid) => {
             const member  = allStaff.find((s) => s.id === uid);
             if (!member) return null;
             const color   = colorMap[uid] ?? COLORS[0];
             const entry   = schedules.find((s) => s.staffId === uid && s.date === day);
-            const repairs = allRepairs.filter((r) => r.date?.slice(0,10) === day && (r.mechanics ?? []).includes(uid));
+            const repairs = allRepairs.filter((r) => r.date?.slice(0, 10) === day && (r.mechanics ?? []).includes(uid));
             const appts   = appointments.filter((a) => a.date === day && a.assignees.includes(uid));
             const si      = entry ? schedInfo(entry.type) : null;
             const initials = (member.name ?? "?").trim().split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -240,13 +400,12 @@ function DayDetailModal(props: DayDetailProps) {
                 key={uid}
                 style={{
                   background: "var(--bg2)", borderRadius: 12,
-                  border: `1px solid var(--border)`,
+                  border: "1px solid var(--border)",
                   borderLeft: `3px solid ${color.bg}`,
                   padding: "12px 14px",
                 }}
               >
-                {/* Staff header */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: si || repairs.length || appts.length ? 10 : 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: (si || repairs.length || appts.length) ? 10 : 0 }}>
                   <div style={{
                     width: 28, height: 28, borderRadius: "50%",
                     background: color.fill, border: `2px solid ${color.border}`,
@@ -366,11 +525,12 @@ export function ScheduleTab() {
   const currentUserId = myProfile?.id ?? "";
 
   const now = new Date();
-  const [year, setYear]   = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
-  const [selStaff, setSelStaff] = useState<string[]>([]);
+  const [year, setYear]     = useState(now.getFullYear());
+  const [month, setMonth]   = useState(now.getMonth());
+  const [selStaff, setSelStaff]   = useState<string[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
-  const [selDay, setSelDay] = useState<string | null>(null);
+  const [selDay, setSelDay]       = useState<string | null>(null);
+  const [showRange, setShowRange] = useState(false);
 
   // Auto-select first 5 staff on load
   useEffect(() => {
@@ -385,7 +545,7 @@ export function ScheduleTab() {
     const unsub = onSnapshot(
       collection(getFirebaseDb(), "schedules"),
       (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ScheduleEntry)),
-      () => setSchedules([]),
+      (err) => { console.error("schedules onSnapshot error:", err); setSchedules([]); },
     );
     return () => unsub();
   }, []);
@@ -397,21 +557,19 @@ export function ScheduleTab() {
     return m;
   }, [staff]);
 
-  // Flatten all repairs
+  // Flatten all repairs with clientName
   const allRepairs = useMemo(
-    () => clients.flatMap((c) =>
-      (c.repairs ?? []).map((r) => ({ ...r, clientName: c.name })),
-    ),
+    () => clients.flatMap((c) => (c.repairs ?? []).map((r) => ({ ...r, clientName: c.name }))),
     [clients],
   );
 
-  // Calendar grid (array of 35-42 strings or nulls)
+  // Calendar grid
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
 
-  // Month bounds for filtering
+  // Month prefix for filtering
   const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-  // Pre-compute per-day, per-staff counts for the displayed month
+  // Per-day per-staff counts (for calendar display)
   const repairCountByDayStaff = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     allRepairs.forEach((r) => {
@@ -442,13 +600,12 @@ export function ScheduleTab() {
   const schedulesByDayStaff = useMemo(() => {
     const m = new Map<string, Map<string, ScheduleEntry>>();
     schedules.forEach((s) => {
-      if (!s.date.startsWith(monthStr)) return;
       if (!selStaff.includes(s.staffId)) return;
       if (!m.has(s.date)) m.set(s.date, new Map());
       m.get(s.date)!.set(s.staffId, s);
     });
     return m;
-  }, [schedules, monthStr, selStaff]);
+  }, [schedules, selStaff]);
 
   function prevMonth() {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -463,7 +620,6 @@ export function ScheduleTab() {
     setSelStaff((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
 
-  // Compute cell min height based on selected staff count
   const cellMinH = 48 + selStaff.length * 17;
 
   return (
@@ -475,6 +631,21 @@ export function ScheduleTab() {
           <i className="ti ti-calendar-user" style={{ fontSize: 17, color: "var(--text2)" }} />
           <span className="section-title">График работы</span>
           <span className="section-count">{selStaff.length} из {staff.length}</span>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowRange(true)}
+              style={{
+                marginLeft: "auto", display: "flex", alignItems: "center", gap: 5,
+                padding: "5px 12px", borderRadius: 10, cursor: "pointer",
+                border: "1px solid var(--border2)", background: "var(--bg3)",
+                color: "var(--text2)", fontSize: 12, fontWeight: 600,
+                fontFamily: "Manrope, sans-serif",
+              }}
+            >
+              📅 Отпуск диапазоном
+            </button>
+          )}
         </div>
 
         {/* Staff color picker */}
@@ -514,17 +685,14 @@ export function ScheduleTab() {
           padding: "16px 14px 10px",
         }}>
           <button
-            type="button"
-            onClick={prevMonth}
+            type="button" onClick={prevMonth}
             style={{
               width: 32, height: 32, borderRadius: 8, cursor: "pointer",
               border: "1px solid var(--border2)", background: "var(--bg3)",
               color: "var(--text2)", fontSize: 18, lineHeight: 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
-          >
-            ‹
-          </button>
+          >‹</button>
           <span style={{
             fontSize: 15, fontWeight: 700, color: "var(--text)",
             minWidth: 160, textAlign: "center", letterSpacing: "-0.2px",
@@ -532,17 +700,14 @@ export function ScheduleTab() {
             {MONTHS[month]} {year}
           </span>
           <button
-            type="button"
-            onClick={nextMonth}
+            type="button" onClick={nextMonth}
             style={{
               width: 32, height: 32, borderRadius: 8, cursor: "pointer",
               border: "1px solid var(--border2)", background: "var(--bg3)",
               color: "var(--text2)", fontSize: 18, lineHeight: 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
-          >
-            ›
-          </button>
+          >›</button>
         </div>
 
         {/* Calendar grid */}
@@ -551,14 +716,11 @@ export function ScheduleTab() {
             {/* Day-of-week headers */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 3 }}>
               {DOW.map((d, i) => (
-                <div
-                  key={d}
-                  style={{
-                    textAlign: "center", fontSize: 10, fontWeight: 700,
-                    color: i >= 5 ? "#ef4444" : "var(--text3)",
-                    padding: "3px 0", textTransform: "uppercase", letterSpacing: "0.5px",
-                  }}
-                >
+                <div key={d} style={{
+                  textAlign: "center", fontSize: 10, fontWeight: 700,
+                  color: i >= 5 ? "#ef4444" : "var(--text3)",
+                  padding: "3px 0", textTransform: "uppercase", letterSpacing: "0.5px",
+                }}>
                   {d}
                 </div>
               ))}
@@ -567,9 +729,7 @@ export function ScheduleTab() {
             {/* Day cells */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
               {grid.map((day, idx) => {
-                if (!day) {
-                  return <div key={`e${idx}`} style={{ minHeight: cellMinH }} />;
-                }
+                if (!day) return <div key={`e${idx}`} style={{ minHeight: cellMinH }} />;
 
                 const dayNum   = parseInt(day.slice(8, 10));
                 const weekend  = isWeekend(day);
@@ -584,20 +744,15 @@ export function ScheduleTab() {
                     onClick={() => selStaff.length > 0 && setSelDay(day)}
                     style={{
                       minHeight: cellMinH, borderRadius: 8,
-                      border: today
-                        ? "1.5px solid var(--accent)"
-                        : "1px solid var(--border)",
+                      border: today ? "1.5px solid var(--accent)" : "1px solid var(--border)",
                       background: weekend
                         ? "rgba(239,68,68,0.04)"
-                        : today
-                        ? "rgba(59,130,246,0.04)"
-                        : "var(--bg2)",
-                      padding: "4px 3px 4px 3px",
+                        : today ? "rgba(59,130,246,0.04)" : "var(--bg2)",
+                      padding: "4px 3px",
                       cursor: selStaff.length > 0 ? "pointer" : "default",
                       display: "flex", flexDirection: "column", gap: 2,
                     }}
                   >
-                    {/* Day number */}
                     <div style={{
                       fontSize: 11, fontWeight: today ? 800 : 600, textAlign: "right",
                       color: today ? "var(--accent2)" : weekend ? "#ef4444" : "var(--text2)",
@@ -606,7 +761,6 @@ export function ScheduleTab() {
                       {dayNum}
                     </div>
 
-                    {/* Per-staff indicators */}
                     {selStaff.map((uid) => {
                       const c      = colorMap[uid] ?? COLORS[0];
                       const entry  = schedMap?.get(uid);
@@ -653,10 +807,7 @@ export function ScheduleTab() {
         </div>
 
         {/* Legend */}
-        <div style={{
-          padding: "0 14px 14px",
-          display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
-        }}>
+        <div style={{ padding: "0 14px 14px", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.4px" }}>
             Обозначения:
           </span>
@@ -688,7 +839,7 @@ export function ScheduleTab() {
         </div>
       </div>
 
-      {/* Day detail modal */}
+      {/* Modals */}
       {selDay && (
         <DayDetailModal
           day={selDay}
@@ -701,6 +852,14 @@ export function ScheduleTab() {
           isAdmin={isAdmin}
           currentUserId={currentUserId}
           onClose={() => setSelDay(null)}
+        />
+      )}
+
+      {showRange && (
+        <VacationRangeModal
+          allStaff={staff}
+          createdBy={currentUserId}
+          onClose={() => setShowRange(false)}
         />
       )}
     </div>
