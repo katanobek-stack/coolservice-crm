@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { uploadPhotos } from "../utils/photos";
+import { uploadPhotos, getStorageErrorMessage } from "../utils/photos";
 import type { PhotoData } from "../utils/photos";
 
 interface Props {
@@ -69,7 +69,7 @@ export function DualPhotoButton({
       const result = await uploadPhotos(files, folder);
       await onUploaded(result);
     } catch (err) {
-      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+      alert("Ошибка загрузки: " + getStorageErrorMessage(err));
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -111,7 +111,7 @@ export function InlinePhotoButton({
       const result = await uploadPhotos(files, folder);
       await onUploaded(result);
     } catch (err) {
-      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+      alert("Ошибка загрузки: " + getStorageErrorMessage(err));
     } finally {
       setUploading(false);
       e.target.value = "";

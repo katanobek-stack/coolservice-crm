@@ -13,7 +13,7 @@ import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { addClient, updateClient, deleteClient, updateClientArray, addAppointment } from "../../shared/firebase/firestore";
 import type { Appointment, Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
 import type { AppointmentDoc } from "../../shared/types/appointment";
-import { uploadPhoto } from "../../shared/utils/photos";
+import { uploadPhoto, getStorageErrorMessage } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
       const result = await uploadPhoto(file, "vehicles");
       setPhoto(result.url ?? "");
     } catch (err) {
-      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+      alert("Ошибка загрузки: " + getStorageErrorMessage(err));
     } finally {
       setUploadingPhoto(false);
       e.target.value = "";
@@ -417,7 +417,7 @@ function ChamberModal({ client, chamber, onClose }: { client: Client; chamber?: 
       const result = await uploadPhoto(file, "chambers");
       setPhoto(result.url ?? "");
     } catch (err) {
-      alert("Ошибка загрузки: " + (err instanceof Error ? err.message : String(err)));
+      alert("Ошибка загрузки: " + getStorageErrorMessage(err));
     } finally {
       setUploadingPhoto(false);
       e.target.value = "";

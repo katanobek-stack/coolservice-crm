@@ -49,3 +49,24 @@ export async function deletePhoto(path: string): Promise<void> {
     // ignore not-found errors
   }
 }
+
+// Firebase Storage error codes → понятные сообщения для пользователя
+export function getStorageErrorMessage(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? "";
+  if (code === "storage/quota-exceeded") {
+    return "Хранилище переполнено. Обратитесь к администратору — необходимо очистить старые фото в Firebase Console (Storage → Files) или перейти на платный тариф Blaze.";
+  }
+  if (code === "storage/unauthorized") {
+    return "Нет доступа к хранилищу. Попробуйте выйти и войти заново.";
+  }
+  if (code === "storage/canceled") {
+    return "Загрузка отменена.";
+  }
+  if (code === "storage/retry-limit-exceeded" || code === "storage/network-request-failed") {
+    return "Ошибка сети при загрузке фото. Проверьте подключение и попробуйте ещё раз.";
+  }
+  if (code === "storage/unknown" || code === "storage/server-file-wrong-size") {
+    return "Ошибка сервера при загрузке фото. Попробуйте ещё раз.";
+  }
+  return err instanceof Error ? err.message : String(err);
+}
