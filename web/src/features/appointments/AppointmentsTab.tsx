@@ -1303,7 +1303,7 @@ export function AppointmentsTab() {
     () =>
       visibleAppts
         .filter((a) => a.status === "pending")
-        .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
+        .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()),
     [visibleAppts],
   );
 
