@@ -61,6 +61,7 @@ export interface Repair {
   mechanics?: string[];
   createdBy?: string;
   createdByName?: string;
+  createdAt?: string;
   editedBy?: string;
   editedAt?: string;
 }

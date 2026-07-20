@@ -717,6 +717,7 @@ function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client:
         mechanics: selectedMechanics,
         createdBy:     user?.uid ?? "",
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
         ...(preChamber ? { chamberId: preChamber.id } : {}),
       };

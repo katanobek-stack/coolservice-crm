@@ -1189,6 +1189,7 @@ export function MyTasksTab() {
       repairGroups.push({ client: c, repair: r, tasks: visible });
     });
   });
+  repairGroups.sort((a, b) => (b.repair.createdAt ?? "").localeCompare(a.repair.createdAt ?? ""));
 
   const hasAnything = myTasks.length || otherTasks.length || repairGroups.length;
 

@@ -386,6 +386,7 @@ export function FloatingMicButton() {
             date:        new Date().toISOString().slice(0, 10),
             status:      "in_progress" as const,
             tasks:       repairTasks,
+            createdAt:   new Date().toISOString(),
           })
         : null;
 

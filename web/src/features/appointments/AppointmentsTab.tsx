@@ -1019,6 +1019,7 @@ function CloseAppointmentModal({
         mechanics:     appt.assignees,
         createdBy:     user?.uid ?? "",
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
       });
 
       const finalClient = clients.find((c) => c.id === createdClientId);
@@ -1271,6 +1272,7 @@ export function AppointmentsTab() {
         mechanics:     appt.assignees,
         createdBy:     user?.uid ?? "",
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
       });
 
       const finalClient = clients.find((c) => c.id === clientId);
