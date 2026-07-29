@@ -1968,7 +1968,11 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-export function ClientsTab({ type }: { type: ClientType }) {
+export function ClientsTab({ type, openClientId, onClientOpened }: {
+  type:            ClientType;
+  openClientId?:   string | null;
+  onClientOpened?: () => void;
+}) {
   const { clients }   = useData();
   const { myProfile } = useAuth();
   const isAdmin = (myProfile?.role ?? "mechanic") !== "mechanic";
@@ -1979,6 +1983,18 @@ export function ClientsTab({ type }: { type: ClientType }) {
   const [selected,   setSelected]   = useState<Client | null>(null);
 
   useEffect(() => { setActiveType(type); setSearch(""); }, [type]);
+
+  // Open a specific client's card when navigated here from another tab (e.g. clicking a vehicle link)
+  useEffect(() => {
+    if (!openClientId) return;
+    const c = clients.find((cl) => cl.id === openClientId);
+    if (c) {
+      setActiveType((c.clientType ?? c.type ?? "phys") as ClientType);
+      setSelected(c);
+    }
+    onClientOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openClientId, clients]);
 
   const searchQuery = search.trim().toLowerCase();
 

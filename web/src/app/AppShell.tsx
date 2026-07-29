@@ -17,6 +17,7 @@ import { ScheduleTab } from "../features/schedule/ScheduleTab";
 import { requestNotificationPermission, showBrowserNotification } from "../shared/utils/fcm";
 import { FloatingMicButton } from "../features/voice/FloatingMicButton";
 import type { StaffMember, StaffRole } from "../shared/types/staff";
+import type { Client } from "../shared/types/client";
 
 export type Tab =
   | "stats" | "mytasks" | "phys" | "legal"
@@ -318,6 +319,13 @@ function Shell() {
   const { canSeePLPanel }            = usePermissions();
   const [tab, setTab]                = useState<Tab>("stats");
   const [showSearch, setShowSearch]  = useState(false);
+  const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+
+  function openClientProfile(client: Client) {
+    const clientType = client.clientType ?? client.type ?? "phys";
+    setTab(clientType === "legal" ? "legal" : "phys");
+    setPendingClientId(client.id);
+  }
 
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "owner";
@@ -354,13 +362,13 @@ function Shell() {
   function renderTab() {
     switch (tab) {
       case "stats":    return <StatsTab onNavigate={setTab} />;
-      case "mytasks":  return <MyTasksTab />;
-      case "phys":     return <ClientsTab type="phys" />;
-      case "legal":    return <ClientsTab type="legal" />;
+      case "mytasks":  return <MyTasksTab onOpenClient={openClientProfile} />;
+      case "phys":     return <ClientsTab type="phys"  openClientId={pendingClientId} onClientOpened={() => setPendingClientId(null)} />;
+      case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} onClientOpened={() => setPendingClientId(null)} />;
       case "calendar": return <AppointmentsTab />;
       case "schedule": return <ScheduleTab />;
       case "freezers": return <FreezersTab />;
-      case "done":     return role !== "mechanic" ? <DoneTab />      : null;
+      case "done":     return role !== "mechanic" ? <DoneTab onOpenClient={openClientProfile} /> : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
       case "staff":    return isAdmin             ? <StaffTab />     : null;
       case "backup":   return isAdmin             ? <BackupTab />    : null;

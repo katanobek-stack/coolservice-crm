@@ -993,11 +993,12 @@ function RepairTaskRow({ task, client, repair }: {
 
 // ─── Repair group card ────────────────────────────────────────────────────────
 
-function RepairGroup({ client, repair, tasks, canAdd }: {
-  client:  Client;
-  repair:  Repair;
-  tasks:   RepairTask[];
-  canAdd:  boolean;
+function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
+  client:        Client;
+  repair:        Repair;
+  tasks:         RepairTask[];
+  canAdd:        boolean;
+  onOpenClient?: (client: Client) => void;
 }) {
   const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
   const brand   = vehicle?.brand ?? vehicle?.model;
@@ -1056,17 +1057,34 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
 
         {/* Main info: brand → plate + status → client name */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div
+            onClick={onOpenClient ? () => onOpenClient(client) : undefined}
+            title={onOpenClient ? "Открыть карточку клиента" : undefined}
+            style={{
+              fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 5,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              cursor: onOpenClient ? "pointer" : "default",
+              textDecoration: onOpenClient ? "underline" : "none",
+              textDecorationColor: "rgba(59,130,246,0.35)",
+              textUnderlineOffset: 2,
+              width: "fit-content",
+            }}
+          >
             {brand || "Автомобиль"}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
             {vehicle?.plate && (
-              <span style={{
-                fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
-                color: "#3b82f6", background: "rgba(59,130,246,0.12)",
-                border: "1px solid rgba(59,130,246,0.25)",
-                padding: "2px 8px", borderRadius: 6,
-              }}>
+              <span
+                onClick={onOpenClient ? () => onOpenClient(client) : undefined}
+                title={onOpenClient ? "Открыть карточку клиента" : undefined}
+                style={{
+                  fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700,
+                  color: "#3b82f6", background: "rgba(59,130,246,0.12)",
+                  border: "1px solid rgba(59,130,246,0.25)",
+                  padding: "2px 8px", borderRadius: 6,
+                  cursor: onOpenClient ? "pointer" : "default",
+                }}
+              >
                 {vehicle.plate}
               </span>
             )}
@@ -1157,7 +1175,7 @@ function RepairGroup({ client, repair, tasks, canAdd }: {
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
-export function MyTasksTab() {
+export function MyTasksTab({ onOpenClient }: { onOpenClient?: (client: Client) => void } = {}) {
   const { clients, tasks } = useData();
   const { myProfile }      = useAuth();
   const [showAdd, setShowAdd] = useState(false);
@@ -1261,6 +1279,7 @@ export function MyTasksTab() {
                   repair={repair}
                   tasks={ts}
                   canAdd={isManagerOrAdmin}
+                  onOpenClient={onOpenClient}
                 />
               ))}
             </div>

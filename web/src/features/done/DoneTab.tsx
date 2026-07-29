@@ -10,9 +10,11 @@ import { Modal } from "../../shared/ui/Modal";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
 import { Button } from "../../shared/ui/Button";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
+import { PhotoLightbox } from "../../shared/ui/PhotoLightbox";
 import { updateClientArray } from "../../shared/firebase/firestore";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
+import type { PhotoData } from "../../shared/utils/photos";
 
 const FREON_TYPES = ["R134a", "R404A", "R410A", "R507", "R22", "R507a"];
 
@@ -58,12 +60,13 @@ interface DoneItem {
 
 // ─── Close repair card (needs manager action) ─────────────────────────────────
 
-function NeedsCloseCard({ item }: { item: DoneItem }) {
+function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?: (client: Client) => void }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const { staff } = useData();
   const [closeSum,     setCloseSum]     = useState(repair.cost ?? "");
   const [closing,      setClosing]      = useState(false);
   const [reopeningId,  setReopeningId]  = useState<string | null>(null);
+  const [gallery,      setGallery]      = useState<{ photos: PhotoData[]; index: number } | null>(null);
 
   const av       = avatarColor(client.id);
   const brand    = vehicle?.brand ?? "";
@@ -105,6 +108,7 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
   }
 
   return (
+    <>
     <div style={{
       background:   "var(--bg2)",
       borderRadius: 16,
@@ -136,20 +140,31 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-          {vehicle?.plate && (
+          <div
+            onClick={onOpenClient ? () => onOpenClient(client) : undefined}
+            title={onOpenClient ? "Открыть карточку клиента" : undefined}
+            style={{ display: "flex", alignItems: "center", gap: 8, cursor: onOpenClient ? "pointer" : "default" }}
+          >
+            {vehicle?.plate && (
+              <span style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 13, fontWeight: 700,
+                color: "var(--accent2)",
+                background: "rgba(59,130,246,0.12)",
+                padding: "2px 8px", borderRadius: 6,
+              }}>
+                {vehicle.plate}
+              </span>
+            )}
             <span style={{
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: 13, fontWeight: 700,
-              color: "var(--accent2)",
-              background: "rgba(59,130,246,0.12)",
-              padding: "2px 8px", borderRadius: 6,
+              fontSize: 13.5, fontWeight: 700, color: "var(--text)",
+              textDecoration: onOpenClient ? "underline" : "none",
+              textDecorationColor: "rgba(59,130,246,0.35)",
+              textUnderlineOffset: 2,
             }}>
-              {vehicle.plate}
+              {brand ? `${brand} · ` : ""}{client.name}
             </span>
-          )}
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>
-            {brand ? `${brand} · ` : ""}{client.name}
-          </span>
+          </div>
           <span style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", background: "rgba(34,197,94,0.12)", padding: "1px 8px", borderRadius: 10 }}>
             ✓ все задачи выполнены
           </span>
@@ -176,12 +191,13 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
         {(repair.tasks ?? []).length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
             {(repair.tasks ?? []).map((t) => {
-              const isDone    = taskStatus(t) === "done";
-              const isFreon   = t.freonTask === true;
-              const isLoading = reopeningId === t.id;
-              const names     = (t.assignees ?? [])
+              const isDone     = taskStatus(t) === "done";
+              const isFreon    = t.freonTask === true;
+              const isLoading  = reopeningId === t.id;
+              const names      = (t.assignees ?? [])
                 .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
                 .filter(Boolean).join(", ");
+              const taskPhotos = (t.photos ?? []).filter((p) => p.url ?? p.data);
               return (
                 <div key={t.id} style={{
                   display:    "flex",
@@ -208,6 +224,22 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
                     </div>
                     {names && (
                       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
+                    )}
+                    {taskPhotos.length > 0 && (
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                        {taskPhotos.map((p, idx) => {
+                          const src = (p.url ?? p.data)!;
+                          return (
+                            <img
+                              key={p.id}
+                              src={src}
+                              alt=""
+                              onClick={(e) => { e.stopPropagation(); setGallery({ photos: taskPhotos, index: idx }); }}
+                              style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
+                            />
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                   {isDone && (
@@ -284,24 +316,39 @@ function NeedsCloseCard({ item }: { item: DoneItem }) {
         </div>
       </div>
     </div>
+    {gallery && (
+      <PhotoLightbox
+        photos={gallery.photos}
+        index={gallery.index}
+        onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))}
+        onClose={() => setGallery(null)}
+      />
+    )}
+    </>
   );
 }
 
 // ─── Repair detail modal ─────────────────────────────────────────────────────
 
-function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
-  item:        DoneItem;
-  isAdmin:     boolean;
-  showAmounts: boolean;
-  onClose:     () => void;
+function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }: {
+  item:         DoneItem;
+  isAdmin:      boolean;
+  showAmounts:  boolean;
+  onOpenClient?: (client: Client) => void;
+  onClose:      () => void;
 }) {
   const { staff }  = useData();
   const { repair, client, vehicle, assigneeNames } = item;
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [gallery, setGallery] = useState<{ photos: PhotoData[]; index: number } | null>(null);
 
   const brand       = vehicle?.brand ?? vehicle?.model ?? "";
   const isCancelled = repairStatus(repair) === "cancelled";
   const costNum     = parseFloat(repair.cost ?? "0") || 0;
+
+  function openPhoto(photos: PhotoData[], src: string) {
+    const idx = photos.findIndex((p) => (p.url ?? p.data) === src);
+    setGallery({ photos, index: idx < 0 ? 0 : idx });
+  }
 
   return (
     <Modal title="Детали ремонта" onClose={onClose}>
@@ -315,7 +362,11 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
             🚗
           </div>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{ flex: 1, minWidth: 0, cursor: onOpenClient ? "pointer" : "default" }}
+          onClick={onOpenClient ? () => { onOpenClient(client); onClose(); } : undefined}
+          title={onOpenClient ? "Открыть карточку клиента" : undefined}
+        >
           {vehicle?.plate && (
             <div style={{ marginBottom: 3 }}>
               <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, fontWeight: 700, color: "#3b82f6", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 6 }}>
@@ -324,7 +375,14 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
             </div>
           )}
           {brand && <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>{brand}</div>}
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{client.name}</div>
+          <div style={{
+            fontSize: 13, fontWeight: 600, color: "var(--text)",
+            textDecoration: onOpenClient ? "underline" : "none",
+            textDecorationColor: "rgba(59,130,246,0.35)",
+            textUnderlineOffset: 2,
+          }}>
+            {client.name}
+          </div>
         </div>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10, flexShrink: 0,
@@ -448,7 +506,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
                               key={p.id}
                               src={src}
                               alt=""
-                              onClick={() => setLightboxUrl(src)}
+                              onClick={() => openPhoto(taskPhotos, src)}
                               style={{ width: 72, height: 72, borderRadius: 7, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
                             />
                           );
@@ -456,7 +514,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
                       </div>
                       {/* Desktop: PhotoGrid — как в Заявках */}
                       <div className="hidden md:block">
-                        <PhotoGrid photos={taskPhotos} readOnly onView={setLightboxUrl} />
+                        <PhotoGrid photos={taskPhotos} readOnly onView={(src) => openPhoto(taskPhotos, src)} />
                       </div>
                     </div>
                   )}
@@ -483,7 +541,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
                   key={p.id}
                   src={src}
                   alt=""
-                  onClick={() => setLightboxUrl(src)}
+                  onClick={() => openPhoto(repair.photos ?? [], src)}
                   style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover", cursor: "pointer", border: "1px solid var(--border)" }}
                 />
               );
@@ -494,7 +552,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
             <PhotoGrid
               photos={(repair.photos ?? []).filter((p) => p.url ?? p.data)}
               readOnly
-              onView={setLightboxUrl}
+              onView={(src) => openPhoto(repair.photos ?? [], src)}
             />
           </div>
         </div>
@@ -519,13 +577,13 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onClose }: {
         </div>
       )}
 
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/90 cursor-pointer"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <img src={lightboxUrl} alt="" className="max-w-[95%] max-h-[90%] object-contain rounded-xl" />
-        </div>
+      {gallery && (
+        <PhotoLightbox
+          photos={gallery.photos}
+          index={gallery.index}
+          onIndexChange={(i) => setGallery((g) => (g ? { ...g, index: i } : g))}
+          onClose={() => setGallery(null)}
+        />
       )}
     </Modal>
   );
@@ -594,13 +652,14 @@ function TasksPreview({ tasks }: { tasks: RepairTask[] }) {
 
 // ─── Repair card (closed history) ────────────────────────────────────────────
 
-function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn }: {
-  item:        DoneItem;
-  isAdmin:     boolean;
-  showAmounts: boolean;
-  isOwner:     boolean;
-  ownerUid:    string;
-  canReturn:   boolean;
+function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, onOpenClient }: {
+  item:          DoneItem;
+  isAdmin:       boolean;
+  showAmounts:   boolean;
+  isOwner:       boolean;
+  ownerUid:      string;
+  canReturn:     boolean;
+  onOpenClient?: (client: Client) => void;
 }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
@@ -672,20 +731,33 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn }
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 4 }}>
-            {vehicle?.plate && (
+            <div
+              onClick={onOpenClient ? (e) => { e.stopPropagation(); onOpenClient(client); } : undefined}
+              title={onOpenClient ? "Открыть карточку клиента" : undefined}
+              style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, cursor: onOpenClient ? "pointer" : "default" }}
+            >
+              {vehicle?.plate && (
+                <span style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: 13, fontWeight: 700,
+                  color: "var(--accent2)",
+                  background: "rgba(59,130,246,0.12)",
+                  padding: "2px 8px", borderRadius: 6,
+                  flexShrink: 0,
+                }}>
+                  {vehicle.plate}
+                </span>
+              )}
               <span style={{
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: 13, fontWeight: 700,
-                color: "var(--accent2)",
-                background: "rgba(59,130,246,0.12)",
-                padding: "2px 8px", borderRadius: 6,
+                fontSize: 13.5, fontWeight: 700, color: "var(--text)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                textDecoration: onOpenClient ? "underline" : "none",
+                textDecorationColor: "rgba(59,130,246,0.35)",
+                textUnderlineOffset: 2,
               }}>
-                {vehicle.plate}
+                {brand ? `${brand} · ` : ""}{client.name}
               </span>
-            )}
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {brand ? `${brand} · ` : ""}{client.name}
-            </span>
+            </div>
           </div>
 
           {repair.description && (
@@ -771,7 +843,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn }
           )}
         </div>
       </div>
-      {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} showAmounts={showAmounts} onClose={() => setShowDetail(false)} />}
+      {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} showAmounts={showAmounts} onOpenClient={onOpenClient} onClose={() => setShowDetail(false)} />}
       {showEdit   && <OwnerEditRepairModal item={item} uid={ownerUid} onClose={() => setShowEdit(false)} />}
     </>
   );
@@ -779,15 +851,16 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn }
 
 // ─── Month block (collapsible) ────────────────────────────────────────────────
 
-function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid, canReturn }: {
-  mk:          string;
-  items:       DoneItem[];
-  tasks:       ServiceTask[];
-  isAdmin:     boolean;
-  showAmounts: boolean;
-  isOwner:     boolean;
-  ownerUid:    string;
-  canReturn:   boolean;
+function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid, canReturn, onOpenClient }: {
+  mk:            string;
+  items:         DoneItem[];
+  tasks:         ServiceTask[];
+  isAdmin:       boolean;
+  showAmounts:   boolean;
+  isOwner:       boolean;
+  ownerUid:      string;
+  canReturn:     boolean;
+  onOpenClient?: (client: Client) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -825,7 +898,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((i) => (
-            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} />
+            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient} />
           ))}
           {tasks.map((t) => (
             <div
@@ -1309,7 +1382,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
-export function DoneTab() {
+export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client) => void } = {}) {
   const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
   const { myProfile, isOwner, user }   = useAuth();
   const { canSeeReportsAmounts }       = usePermissions();
@@ -1545,7 +1618,7 @@ export function DoneTab() {
           </div>
           <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
             {needsClose.map((i) => (
-              <NeedsCloseCard key={`${i.client.id}-${i.repair.id}`} item={i} />
+              <NeedsCloseCard key={`${i.client.id}-${i.repair.id}`} item={i} onOpenClient={onOpenClient} />
             ))}
           </div>
         </div>
@@ -1615,7 +1688,7 @@ export function DoneTab() {
         ) : (
           <div style={{ padding: "8px 12px 12px" }}>
             {byMonth.map(([mk, { items, tasks: mTasks }]) => (
-              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} />
+              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient} />
             ))}
           </div>
         )}
