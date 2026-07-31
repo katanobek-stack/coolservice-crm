@@ -1,3 +1,5 @@
 scripts/serviceAccount.json
 scripts/node_modules/
 fix-freon.mjs
+firebase-debug.log
+firebase-debug.*.log
