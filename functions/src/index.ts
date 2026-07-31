@@ -5,15 +5,16 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
-// Set once via: firebase functions:secrets:set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+// Set once via: firebase functions:secrets:set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID / TELEGRAM_GROUP_CHAT_ID
 // (the legacy `firebase functions:config:set` API was shut down Dec 31, 2025 — secrets replace it)
 //
-// TELEGRAM_CHAT_ID may hold a single chat id or a comma-separated list — this is how
-// "личный чат + группа админов" is configured: e.g. "324051322,-1001234567890".
-const TELEGRAM_BOT_TOKEN = defineSecret("TELEGRAM_BOT_TOKEN");
-const TELEGRAM_CHAT_ID   = defineSecret("TELEGRAM_CHAT_ID");
+// Recipients = TELEGRAM_CHAT_ID (личный чат — may itself be a comma-separated list)
+//            + TELEGRAM_GROUP_CHAT_ID (группа админов), if set. Either can be empty/unset.
+const TELEGRAM_BOT_TOKEN     = defineSecret("TELEGRAM_BOT_TOKEN");
+const TELEGRAM_CHAT_ID       = defineSecret("TELEGRAM_CHAT_ID");
+const TELEGRAM_GROUP_CHAT_ID = defineSecret("TELEGRAM_GROUP_CHAT_ID");
 
-const SECRETS = [TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID];
+const SECRETS = [TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_GROUP_CHAT_ID];
 
 // ─── Minimal Firestore data shapes ─────────────────────────────────────────
 // Mirrors web/src/shared/types/client.ts — only the fields this function reads.
@@ -58,10 +59,9 @@ interface ClientDoc {
 // ─── Telegram — low-level senders ──────────────────────────────────────────
 
 function chatIds(): string[] {
-  return (TELEGRAM_CHAT_ID.value() ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const personal = (TELEGRAM_CHAT_ID.value() ?? "").split(",");
+  const group    = (TELEGRAM_GROUP_CHAT_ID.value() ?? "").split(",");
+  return [...personal, ...group].map((s) => s.trim()).filter(Boolean);
 }
 
 async function callTelegram(method: string, body: Record<string, unknown>): Promise<void> {

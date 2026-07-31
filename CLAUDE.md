@@ -18,7 +18,7 @@ React + TypeScript + Vite + Firebase + Tailwind CSS
 - web/src/features/ — модули CRM
 - web/src/shared/ — общие компоненты
 - web/src/app/ — роутинг и провайдеры
-- functions/src/ — Cloud Functions (Node 20, TypeScript, firebase-functions v2). Секреты (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) — через `firebase functions:secrets:set`, не в коде. TELEGRAM_CHAT_ID — один id или несколько через запятую (личный чат + группа админов), фото шлются через sendPhoto/sendMediaGroup с caption (задача, клиент+авто, автор из createdByName, примечание из workComment)
+- functions/src/ — Cloud Functions (Node 20, TypeScript, firebase-functions v2). Секреты (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_GROUP_CHAT_ID) — через `firebase functions:secrets:set`, не в коде. Получатели = TELEGRAM_CHAT_ID (личный, можно несколько через запятую) + TELEGRAM_GROUP_CHAT_ID (группа админов) — оба секрета обязательны для деплоя (даже пустой строкой), т.к. перечислены в secrets: [...] функций. Фото шлются через sendPhoto/sendMediaGroup с caption (задача, клиент+авто, автор из createdByName, примечание из workComment)
 
 ## Текущий статус (июнь 2026)
 - CRM задеплоена на GitHub Pages
