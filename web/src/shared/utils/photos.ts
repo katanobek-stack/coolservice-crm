@@ -38,8 +38,22 @@ export async function uploadPhoto(file: File, folder = "photos"): Promise<PhotoD
   return { id: photoId, url, path };
 }
 
-export async function uploadPhotos(files: File[], folder = "photos"): Promise<PhotoData[]> {
-  return Promise.all(files.map((f) => uploadPhoto(f, folder)));
+export async function uploadPhotos(
+  files: File[],
+  folder = "photos",
+  onProgress?: (done: number, total: number) => void,
+): Promise<PhotoData[]> {
+  const total = files.length;
+  let done = 0;
+  onProgress?.(done, total);
+  return Promise.all(
+    files.map(async (f) => {
+      const result = await uploadPhoto(f, folder);
+      done += 1;
+      onProgress?.(done, total);
+      return result;
+    }),
+  );
 }
 
 export async function deletePhoto(path: string): Promise<void> {

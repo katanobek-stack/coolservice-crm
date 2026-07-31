@@ -1524,7 +1524,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
 
 // ─── Client Detail ────────────────────────────────────────────────────────────
 
-function ClientDetail({ client, onClose }: { client: Client; onClose: () => void }) {
+function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; initialVehicleId?: string | null; onClose: () => void }) {
   const { myProfile, isOwner } = useAuth();
   const { staff } = useData();
   const role    = myProfile?.role ?? "mechanic";
@@ -1550,6 +1550,17 @@ function ClientDetail({ client, onClose }: { client: Client; onClose: () => void
   const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
   const vehicles      = client.vehicles ?? [];
   const chambers      = client.chambers ?? [];
+
+  // Auto-open a specific vehicle's history when navigated here (e.g. clicking its photo in a repair card)
+  const openedInitialVehicle = useRef(false);
+  useEffect(() => {
+    if (!initialVehicleId || openedInitialVehicle.current) return;
+    const v = vehicles.find((veh) => veh.id === initialVehicleId);
+    if (v) {
+      setHistoryVehicle(v);
+      openedInitialVehicle.current = true;
+    }
+  }, [initialVehicleId, vehicles]);
 
   function handleNewRepair() {
     if (vehicles.length === 0 && chambers.length === 0) {
@@ -1976,9 +1987,10 @@ function ClientCard({ client, onClick }: { client: Client; onClick: () => void }
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-export function ClientsTab({ type, openClientId, onClientOpened }: {
+export function ClientsTab({ type, openClientId, openVehicleId, onClientOpened }: {
   type:            ClientType;
   openClientId?:   string | null;
+  openVehicleId?:  string | null;
   onClientOpened?: () => void;
 }) {
   const { clients }   = useData();
@@ -2133,7 +2145,7 @@ export function ClientsTab({ type, openClientId, onClientOpened }: {
       </div>
 
       {showAdd      && <AddClientModal type={activeType} onClose={() => setShowAdd(false)} />}
-      {selectedLive && <ClientDetail client={selectedLive} onClose={() => setSelected(null)} />}
+      {selectedLive && <ClientDetail client={selectedLive} initialVehicleId={openVehicleId} onClose={() => setSelected(null)} />}
     </div>
   );
 }

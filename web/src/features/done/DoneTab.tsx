@@ -61,7 +61,7 @@ interface DoneItem {
 
 // ─── Close repair card (needs manager action) ─────────────────────────────────
 
-function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?: (client: Client) => void }) {
+function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?: (client: Client, vehicleId?: string) => void }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const { staff } = useData();
   const [closeSum,     setCloseSum]     = useState(repair.cost ?? "");
@@ -125,7 +125,9 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
         <img
           src={vehicle.photo}
           alt=""
-          style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+          onClick={onOpenClient && vehicle ? () => onOpenClient(client, vehicle.id) : undefined}
+          title={onOpenClient && vehicle ? "Открыть карточку автомобиля" : undefined}
+          style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)", cursor: onOpenClient && vehicle ? "pointer" : "default" }}
         />
       ) : (
         <div style={{
@@ -334,7 +336,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
   item:         DoneItem;
   isAdmin:      boolean;
   showAmounts:  boolean;
-  onOpenClient?: (client: Client) => void;
+  onOpenClient?: (client: Client, vehicleId?: string) => void;
   onClose:      () => void;
 }) {
   const { staff }  = useData();
@@ -356,7 +358,13 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
       {/* Vehicle + client header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 14px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
         {vehicle?.photo ? (
-          <img src={vehicle.photo} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+          <img
+            src={vehicle.photo}
+            alt=""
+            onClick={onOpenClient && vehicle ? () => { onOpenClient(client, vehicle.id); onClose(); } : undefined}
+            title={onOpenClient && vehicle ? "Открыть карточку автомобиля" : undefined}
+            style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)", cursor: onOpenClient && vehicle ? "pointer" : "default" }}
+          />
         ) : (
           <div style={{ width: 52, height: 52, borderRadius: 8, flexShrink: 0, background: "rgba(59,130,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
             🚗
@@ -662,7 +670,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
   isOwner:       boolean;
   ownerUid:      string;
   canReturn:     boolean;
-  onOpenClient?: (client: Client) => void;
+  onOpenClient?: (client: Client, vehicleId?: string) => void;
 }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const [showDetail, setShowDetail] = useState(false);
@@ -718,7 +726,9 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
           <img
             src={vehicle.photo}
             alt=""
-            style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+            onClick={onOpenClient && vehicle ? (e) => { e.stopPropagation(); onOpenClient(client, vehicle.id); } : undefined}
+            title={onOpenClient && vehicle ? "Открыть карточку автомобиля" : undefined}
+            style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)", cursor: onOpenClient && vehicle ? "pointer" : "default" }}
           />
         ) : (
           <div style={{
@@ -865,7 +875,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
   isOwner:       boolean;
   ownerUid:      string;
   canReturn:     boolean;
-  onOpenClient?: (client: Client) => void;
+  onOpenClient?: (client: Client, vehicleId?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1391,7 +1401,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
-export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client) => void } = {}) {
+export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehicleId?: string) => void } = {}) {
   const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
   const { myProfile, isOwner, user }   = useAuth();
   const { canSeeReportsAmounts }       = usePermissions();

@@ -319,12 +319,14 @@ function Shell() {
   const { canSeePLPanel }            = usePermissions();
   const [tab, setTab]                = useState<Tab>("stats");
   const [showSearch, setShowSearch]  = useState(false);
-  const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+  const [pendingClientId, setPendingClientId]   = useState<string | null>(null);
+  const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
 
-  function openClientProfile(client: Client) {
+  function openClientProfile(client: Client, vehicleId?: string) {
     const clientType = client.clientType ?? client.type ?? "phys";
     setTab(clientType === "legal" ? "legal" : "phys");
     setPendingClientId(client.id);
+    setPendingVehicleId(vehicleId ?? null);
   }
 
   const role    = myProfile?.role ?? "mechanic";
@@ -363,8 +365,8 @@ function Shell() {
     switch (tab) {
       case "stats":    return <StatsTab onNavigate={setTab} />;
       case "mytasks":  return <MyTasksTab onOpenClient={openClientProfile} />;
-      case "phys":     return <ClientsTab type="phys"  openClientId={pendingClientId} onClientOpened={() => setPendingClientId(null)} />;
-      case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} onClientOpened={() => setPendingClientId(null)} />;
+      case "phys":     return <ClientsTab type="phys"  openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
+      case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
       case "calendar": return <AppointmentsTab />;
       case "schedule": return <ScheduleTab />;
       case "freezers": return <FreezersTab />;

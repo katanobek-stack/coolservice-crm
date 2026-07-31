@@ -60,13 +60,14 @@ export function DualPhotoButton({
   const camRef                     = useRef<HTMLInputElement>(null);
   const galRef                     = useRef<HTMLInputElement>(null);
   const [uploading, setUploading]  = useState(false);
+  const [progress,  setProgress]   = useState({ done: 0, total: 0 });
 
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     setUploading(true);
     try {
-      const result = await uploadPhotos(files, folder);
+      const result = await uploadPhotos(files, folder, (done, total) => setProgress({ done, total }));
       await onUploaded(result);
     } catch (err) {
       alert("Ошибка загрузки: " + getStorageErrorMessage(err));
@@ -76,7 +77,12 @@ export function DualPhotoButton({
     }
   }
 
-  if (uploading) return <span style={{ fontSize: 12, color: "var(--text3)" }}>⏳ Загрузка...</span>;
+  if (uploading) {
+    const label = progress.total > 1
+      ? `⏳ Загружается ${progress.done} из ${progress.total}`
+      : "⏳ Загрузка...";
+    return <span style={{ fontSize: 12, color: "var(--text3)" }}>{label}</span>;
+  }
 
   const btnCss = "text-xs text-[#667085] bg-white px-2.5 py-1 rounded-lg border border-[#E2E8F0] cursor-pointer inline-flex items-center gap-1";
   return (
@@ -102,13 +108,14 @@ export function InlinePhotoButton({
 }) {
   const inputRef                   = useRef<HTMLInputElement>(null);
   const [uploading, setUploading]  = useState(false);
+  const [progress,  setProgress]   = useState({ done: 0, total: 0 });
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     setUploading(true);
     try {
-      const result = await uploadPhotos(files, folder);
+      const result = await uploadPhotos(files, folder, (done, total) => setProgress({ done, total }));
       await onUploaded(result);
     } catch (err) {
       alert("Ошибка загрузки: " + getStorageErrorMessage(err));
@@ -117,6 +124,10 @@ export function InlinePhotoButton({
       e.target.value = "";
     }
   }
+
+  const uploadingLabel = progress.total > 1
+    ? `Загружается ${progress.done} из ${progress.total}`
+    : "Загрузка...";
 
   return (
     <>
@@ -135,7 +146,7 @@ export function InlinePhotoButton({
         disabled={uploading}
         className="text-xs text-[#667085] bg-white px-2.5 py-1 rounded-lg border border-[#E2E8F0] cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
       >
-        {uploading ? "⏳" : capture ? "📷" : "🖼️"} {uploading ? "Загрузка..." : label}
+        {uploading ? "⏳" : capture ? "📷" : "🖼️"} {uploading ? uploadingLabel : label}
       </button>
     </>
   );

@@ -1004,7 +1004,7 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
   repair:        Repair;
   tasks:         RepairTask[];
   canAdd:        boolean;
-  onOpenClient?: (client: Client) => void;
+  onOpenClient?: (client: Client, vehicleId?: string) => void;
 }) {
   const vehicle = (client.vehicles ?? []).find((v) => v.id === repair.vehicleId);
   const brand   = vehicle?.brand ?? vehicle?.model;
@@ -1048,7 +1048,9 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
           <img
             src={vehicle.photo}
             alt=""
-            style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+            onClick={onOpenClient && vehicle ? () => onOpenClient(client, vehicle.id) : undefined}
+            title={onOpenClient && vehicle ? "Открыть карточку автомобиля" : undefined}
+            style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)", cursor: onOpenClient && vehicle ? "pointer" : "default" }}
           />
         ) : (
           <div style={{
@@ -1182,7 +1184,7 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
-export function MyTasksTab({ onOpenClient }: { onOpenClient?: (client: Client) => void } = {}) {
+export function MyTasksTab({ onOpenClient }: { onOpenClient?: (client: Client, vehicleId?: string) => void } = {}) {
   const { clients, tasks } = useData();
   const { myProfile }      = useAuth();
   const [showAdd, setShowAdd] = useState(false);
