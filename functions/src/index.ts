@@ -28,10 +28,22 @@ interface Photo {
 interface RepairTask {
   id: string;
   description?:   string;
+  status?:        "in_progress" | "done";
+  assignees?:     string[];
+  doneBy?:        string[]; // uids who marked themselves done — task is "done" once this ⊇ assignees
   workComment?:   string; // "примечание" left by whoever worked the task
   photos?:        Photo[];
   createdBy?:     string;
   createdByName?: string; // who created this task — also used as "кто добавил фото"
+}
+
+// Mirrors web/src/shared/utils/repair.ts taskStatus() — a task counts as done either by an
+// explicit status flag or once every assignee has marked themselves done via doneBy.
+function taskDone(t: RepairTask): boolean {
+  if (t.status === "done") return true;
+  const assignees = t.assignees ?? [];
+  const doneBy    = t.doneBy ?? [];
+  return assignees.length > 0 && assignees.every((uid) => doneBy.includes(uid));
 }
 
 interface Repair {
@@ -272,6 +284,11 @@ export const notifyClientUpdated = onDocumentUpdated(
           const creator = esc(task.createdByName ?? repair.createdByName) || "Неизвестно";
           await sendTelegram(`➕ *Задача:* ${taskLabel}\nЗаявка: ${clientName}\nСоздал: ${creator}`);
           continue;
+        }
+
+        // Задача закрыта — done flips false → true (independent of the repair itself closing)
+        if (!taskDone(prevTask) && taskDone(task)) {
+          await sendTelegram(`✅ *Задача закрыта:* ${taskLabel} — ${clientName}${vehiclePart}`);
         }
 
         // Photo diffing within this task
