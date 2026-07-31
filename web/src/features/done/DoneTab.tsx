@@ -4,13 +4,14 @@ import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
 import { repairStatus, taskStatus } from "../../shared/utils/repair";
-import { fmtDate, fmtMoney } from "../../shared/utils/format";
+import { fmtDate, fmtMoney, fmtDayMonth } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
 import { Button } from "../../shared/ui/Button";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
 import { PhotoLightbox } from "../../shared/ui/PhotoLightbox";
+import { CreatorLine } from "../../shared/ui/CreatorLine";
 import { updateClientArray } from "../../shared/firebase/firestore";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
@@ -182,9 +183,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
           </div>
         )}
         {item.createdByName && item.createdByName !== "—" && (
-          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8, opacity: 0.7 }}>
-            🖊 Создал: {item.createdByName}
-          </div>
+          <CreatorLine name={item.createdByName} date={repair.createdAt} style={{ marginBottom: 8 }} />
         )}
 
         {/* Task list with reopen buttons */}
@@ -225,6 +224,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                     {names && (
                       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
                     )}
+                    <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 1 }} />
                     {taskPhotos.length > 0 && (
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
                         {taskPhotos.map((p, idx) => {
@@ -417,7 +417,9 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
         {item.createdByName && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--text3)", minWidth: 88 }}>🖊 Создал</span>
-            <span style={{ color: "var(--text)", opacity: 0.8 }}>{item.createdByName}</span>
+            <span style={{ color: "var(--text)", opacity: 0.8 }}>
+              {item.createdByName}{repair.createdAt ? ` · ${fmtDayMonth(repair.createdAt)}` : ""}
+            </span>
           </div>
         )}
         {repair.freonType && (
@@ -487,6 +489,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
                       {taskNames && (
                         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>👤 {taskNames}</div>
                       )}
+                      <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 3 }} />
                       {t.workComment && (
                         <div style={{ fontSize: 11, color: "var(--text2)", background: "rgba(139,92,246,0.08)", borderRadius: 5, padding: "3px 8px", marginTop: 5, border: "1px solid rgba(139,92,246,0.15)" }}>
                           <span style={{ color: "#6d28d9", fontWeight: 600 }}>📝 </span>{t.workComment}
@@ -794,7 +797,9 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
               <span style={{ fontSize: 11.5, color: "var(--text3)" }}>👨‍🔧 {assigneeNames}</span>
             )}
             {item.createdByName && item.createdByName !== "—" && (
-              <span style={{ fontSize: 11, color: "var(--text3)", opacity: 0.7 }}>🖊 {item.createdByName}</span>
+              <span style={{ fontSize: 11, color: "var(--text3)", opacity: 0.7 }}>
+                🖊 {item.createdByName}{repair.createdAt ? ` · ${fmtDayMonth(repair.createdAt)}` : ""}
+              </span>
             )}
             <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>
           </div>
@@ -1028,6 +1033,7 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
   onClose: () => void;
 }) {
   const { repair, client } = item;
+  const { myProfile } = useAuth();
 
   const [freonType,   setFreonType]   = useState(repair.freonType ?? "");
   const [freonAmount, setFreonAmount] = useState(repair.freonAmount ?? "");
@@ -1073,6 +1079,9 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
       assignees:   [],
       doneBy:      [],
       status:      "in_progress",
+      createdBy:     uid,
+      createdByName: myProfile?.name ?? "Неизвестно",
+      createdAt:     new Date().toISOString(),
     };
     setTasks((prev) => [...prev, newTask]);
   }

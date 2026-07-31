@@ -7,6 +7,7 @@ import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
+import { CreatorLine } from "../../shared/ui/CreatorLine";
 import { updateClientArray, addServiceTask, updateServiceTask, deleteServiceTask } from "../../shared/firebase/firestore";
 import { deletePhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
@@ -175,7 +176,7 @@ function AddRepairTaskModal({ client, repair, onClose }: {
   onClose: () => void;
 }) {
   const { staff } = useData();
-  const { myProfile } = useAuth();
+  const { myProfile, user } = useAuth();
   const [desc,          setDesc]          = useState("");
   const [assignees,     setAssignees]     = useState<string[]>(myProfile?.id ? [myProfile.id] : []);
   const [assigneesOpen, setAssigneesOpen] = useState(false);
@@ -219,6 +220,9 @@ function AddRepairTaskModal({ client, repair, onClose }: {
       freonTask:   isFreon,
       freonKg:     "",
       photos:      [],
+      createdBy:     user?.uid ?? "",
+      createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+      createdAt:     new Date().toISOString(),
     };
     const repairs = (client.repairs ?? []).map((r) =>
       r.id === repair.id ? { ...r, tasks: [...(r.tasks ?? []), newTask] } : r,
@@ -829,6 +833,8 @@ function RepairTaskRow({ task, client, repair }: {
             <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>👤 {assigneeNames}</div>
           )}
 
+          <CreatorLine name={task.createdByName} date={task.createdAt} style={{ marginTop: 2 }} />
+
           {/* Freon type badges */}
           {isFreon && !isDone && (
             <div style={{ display: "flex", gap: 4, marginTop: 7, flexWrap: "wrap", alignItems: "center" }}>
@@ -1102,6 +1108,7 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
             )}
           </div>
           <div style={{ fontSize: 11, color: "var(--text3)" }}>{client.name}</div>
+          <CreatorLine name={repair.createdByName} date={repair.createdAt} style={{ marginTop: 2 }} />
         </div>
 
         {/* Right: date + delete */}

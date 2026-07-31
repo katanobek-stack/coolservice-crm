@@ -349,6 +349,12 @@ export function FloatingMicButton() {
         if (found) mechAssignees.push(found.id);
       }
 
+      const creatorFields = {
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
+      };
+
       // Автоматическая freon-задача — всегда для каждого ремонта
       const autoFreonTask: RepairTask = {
         id:          genId(),
@@ -357,6 +363,7 @@ export function FloatingMicButton() {
         doneBy:      [],
         status:      "in_progress",
         freonTask:   true,
+        ...creatorFields,
       };
 
       // Остальные задачи из голосовой команды (freon не дублируем — уже добавлен выше)
@@ -368,6 +375,7 @@ export function FloatingMicButton() {
           assignees:   mechAssignees,
           doneBy:      [] as string[],
           status:      "in_progress" as const,
+          ...creatorFields,
         }));
 
       const repairTasks: RepairTask[] = [autoFreonTask, ...voiceTasks];
@@ -386,7 +394,7 @@ export function FloatingMicButton() {
             date:        new Date().toISOString().slice(0, 10),
             status:      "in_progress" as const,
             tasks:       repairTasks,
-            createdAt:   new Date().toISOString(),
+            ...creatorFields,
           })
         : null;
 

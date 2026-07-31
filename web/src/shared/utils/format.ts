@@ -7,6 +7,11 @@ export function fmtDate(d?: string | null): string {
   });
 }
 
+export function fmtDayMonth(d?: string | null): string {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
 export function fmtDateTime(d?: string | null): string {
   if (!d) return "";
   return (

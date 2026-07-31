@@ -1008,6 +1008,9 @@ function CloseAppointmentModal({
         doneBy:      [],
         status:      "in_progress",
         freonTask:   true,
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
       };
       const repair: Repair = clean({
         id:            repairId,
@@ -1261,6 +1264,9 @@ export function AppointmentsTab() {
         doneBy:      [],
         status:      "in_progress",
         freonTask:   true,
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
       };
       const repair: Repair = clean({
         id:            repairId,

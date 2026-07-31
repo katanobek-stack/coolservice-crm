@@ -32,6 +32,9 @@ export interface RepairTask {
   freonTask?: boolean;
   freonType?: string;
   freonKg?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: string;
 }
 
 export interface Photo {

@@ -10,6 +10,7 @@ import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
+import { CreatorLine } from "../../shared/ui/CreatorLine";
 import { addClient, updateClient, deleteClient, updateClientArray, addAppointment } from "../../shared/firebase/firestore";
 import type { Appointment, Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
 import type { AppointmentDoc } from "../../shared/types/appointment";
@@ -700,10 +701,15 @@ function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client:
         finalVehicleId = newV.id;
         await updateClient(client.id, { vehicles });
       }
+      const creatorFields = {
+        createdBy:     user?.uid ?? "",
+        createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+        createdAt:     new Date().toISOString(),
+      };
       const tasks: RepairTask[] = [
-        { id: genId(), description: "Заправка фреона", assignees: selectedMechanics, doneBy: [], status: "in_progress", freonTask: true },
+        { id: genId(), description: "Заправка фреона", assignees: selectedMechanics, doneBy: [], status: "in_progress", freonTask: true, ...creatorFields },
         ...(taskDesc.trim()
-          ? [{ id: genId(), description: taskDesc.trim(), assignees: selectedMechanics, doneBy: [], status: "in_progress" as const }]
+          ? [{ id: genId(), description: taskDesc.trim(), assignees: selectedMechanics, doneBy: [], status: "in_progress" as const, ...creatorFields }]
           : []),
       ];
       const repair: Repair = {
@@ -1040,11 +1046,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
           👨‍🔧 {(repair.mechanics ?? []).map((uid) => staff.find((s) => s.id === uid)?.name ?? uid).join(", ")}
         </div>
       )}
-      {repair.createdByName && (
-        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3, opacity: 0.7 }}>
-          🖊 Создал: {repair.createdByName}
-        </div>
-      )}
+      <CreatorLine name={repair.createdByName} date={repair.createdAt} style={{ marginTop: 3 }} />
       {repair.description && <div style={{ fontSize: 13, color: "var(--text)", marginTop: 6 }}>{repair.description}</div>}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
@@ -1079,6 +1081,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
                   {t.freonKg   && <span style={{ fontSize: 10, color: "#0e7490" }}>{t.freonKg} кг</span>}
                   {t.workComment && <span style={{ fontSize: 10, color: "#6d28d9" }}>📝</span>}
                 </div>
+                <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 3, marginLeft: 24 }} />
                 {t.freonTask && ts !== "done" && (
                   <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
                     {FREON_BADGES.map((fr) => {
@@ -1469,6 +1472,8 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
                   <div style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 6 }}>👨‍🔧 {names}</div>
                 )}
 
+                <CreatorLine name={r.createdByName} date={r.createdAt} style={{ marginBottom: 6 }} />
+
                 {r.closedAt && (
                   <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
                     🔒 Закрыто: {fmtDate(r.closedAt)}
@@ -1477,17 +1482,20 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
 
                 {/* Task list */}
                 {(r.tasks ?? []).length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                     {(r.tasks ?? []).map((t) => (
                       <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12 }}>
                         <span style={{ color: t.status === "done" ? "#16a34a" : "#b45309", flexShrink: 0, marginTop: 1 }}>
                           {t.status === "done" ? "✓" : "●"}
                         </span>
-                        <span style={{ color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>
-                          {t.description}
-                          {t.freonType && <span style={{ color: "#0e7490" }}> · ❄️ {t.freonType}</span>}
-                          {t.freonKg   && <span style={{ color: "#0e7490" }}> {t.freonKg} кг</span>}
-                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ color: t.status === "done" ? "var(--text3)" : "var(--text)" }}>
+                            {t.description}
+                            {t.freonType && <span style={{ color: "#0e7490" }}> · ❄️ {t.freonType}</span>}
+                            {t.freonKg   && <span style={{ color: "#0e7490" }}> {t.freonKg} кг</span>}
+                          </span>
+                          <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 1 }} />
+                        </div>
                       </div>
                     ))}
                   </div>
