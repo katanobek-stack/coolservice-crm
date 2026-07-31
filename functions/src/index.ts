@@ -38,6 +38,7 @@ interface Repair {
   vehicleId?:       string;
   cost?:             string;
   closedByManager?: boolean;
+  createdByName?:   string; // fallback "автор" for tasks that predate task-level createdByName tracking
   tasks?:            RepairTask[];
 }
 
@@ -197,9 +198,11 @@ function byId<T extends { id: string }>(items: T[] | undefined): Map<string, T> 
   return new Map((items ?? []).map((item) => [item.id, item]));
 }
 
-function taskCaption(task: RepairTask, clientName: string, vehicleLbl: string): string {
+function taskCaption(task: RepairTask, clientName: string, vehicleLbl: string, repairCreator?: string): string {
   const title    = esc(task.description) || "Задача";
-  const creator  = esc(task.createdByName) || "Неизвестно";
+  // Task-level createdByName only exists on tasks created after that tracking was added —
+  // older tasks fall back to who created the containing заявка, then finally "Неизвестно".
+  const creator  = esc(task.createdByName ?? repairCreator) || "Неизвестно";
   const lines = [
     `📷 *${title}*`,
     `Клиент: ${clientName}${vehicleLbl ? ` · ${vehicleLbl}` : ""}`,
@@ -266,7 +269,7 @@ export const notifyClientUpdated = onDocumentUpdated(
         const prevTask  = beforeTasks.get(task.id);
 
         if (!prevTask) {
-          const creator     = esc(task.createdByName) || "Неизвестно";
+          const creator = esc(task.createdByName ?? repair.createdByName) || "Неизвестно";
           await sendTelegram(`➕ *Задача:* ${taskLabel}\nЗаявка: ${clientName}\nСоздал: ${creator}`);
           continue;
         }
@@ -275,7 +278,7 @@ export const notifyClientUpdated = onDocumentUpdated(
         const beforePhotoIds = new Set((prevTask.photos ?? []).map((p) => p.id));
         const newPhotos       = (task.photos ?? []).filter((p) => !beforePhotoIds.has(p.id));
         if (newPhotos.length > 0) {
-          await notifyNewPhotos(newPhotos, taskCaption(task, clientName, label));
+          await notifyNewPhotos(newPhotos, taskCaption(task, clientName, label, repair.createdByName));
         }
       }
     }
