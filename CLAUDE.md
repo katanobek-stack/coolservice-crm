@@ -5,8 +5,8 @@ CRM система для рефрижераторного сервиса RefSer
 Репозиторий: coolservice-crm
 
 ## Правила работы
-- Читай только папку src/ и web/src/
-- Не читай node_modules, .git, dist, build
+- Читай только папку src/, web/src/ и functions/src/
+- Не читай node_modules, .git, dist, build, functions/lib
 - После каждого завершённого модуля делай git push
 - Используй Sonnet на Medium если задача простая
 - В начале каждой сессии проверь последний коммит и продолжи
@@ -18,6 +18,7 @@ React + TypeScript + Vite + Firebase + Tailwind CSS
 - web/src/features/ — модули CRM
 - web/src/shared/ — общие компоненты
 - web/src/app/ — роутинг и провайдеры
+- functions/src/ — Cloud Functions (Node 20, TypeScript, firebase-functions v2). Секреты (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) — через `firebase functions:secrets:set`, не в коде
 
 ## Текущий статус (июнь 2026)
 - CRM задеплоена на GitHub Pages
@@ -47,6 +48,7 @@ React + TypeScript + Vite + Firebase + Tailwind CSS
 - Фото к задачам: Камера + Галерея
 - Закрытие наряда: форма появляется в Отчётах когда все задачи выполнены
 - Детали ремонта: фото группируются по задачам а не общей пачкой
+- Telegram-уведомления (functions/): новая заявка, новая задача, новое фото к задаче, закрытие заявки — триггеры onCreate/onUpdate на clients/{clientId}, т.к. repairs/tasks/photos хранятся как вложенные массивы, а не отдельные коллекции
 
 ## Текущие баги и что нужно доделать:
 
