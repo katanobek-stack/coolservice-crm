@@ -210,6 +210,12 @@ function byId<T extends { id: string }>(items: T[] | undefined): Map<string, T> 
   return new Map((items ?? []).map((item) => [item.id, item]));
 }
 
+// Vehicle label (if any) on its own line — shared across every task/заявка notification
+// so "марка + номер" always looks the same regardless of message type.
+function vehicleLines(vehicleLbl: string): string[] {
+  return vehicleLbl ? [vehicleLbl] : [];
+}
+
 function taskCaption(task: RepairTask, clientName: string, vehicleLbl: string, repairCreator?: string): string {
   const title    = esc(task.description) || "Задача";
   // Task-level createdByName only exists on tasks created after that tracking was added —
@@ -217,7 +223,8 @@ function taskCaption(task: RepairTask, clientName: string, vehicleLbl: string, r
   const creator  = esc(task.createdByName ?? repairCreator) || "Неизвестно";
   const lines = [
     `📷 *${title}*`,
-    `Клиент: ${clientName}${vehicleLbl ? ` · ${vehicleLbl}` : ""}`,
+    ...vehicleLines(vehicleLbl),
+    `Клиент: ${clientName}`,
     `Добавил: ${creator}`,
   ];
   if (task.workComment?.trim()) lines.push(esc(task.workComment.trim()));
@@ -271,7 +278,11 @@ export const notifyClientUpdated = onDocumentUpdated(
 
       // Заявка закрыта — closedByManager flips false → true
       if (!prevRepair.closedByManager && repair.closedByManager) {
-        await sendTelegram(`✅ *Заявка закрыта:* ${clientName}${vehiclePart} — ${fmtMoney(repair.cost)}`);
+        await sendTelegram([
+          `✅ *Заявка закрыта:* ${clientName}`,
+          ...vehicleLines(label),
+          `Сумма: ${fmtMoney(repair.cost)}`,
+        ].join("\n"));
       }
 
       // Task diffing within this repair
@@ -282,13 +293,22 @@ export const notifyClientUpdated = onDocumentUpdated(
 
         if (!prevTask) {
           const creator = esc(task.createdByName ?? repair.createdByName) || "Неизвестно";
-          await sendTelegram(`➕ *Задача:* ${taskLabel}\nЗаявка: ${clientName}\nСоздал: ${creator}`);
+          await sendTelegram([
+            `➕ *Задача:* ${taskLabel}`,
+            ...vehicleLines(label),
+            `Клиент: ${clientName}`,
+            `Создал: ${creator}`,
+          ].join("\n"));
           continue;
         }
 
         // Задача закрыта — done flips false → true (independent of the repair itself closing)
         if (!taskDone(prevTask) && taskDone(task)) {
-          await sendTelegram(`✅ *Задача закрыта:* ${taskLabel} — ${clientName}${vehiclePart}`);
+          await sendTelegram([
+            `✅ *Задача закрыта:* ${taskLabel}`,
+            ...vehicleLines(label),
+            `Клиент: ${clientName}`,
+          ].join("\n"));
         }
 
         // Photo diffing within this task
