@@ -3,6 +3,8 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
+export { parseVoiceCommand } from "./parseVoiceCommand";
+
 admin.initializeApp();
 
 // Set once via: firebase functions:secrets:set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID / TELEGRAM_GROUP_CHAT_ID

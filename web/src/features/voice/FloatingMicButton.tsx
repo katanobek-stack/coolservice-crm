@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from "react";
+import { httpsCallable } from "firebase/functions";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
+import { getFirebaseFunctions } from "../../shared/firebase";
 import { addClient, updateClient, addAppointment } from "../../shared/firebase/firestore";
 import { genId } from "../../shared/utils/format";
 import type { Vehicle, Repair, RepairTask } from "../../shared/types/client";
@@ -72,88 +74,14 @@ function clean<T>(v: T): T {
   return v;
 }
 
-// ─── Claude API ───────────────────────────────────────────────────────────────
-
-const SYSTEM = `Ты ИИ-агент CRM рефрижераторного сервиса (Владивосток).
-Из голосовой команды извлеки данные и верни ТОЛЬКО JSON без пояснений и форматирования.
-
-ЕСЛИ речь о записи на приём (слова: "запиши", "запись", "записать", "назначь визит", "визит"):
-{"action":"create_appointment","clientName":"Иван Петров","clientPhone":"+79147771234","carBrand":"Toyota","carModel":"Hiace","date":"2026-06-09","time":"14:00","type":"diagnostics","assigneeQuery":"Сергей","note":""}
-
-ЕСЛИ речь о ремонте/заявке (по умолчанию):
-{"action":"both","clientType":"individual","client":{"name":"Иван Петров","phone":"89147771234","vehicle":{"plate":"К123АВ125","brand":"Toyota Hiace"}},"tasks":[{"description":"не морозит","type":"repair"}],"mechanic":{"name":"Сергей"}}
-
-Правила:
-- action "create_appointment" — запись клиента на приём (диагностика, консультация, визит)
-- action "both" — создать клиента и задачи (ремонт, неисправность)
-- action "create_client" — только клиент без задач
-- action "add_task" — клиент уже существует, добавить задачу
-- clientType "individual" — физлицо; "company" — юрлицо (ООО, ИП)
-- appointmentType: "diagnostics" — диагностика; "repair" — ремонт; "consultation" — консультация
-- type "repair" — ремонт, неисправность; "service" — плановое ТО
-- phone (для клиента ремонта) и clientPhone (для записи на приём) — формат +7XXXXXXXXXX
-- plate — кириллица+цифры без пробелов
-- date — формат YYYY-MM-DD; если не указана дата явно — используй сегодняшнюю из начала сообщения
-- Если задач нет — tasks:[]
-- Если нет телефона — не включай поле phone
-- Если нет авто — не включай поле vehicle
-- Если упоминается имя механика/мастера ("назначь на ...", "... займётся") — извлеки в mechanic: {"name":"имя"}
-- Если механик не упомянут — не включай поле mechanic
-
----
-Ты умеешь создавать записи на приём в сервис. Когда пользователь говорит что-то вроде:
-- "создай запись на диагностику"
-- "запишись на Toyota Mark 2"
-- "запись на 10 утра Петя"
-- "новая запись"
-- "запиши машину"
-
-Ответь ТОЛЬКО валидным JSON без markdown, без объяснений, без \`\`\`json блоков, просто голый JSON:
-{"action":"create_appointment","clientName":"Клиент","carBrand":"Toyota","carModel":"Mark 2","date":"YYYY-MM-DD","time":"10:00","type":"diagnostics","assigneeQuery":"Петя"}
-
-Правила заполнения:
-- date: если не сказана — сегодняшняя дата в формате YYYY-MM-DD
-- time: если не сказано — "09:00"
-- type: "diagnostics" если сказано "диагностика", "repair" если "ремонт", "consultation" если "консультация". По умолчанию "diagnostics"
-- clientName: если имя клиента не сказано — "Клиент"
-- carBrand: марка авто заглавной буквой на английском (Toyota, Nissan, Honda...)
-- carModel: модель как сказано
-- assigneeQuery: имя механика или администратора если упомянуто в речи.
-  Примеры фраз: "назначить на Петю", "запиши на Вову", "механик Сергей", "отдай Пете"
-  Если механик не упомянут — пустая строка ""
----`;
-
+// ─── Backend voice parsing ───────────────────────────────────────────────────
 async function callClaude(text: string): Promise<{ cmd: VoiceCmd; raw: string; cleaned: string }> {
-  const key = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!key) throw new Error("Добавьте VITE_ANTHROPIC_API_KEY в файл .env");
-
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
-      system: SYSTEM,
-      messages: [{ role: "user", content: `Сегодня: ${new Date().toISOString().slice(0, 10)}. ${text}` }],
-    }),
-  });
-
-  if (!r.ok) {
-    const msg = await r.text().catch(() => "");
-    throw new Error(`Claude ${r.status}: ${msg.slice(0, 120)}`);
-  }
-
-  const d = await r.json() as { content: Array<{ type: string; text: string }> };
-  const raw     = d.content.find((b) => b.type === "text")?.text ?? "";
-  const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
-  const m = cleaned.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("Не JSON: " + cleaned.slice(0, 60));
-  return { cmd: JSON.parse(m[0]) as VoiceCmd, raw, cleaned };
+  const callable = httpsCallable<
+    { text: string },
+    { cmd: VoiceCmd; raw: string; cleaned: string }
+  >(getFirebaseFunctions(), "parseVoiceCommand");
+  const result = await callable({ text });
+  return result.data;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
