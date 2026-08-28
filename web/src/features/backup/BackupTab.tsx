@@ -6,6 +6,11 @@ import { fmtDate } from "../../shared/utils/format";
 import { Button } from "../../shared/ui/Button";
 import { getFirebaseDb } from "../../shared/firebase/app";
 import { restoreDocumentFromBackup } from "../../shared/firebase/concurrency";
+import {
+  buildJsonBackupData,
+  clientsFromBackup,
+  standaloneAppointmentsFromBackup,
+} from "../../shared/backup/appointments";
 import * as XLSX from "xlsx";
 
 // ─── JSON backup ──────────────────────────────────────────────────────────────
@@ -141,7 +146,7 @@ function exportExcel(
 
 // ─── JSON import ──────────────────────────────────────────────────────────────
 
-async function importJSON(file: File, onStatus: (msg: string) => void): Promise<{ clients: number; tasks: number; freezers: number; errors: number }> {
+async function importJSON(file: File, onStatus: (msg: string) => void): Promise<{ clients: number; tasks: number; freezers: number; appointments: number; errors: number }> {
   const text = await file.text();
   let data: Record<string, unknown>;
   try {
@@ -152,7 +157,7 @@ async function importJSON(file: File, onStatus: (msg: string) => void): Promise<
   if (!data || !data.version) throw new Error("Это не бэкап РефСервисДВ (нет поля version)");
 
   const db    = getFirebaseDb();
-  const stats = { clients: 0, tasks: 0, freezers: 0, errors: 0 };
+  const stats = { clients: 0, tasks: 0, freezers: 0, appointments: 0, errors: 0 };
 
   function chunk<T>(arr: T[], size: number): T[][] {
     const out: T[][] = [];
@@ -179,9 +184,10 @@ async function importJSON(file: File, onStatus: (msg: string) => void): Promise<
     }
   }
 
-  await writeCollection("clients",      (data.clients      as Array<Record<string, unknown>>) ?? [], "clients");
+  await writeCollection("clients",      clientsFromBackup(data), "clients");
   await writeCollection("servicetasks", (data.servicetasks as Array<Record<string, unknown>>) ?? [], "tasks");
   await writeCollection("freezers",     (data.freezers     as Array<Record<string, unknown>>) ?? [], "freezers");
+  await writeCollection("appointments", standaloneAppointmentsFromBackup(data), "appointments");
 
   if (data.settings && (data.settings as Record<string, unknown>).finance) {
     onStatus("Записываю настройки финансов...");
@@ -199,7 +205,7 @@ async function importJSON(file: File, onStatus: (msg: string) => void): Promise<
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function BackupTab() {
-  const { clients, tasks, freezers, finance, staff } = useData();
+  const { clients, tasks, freezers, finance, staff, appointments } = useData();
   const { myProfile, user }                          = useAuth();
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -212,18 +218,17 @@ export function BackupTab() {
   const stamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
   function handleExportJSON() {
-    const data = {
-      version:    1,
-      exportedAt: new Date().toISOString(),
+    const data = buildJsonBackupData({
       exportedBy: user?.email ?? "",
       clients,
       staff,
       servicetasks: tasks,
       freezers,
+      appointments,
       settings: { finance },
-    };
+    });
     downloadJSON(data, `РефСервисДВ_бэкап_${stamp}.json`);
-    setImportResult(`✅ Бэкап скачан: ${clients.length} клиентов, ${tasks.length} задач, ${freezers.length} камер`);
+    setImportResult(`✅ Бэкап скачан: ${clients.length} клиентов, ${appointments.length} записей, ${tasks.length} задач, ${freezers.length} камер`);
   }
 
   async function handleExportExcel() {
@@ -243,7 +248,7 @@ export function BackupTab() {
     try {
       const stats = await importJSON(file, setImportStatus);
       setImportResult(
-        `✅ Импорт завершён: ${stats.clients} клиентов, ${stats.tasks} задач, ${stats.freezers} камер` +
+        `✅ Импорт завершён: ${stats.clients} клиентов, ${stats.appointments} записей, ${stats.tasks} задач, ${stats.freezers} камер` +
         (stats.errors ? `, ошибок: ${stats.errors}` : ""),
       );
     } catch (e) {
@@ -287,7 +292,7 @@ export function BackupTab() {
           </button>
         </div>
         <div className="text-[10px] text-[#98A2B3] mt-2 text-center">
-          {clients.length} клиентов · {tasks.length} задач · {freezers.length} камер
+          {clients.length} клиентов · {appointments.length} записей · {tasks.length} задач · {freezers.length} камер
         </div>
       </div>
 
@@ -337,6 +342,7 @@ export function BackupTab() {
         {[
           { label: "Клиентов", value: clients.length },
           { label: "Ремонтов всего", value: clients.reduce((s, c) => s + (c.repairs ?? []).length, 0) },
+          { label: "Записей на приём", value: appointments.length },
           { label: "Сервисных задач", value: tasks.length },
           { label: "Камер на балансе", value: freezers.length },
           { label: "Сотрудников", value: staff.length },

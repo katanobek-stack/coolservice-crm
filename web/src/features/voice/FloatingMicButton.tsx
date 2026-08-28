@@ -3,7 +3,9 @@ import { httpsCallable } from "firebase/functions";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import { getFirebaseFunctions } from "../../shared/firebase";
-import { addClient, addAppointment } from "../../shared/firebase/firestore";
+import { addClient } from "../../shared/firebase/firestore";
+import { createAppointment } from "../../shared/firebase/appointments";
+import { findExistingAppointmentClient } from "../../shared/appointments/matching";
 import { addClientRepairWithVehicle } from "../../shared/firebase/concurrency";
 import { genId } from "../../shared/utils/format";
 import type { Vehicle, Repair, RepairTask } from "../../shared/types/client";
@@ -170,7 +172,7 @@ export function FloatingMicButton() {
           : undefined;
 
         try {
-          await addAppointment(clean({
+          await createAppointment(clean({
             clientName:    "Клиент",
             date:          new Date().toISOString().slice(0, 10),
             time:          apptTime,
@@ -224,8 +226,9 @@ export function FloatingMicButton() {
       }
       // Поддерживаем оба поля: новый "type" и старый "appointmentType"
       const apptType = cmd.type ?? cmd.appointmentType ?? "diagnostics";
+      const existingClient = findExistingAppointmentClient(clients, cmd);
       try {
-        await addAppointment(clean({
+        await createAppointment(clean({
           clientName:    cmd.clientName  ?? "Клиент",
           clientPhone:   cmd.clientPhone ?? undefined,
           carBrand:      cmd.carBrand    ?? undefined,
@@ -239,6 +242,7 @@ export function FloatingMicButton() {
           note:          cmd.note || undefined,
           createdBy:     user?.uid ?? "",
           createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
+          clientId:      existingClient?.id,
         }));
       } catch (fbErr) {
         console.error("[VoiceAgent] Firestore write error (AI appointment):", fbErr);
@@ -349,7 +353,6 @@ export function FloatingMicButton() {
         phone:       cmd.client.phone,
         vehicles:    vehicle ? [vehicle] : [],
         repairs:     repair  ? [repair]  : [],
-        appointments: [],
       }));
 
       const n = repairTasks.length;

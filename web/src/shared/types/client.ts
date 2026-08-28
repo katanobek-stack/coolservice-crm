@@ -69,13 +69,15 @@ export interface Repair {
   editedAt?: string;
 }
 
-export interface Appointment {
+/** Read-only compatibility shape for appointments embedded in legacy client documents. */
+export interface LegacyClientAppointment {
   id: string;
   date: string;
   time?: string;
   description?: string;
   vehicleId?: string;
   serviceType?: string;
+  standaloneAppointmentId?: string;
 }
 
 export interface Client {
@@ -92,7 +94,7 @@ export interface Client {
   vehicles: Vehicle[];
   chambers?: Chamber[];
   repairs: Repair[];
-  appointments: Appointment[];
+  appointments?: LegacyClientAppointment[];
   createdAt?: unknown;
   // Поля конвертации физлица в юрлицо
   companyName?: string;

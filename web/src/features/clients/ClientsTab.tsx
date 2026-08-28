@@ -11,9 +11,9 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { CreatorLine } from "../../shared/ui/CreatorLine";
-import { addClient, addAppointment } from "../../shared/firebase/firestore";
+import { addClient } from "../../shared/firebase/firestore";
+import { createAppointment, deleteAppointment } from "../../shared/firebase/appointments";
 import {
-  addClientAppointment,
   addClientChamber,
   addClientRepair,
   addClientVehicle,
@@ -23,15 +23,15 @@ import {
   mutateClientRepair,
   mutateClientVehicle,
   mutateRepairTask,
-  removeClientAppointment,
   removeClientChamber,
   removeClientRepair,
   removeClientVehicle,
   removeDocumentIfUnchanged,
   updateDocumentFieldsIfUnchanged,
 } from "../../shared/firebase/concurrency";
-import type { Appointment, Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
-import type { AppointmentDoc } from "../../shared/types/appointment";
+import type { Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
+import type { Appointment } from "../../shared/types/appointment";
+import { legacyAppointmentsForDisplay } from "../../shared/appointments/legacy";
 import { uploadPhoto, getStorageErrorMessage } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
@@ -199,7 +199,7 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
     try {
       const data: Record<string, unknown> = {
         name: name.trim(), clientType: type,
-        vehicles: [], repairs: [], appointments: [],
+        vehicles: [], repairs: [],
       };
       if (phone.trim())   data.phone         = phone.trim();
       if (note.trim())    data.note          = note.trim();
@@ -611,8 +611,7 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
     try {
       const vehicle = (client.vehicles ?? []).find((v) => v.id === vId);
 
-      // Write to global appointments collection so AppointmentsTab shows it
-      const globalApptData: Omit<AppointmentDoc, "id" | "createdAt"> = {
+      const appointmentData: Omit<Appointment, "id" | "createdAt"> = {
         clientName:    client.name,
         date,
         time:          time || "",
@@ -624,20 +623,12 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
         createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
         clientId:      client.id,
       };
-      if (client.phone)   globalApptData.clientPhone = client.phone;
-      if (vehicle?.brand) globalApptData.carBrand    = vehicle.brand;
-      if (vehicle?.model) globalApptData.carModel    = vehicle.model;
-      if (desc.trim())    globalApptData.note        = desc.trim();
-      await addAppointment(globalApptData);
-
-      // Also write to client.appointments[] for backward-compat (client card list)
-      const localAppt: Record<string, unknown> = {
-        id:   genId(),
-        date: time ? `${date}T${time}:00` : date,
-      };
-      if (desc.trim()) localAppt.description = desc.trim();
-      if (vId)         localAppt.vehicleId   = vId;
-      await addClientAppointment(client.id, localAppt as unknown as Appointment);
+      if (client.phone)   appointmentData.clientPhone = client.phone;
+      if (vehicle?.brand) appointmentData.carBrand    = vehicle.brand;
+      if (vehicle?.model) appointmentData.carModel    = vehicle.model;
+      if (vehicle?.plate) appointmentData.carPlate    = vehicle.plate;
+      if (desc.trim())    appointmentData.note        = desc.trim();
+      await createAppointment(appointmentData);
 
       onClose();
     } catch (e) {
@@ -1216,29 +1207,44 @@ function CollapsibleMonth({ label, count, isAdmin, client, repairs }: {
 
 // ─── Appointments list in client detail ──────────────────────────────────────
 
-function AppointmentsList({ client, isAdmin }: { client: Client; isAdmin: boolean }) {
-  const appts = (client.appointments ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
-  if (!appts.length) return null;
-
-  async function deleteAppt(id: string) {
-    const appointment = appts.find((item) => item.id === id);
-    if (appointment) await removeClientAppointment(client.id, appointment);
-  }
+function AppointmentsList({
+  client,
+  appointments,
+  isAdmin,
+}: {
+  client: Client;
+  appointments: Appointment[];
+  isAdmin: boolean;
+}) {
+  const canonical = appointments
+    .filter((item) => item.clientId === client.id)
+    .slice()
+    .sort((a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`));
+  const legacy = legacyAppointmentsForDisplay(client, canonical)
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date));
+  if (!canonical.length && !legacy.length) return null;
 
   return (
     <>
       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8, marginTop: 4, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
-        Записи ({appts.length})
+        Записи ({canonical.length + legacy.length})
       </div>
-      {appts.map((a) => (
+      {canonical.map((a) => (
         <div key={a.id} style={{ background: "var(--bg2)", borderRadius: 10, border: "1px solid var(--border)", padding: "10px 12px", marginBottom: 6, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
-            <Badge variant="amber">📅 {fmtDate(a.date)}</Badge>
-            {a.description && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 4 }}>{a.description}</div>}
+            <Badge variant="amber">📅 {fmtDate(a.date)} {a.time}</Badge>
+            {a.note && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 4 }}>{a.note}</div>}
           </div>
           {isAdmin && (
-            <button type="button" onClick={() => void deleteAppt(a.id)} style={{ fontSize: 18, color: "var(--text3)", background: "transparent", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}>×</button>
+            <button type="button" onClick={() => void deleteAppointment(a)} style={{ fontSize: 18, color: "var(--text3)", background: "transparent", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}>×</button>
           )}
+        </div>
+      ))}
+      {legacy.map((a) => (
+        <div key={`legacy-${a.id}`} style={{ background: "var(--bg2)", borderRadius: 10, border: "1px dashed var(--border)", padding: "10px 12px", marginBottom: 6 }}>
+          <Badge variant="gray">📅 {fmtDate(a.date)} · архив</Badge>
+          {a.description && <div style={{ fontSize: 11.5, color: "var(--text2)", marginTop: 4 }}>{a.description}</div>}
         </div>
       ))}
     </>
@@ -1551,7 +1557,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
 
 function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; initialVehicleId?: string | null; onClose: () => void }) {
   const { myProfile, isOwner } = useAuth();
-  const { staff } = useData();
+  const { staff, appointments } = useData();
   const role    = myProfile?.role ?? "mechanic";
   const isAdmin = role === "admin" || role === "manager" || isOwner;
 
@@ -1754,7 +1760,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
       </div>
 
       {/* ── ЗАПИСИ ── */}
-      <AppointmentsList client={client} isAdmin={isAdmin} />
+      <AppointmentsList client={client} appointments={appointments} isAdmin={isAdmin} />
 
       {/* ── ИСТОРИЯ ИЗМЕНЕНИЙ ── */}
       {client.convertedFrom === "individual" && (

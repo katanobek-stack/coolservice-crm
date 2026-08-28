@@ -13,7 +13,7 @@ import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Textarea, FormGroup, Select } from "../../shared/ui/Input";
-import type { AppointmentDoc } from "../../shared/types/appointment";
+import type { Appointment } from "../../shared/types/appointment";
 import type { Repair } from "../../shared/types/client";
 import type { StaffMember } from "../../shared/types/staff";
 
@@ -366,7 +366,7 @@ interface DayDetailProps {
   allStaff: StaffMember[];
   schedules: ScheduleEntry[];
   allRepairs: Array<Repair & { clientName: string }>;
-  appointments: AppointmentDoc[];
+  appointments: Appointment[];
   isAdmin: boolean;
   currentUserId: string;
   onClose: () => void;

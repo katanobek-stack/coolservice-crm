@@ -54,13 +54,3 @@ export function addExpense(data: { category: string; month: string; amount: numb
 export function deleteExpense(id: string) {
   return deleteDoc(doc(getFirebaseDb(), "expenses", id));
 }
-
-// ─── Appointments ─────────────────────────────────────────────────────────
-import type { AppointmentDoc } from "../types/appointment";
-
-export function addAppointment(data: Omit<AppointmentDoc, "id" | "createdAt">) {
-  return addDoc(collection(getFirebaseDb(), "appointments"), {
-    ...data,
-    createdAt: serverTimestamp(),
-  });
-}

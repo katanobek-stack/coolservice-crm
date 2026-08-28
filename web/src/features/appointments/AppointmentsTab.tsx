@@ -3,18 +3,20 @@ import { serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
-  addAppointment,
   addClient,
 } from "../../shared/firebase/firestore";
 import {
+  createAppointment,
+  deleteAppointment,
+  updateAppointment,
+} from "../../shared/firebase/appointments";
+import {
   addClientRepair,
   ensureClientVehicle,
-  removeDocumentIfUnchanged,
-  updateDocumentFieldsIfUnchanged,
 } from "../../shared/firebase/concurrency";
 import { genId } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
-import type { AppointmentDoc } from "../../shared/types/appointment";
+import type { Appointment } from "../../shared/types/appointment";
 import type { Client, Repair, RepairTask, Vehicle } from "../../shared/types/client";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -40,7 +42,7 @@ function fmtApptDate(d: string) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const APPT_TYPES: Record<AppointmentDoc["type"], { label: string; icon: string }> = {
+const APPT_TYPES: Record<Appointment["type"], { label: string; icon: string }> = {
   diagnostics:  { label: "Диагностика",  icon: "🔍" },
   repair:       { label: "Ремонт",       icon: "🔧" },
   consultation: { label: "Консультация", icon: "💬" },
@@ -51,13 +53,13 @@ const APPT_TYPES: Record<AppointmentDoc["type"], { label: string; icon: string }
 function AppointmentCard({
   appt, myUid, role, onClose, onDelete, onEdit, onCreateRepair, creatingRepair,
 }: {
-  appt:            AppointmentDoc;
+  appt:            Appointment;
   myUid:           string;
   role:            string;
-  onClose:         (a: AppointmentDoc) => void;
-  onDelete:        (a: AppointmentDoc) => void;
-  onEdit:          (a: AppointmentDoc) => void;
-  onCreateRepair:  (a: AppointmentDoc) => void;
+  onClose:         (a: Appointment) => void;
+  onDelete:        (a: Appointment) => void;
+  onEdit:          (a: Appointment) => void;
+  onCreateRepair:  (a: Appointment) => void;
   creatingRepair:  string | null;
 }) {
   const isPending  = appt.status === "pending";
@@ -245,7 +247,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
   const [clientId,    setClientId]    = useState<string | null>(null);
   const [date,        setDate]        = useState(today);
   const [time,        setTime]        = useState("");
-  const [apptType,    setApptType]    = useState<AppointmentDoc["type"]>("diagnostics");
+  const [apptType,    setApptType]    = useState<Appointment["type"]>("diagnostics");
   const [note,        setNote]        = useState("");
   const [selectedMechanics, setSelectedMechanics] = useState<string[]>([]);
   const [mechanicsOpen,     setMechanicsOpen]     = useState(false);
@@ -320,7 +322,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
 
     setSaving(true);
     try {
-      await addAppointment(clean({
+      await createAppointment(clean({
         clientName:    clientName.trim(),
         clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
@@ -505,7 +507,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
           <select
             className="input"
             value={apptType}
-            onChange={(e) => setApptType(e.target.value as AppointmentDoc["type"])}
+            onChange={(e) => setApptType(e.target.value as Appointment["type"])}
           >
             <option value="diagnostics">🔍 Диагностика</option>
             <option value="repair">🔧 Ремонт</option>
@@ -627,7 +629,7 @@ function AddAppointmentModal({ onClose }: { onClose: () => void }) {
 function EditAppointmentModal({
   appt, onClose,
 }: {
-  appt:    AppointmentDoc;
+  appt:    Appointment;
   onClose: () => void;
 }) {
   const { user, myProfile } = useAuth();
@@ -639,7 +641,7 @@ function EditAppointmentModal({
   const [carModel,    setCarModel]    = useState(appt.carModel ?? "");
   const [date,        setDate]        = useState(appt.date);
   const [time,        setTime]        = useState(appt.time);
-  const [apptType,    setApptType]    = useState<AppointmentDoc["type"]>(appt.type);
+  const [apptType,    setApptType]    = useState<Appointment["type"]>(appt.type);
   const [note,        setNote]        = useState(appt.note ?? "");
   const [selectedMechanics, setSelectedMechanics] = useState<string[]>(appt.assignees);
   const [mechanicsOpen,     setMechanicsOpen]     = useState(false);
@@ -677,7 +679,7 @@ function EditAppointmentModal({
 
     setSaving(true);
     try {
-      await updateDocumentFieldsIfUnchanged("appointments", appt, clean({
+      await updateAppointment(appt, clean({
         clientName:    clientName.trim(),
         clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
@@ -688,7 +690,7 @@ function EditAppointmentModal({
         assignees:     selectedMechanics,
         assigneeNames,
         note:          note.trim() || undefined,
-        updatedAt:     serverTimestamp() as unknown as AppointmentDoc["updatedAt"],
+        updatedAt:     serverTimestamp() as unknown as Appointment["updatedAt"],
         updatedBy:     user?.uid ?? "",
         updatedByName: myProfile?.name ?? user?.email ?? "Неизвестно",
       }));
@@ -794,7 +796,7 @@ function EditAppointmentModal({
           <select
             className="input"
             value={apptType}
-            onChange={(e) => setApptType(e.target.value as AppointmentDoc["type"])}
+            onChange={(e) => setApptType(e.target.value as Appointment["type"])}
           >
             <option value="diagnostics">🔍 Диагностика</option>
             <option value="repair">🔧 Ремонт</option>
@@ -918,7 +920,7 @@ function EditAppointmentModal({
 function CloseAppointmentModal({
   appt, onClose,
 }: {
-  appt:    AppointmentDoc;
+  appt:    Appointment;
   onClose: () => void;
 }) {
   const { user, myProfile } = useAuth();
@@ -956,7 +958,6 @@ function CloseAppointmentModal({
         clientType:   "phys" as const,
         vehicles:     [vehicle],
         repairs:      [],
-        appointments: [],
       }));
       setCreatedClientId(ref.id);
       setCreatedVehicleId(vId);
@@ -1029,7 +1030,7 @@ function CloseAppointmentModal({
       });
 
       await addClientRepair(createdClientId, repair);
-      await updateDocumentFieldsIfUnchanged("appointments", appt, {
+      await updateAppointment(appt, {
         status:   "closed",
         outcome:  "repair",
         clientId: createdClientId,
@@ -1047,7 +1048,7 @@ function CloseAppointmentModal({
   async function handleDeclined() {
     setSaving(true);
     try {
-      await updateDocumentFieldsIfUnchanged("appointments", appt, clean({
+      await updateAppointment(appt, clean({
         status:   "closed" as const,
         outcome:  "declined" as const,
         clientId: createdClientId ?? undefined,
@@ -1197,15 +1198,15 @@ export function AppointmentsTab() {
   const { appointments, clients } = useData();
 
   const [showAdd,        setShowAdd]        = useState(false);
-  const [closingAppt,    setClosingAppt]    = useState<AppointmentDoc | null>(null);
-  const [editingAppt,    setEditingAppt]    = useState<AppointmentDoc | null>(null);
+  const [closingAppt,    setClosingAppt]    = useState<Appointment | null>(null);
+  const [editingAppt,    setEditingAppt]    = useState<Appointment | null>(null);
   const [creatingRepair, setCreatingRepair] = useState<string | null>(null);
 
   const role      = myProfile?.role ?? "mechanic";
   const uid       = user?.uid ?? "";
   const canCreate = role === "admin" || role === "owner" || role === "manager";
 
-  async function handleCreateRepair(appt: AppointmentDoc) {
+  async function handleCreateRepair(appt: Appointment) {
     if (creatingRepair) return;
     setCreatingRepair(appt.id);
     try {
@@ -1254,7 +1255,6 @@ export function AppointmentsTab() {
           clientType:   "phys" as const,
           vehicles:     [newVehicle],
           repairs:      [],
-          appointments: [],
         }));
         clientId = ref.id;
       }
@@ -1286,7 +1286,7 @@ export function AppointmentsTab() {
 
       await addClientRepair(clientId!, repair);
 
-      await updateDocumentFieldsIfUnchanged("appointments", appt, {
+      await updateAppointment(appt, {
         status:   "closed",
         outcome:  "repair",
         clientId: clientId!,
@@ -1323,9 +1323,9 @@ export function AppointmentsTab() {
     [visibleAppts],
   );
 
-  async function handleDelete(appt: AppointmentDoc) {
+  async function handleDelete(appt: Appointment) {
     if (!confirm(`Удалить запись «${appt.clientName}»?`)) return;
-    await removeDocumentIfUnchanged("appointments", appt);
+    await deleteAppointment(appt);
   }
 
 

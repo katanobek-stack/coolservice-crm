@@ -1,6 +1,6 @@
 import type { Timestamp } from "firebase/firestore";
 
-export interface AppointmentDoc {
+export interface Appointment {
   id: string;
   clientName: string;
   carBrand?: string;

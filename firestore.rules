@@ -40,6 +40,17 @@ service cloud.firestore {
       return isAdminOrOwner() || isManager();
     }
 
+    function isAssignedMechanicAppointmentUpdate() {
+      return resource.data.assignees is list
+        && request.auth.uid in resource.data.assignees
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "assignees",
+          "assigneeNames",
+          "createdBy",
+          "createdAt"
+        ]);
+    }
+
     function validOptionalString(data, field) {
       return !(field in data) || data[field] is string;
     }
@@ -166,8 +177,7 @@ service cloud.firestore {
       allow read, create: if isAuth();
       allow update: if isAuth()
         && (isManagerOrAbove()
-          || (resource.data.assignees is list
-            && request.auth.uid in resource.data.assignees));
+          || isAssignedMechanicAppointmentUpdate());
       allow delete: if isAuth() && isManagerOrAbove();
     }
 

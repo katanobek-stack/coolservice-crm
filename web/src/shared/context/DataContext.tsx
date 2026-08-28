@@ -18,7 +18,7 @@ import type { Client } from "../types/client";
 import type { ServiceTask } from "../types/task";
 import type { Freezer } from "../types/freezer";
 import type { StaffMember } from "../types/staff";
-import type { AppointmentDoc } from "../types/appointment";
+import type { Appointment } from "../types/appointment";
 
 export interface Expense {
   id:         string;
@@ -37,7 +37,7 @@ interface DataContextValue {
   freezers:     Freezer[];
   finance:      Record<string, unknown>;
   expenses:     Expense[];
-  appointments: AppointmentDoc[];
+  appointments: Appointment[];
   loaded:       boolean;
 }
 
@@ -50,7 +50,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [freezers,     setFreezers]     = useState<Freezer[]>([]);
   const [finance,      setFinance]      = useState<Record<string, unknown>>({});
   const [expenses,     setExpenses]     = useState<Expense[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentDoc[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadCount,    setLoadCount]    = useState(0);
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       onSnapshot(
         query(collection(db, "appointments"), orderBy("createdAt", "desc")),
         (snap) => {
-          setAppointments(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AppointmentDoc));
+          setAppointments(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Appointment));
           setLoadCount((n) => n + 1);
         },
         () => {

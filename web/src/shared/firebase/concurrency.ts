@@ -8,7 +8,6 @@ import {
 } from "firebase/firestore";
 import { getFirebaseDb } from "./app";
 import type {
-  Appointment,
   Chamber,
   Client,
   Repair,
@@ -19,7 +18,7 @@ import type { ServiceTask, Subtask } from "../types/task";
 import type { Freezer, RentHistoryEntry } from "../types/freezer";
 
 type Entity = Record<string, unknown> & { id?: string };
-type ClientArrayField = "repairs" | "vehicles" | "appointments" | "chambers";
+type ClientArrayField = "repairs" | "vehicles" | "chambers";
 
 export class ConcurrentMutationError extends Error {
   constructor(message: string) {
@@ -362,8 +361,6 @@ export async function removeClientVehicle(
     return {
       vehicles,
       repairs: (client.repairs ?? []).filter((repair) => !vehicleId || repair.vehicleId !== vehicleId),
-      appointments: (client.appointments ?? []).filter((appointment) =>
-        !vehicleId || appointment.vehicleId !== vehicleId),
     };
   }, firestore);
 }
@@ -394,22 +391,6 @@ export async function removeClientChamber(
     chambers: removeEntityIfUnchanged(client.chambers ?? [], chamber, "chamber"),
     repairs: (client.repairs ?? []).filter((repair) => !chamber.id || repair.chamberId !== chamber.id),
   }), firestore);
-}
-
-export function addClientAppointment(
-  clientId: string,
-  appointment: Appointment,
-  firestore: Firestore = getFirebaseDb(),
-): Promise<void> {
-  return addClientArrayEntity(clientId, "appointments", appointment, firestore);
-}
-
-export function removeClientAppointment(
-  clientId: string,
-  appointment: Appointment,
-  firestore: Firestore = getFirebaseDb(),
-): Promise<void> {
-  return removeClientArrayEntity(clientId, "appointments", appointment, firestore);
 }
 
 async function mutateServiceTaskDocument(

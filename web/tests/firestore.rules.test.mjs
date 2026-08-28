@@ -39,6 +39,16 @@ async function seedRole(uid, role, extra = {}) {
   });
 }
 
+async function seedAppointment(id, assignees = ["mechanic-1"]) {
+  await seed(`appointments/${id}`, {
+    assignees,
+    assigneeNames: assignees.map((uid) => uid),
+    status: "pending",
+    createdBy: "manager-1",
+    createdAt: "2026-08-28T00:00:00.000Z",
+  });
+}
+
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -161,20 +171,62 @@ describe("mechanic operational access", () => {
     await assertFails(deleteDoc(doc(db, "servicetasks/task-1")));
   });
 
-  test("can create appointments and update only assigned appointments", async () => {
-    await seed("appointments/assigned", { assignees: ["mechanic-1"], status: "pending" });
-    await seed("appointments/unassigned", { assignees: ["other"], status: "pending" });
+  test("can create appointments and update only assigned appointments without assignee escalation", async () => {
+    const createdAt = "2026-08-28T00:00:00.000Z";
+    await seed("appointments/assigned", {
+      assignees: ["mechanic-1"], assigneeNames: ["Mechanic"], status: "pending",
+      createdBy: "manager-1", createdAt,
+    });
+    await seed("appointments/unassigned", {
+      assignees: ["other"], assigneeNames: ["Other"], status: "pending",
+      createdBy: "manager-1", createdAt,
+    });
     const db = dbFor("mechanic-1");
     await assertSucceeds(addDoc(collection(db, "appointments"), {
       assignees: [], status: "pending",
     }));
     await assertSucceeds(updateDoc(doc(db, "appointments/assigned"), { status: "closed" }));
+    await assertFails(updateDoc(doc(db, "appointments/assigned"), {
+      assignees: ["mechanic-1", "other"],
+      assigneeNames: ["Mechanic", "Other"],
+    }));
+    await assertFails(updateDoc(doc(db, "appointments/assigned"), { createdBy: "mechanic-1" }));
     await assertFails(updateDoc(doc(db, "appointments/unassigned"), { status: "closed" }));
     await assertFails(updateDoc(doc(db, "appointments/unassigned"), {
       assignees: ["mechanic-1"],
       status: "closed",
     }));
     await assertFails(deleteDoc(doc(db, "appointments/assigned")));
+  });
+
+  for (const [field, value] of [
+    ["assignees", ["mechanic-1", "other"]],
+    ["assigneeNames", ["Changed"]],
+    ["createdBy", "mechanic-1"],
+    ["createdAt", "2026-08-29T00:00:00.000Z"],
+  ]) {
+    test(`cannot change protected appointment field ${field}`, async () => {
+      await seedAppointment(`protected-${field}`);
+      await assertFails(updateDoc(doc(dbFor("mechanic-1"), `appointments/protected-${field}`), {
+        [field]: value,
+      }));
+    });
+  }
+
+  test("cannot combine an allowed status change with an assignee change", async () => {
+    await seedAppointment("mixed-update");
+    await assertFails(updateDoc(doc(dbFor("mechanic-1"), "appointments/mixed-update"), {
+      status: "closed",
+      assignees: ["mechanic-1", "other"],
+    }));
+  });
+
+  test("cannot remove another assignee from an assigned appointment", async () => {
+    await seedAppointment("remove-assignee", ["mechanic-1", "mechanic-2"]);
+    await assertFails(updateDoc(doc(dbFor("mechanic-1"), "appointments/remove-assignee"), {
+      assignees: ["mechanic-1"],
+      assigneeNames: ["mechanic-1"],
+    }));
   });
 
   test("cannot mutate freezers, schedules, finance, or expenses", async () => {
@@ -265,6 +317,13 @@ describe("admin staff management", () => {
     await assertSucceeds(setDoc(ref, { staffId: "mechanic-1" }));
     await assertSucceeds(deleteDoc(ref));
   });
+
+  test("can manage standalone appointments", async () => {
+    await seedAppointment("admin-appointment", ["mechanic-1"]);
+    const ref = doc(dbFor("admin-1"), "appointments/admin-appointment");
+    await assertSucceeds(updateDoc(ref, { assignees: ["admin-1"], assigneeNames: ["Admin"] }));
+    await assertSucceeds(deleteDoc(ref));
+  });
 });
 
 describe("owner", () => {
@@ -313,6 +372,10 @@ describe("owner", () => {
     await assertSucceeds(setDoc(doc(db, "settings/finance"), { kwPrice: 10 }));
     await assertSucceeds(setDoc(doc(db, "schedules/day-1"), { staffId: "admin-1" }));
     await assertSucceeds(setDoc(doc(db, "freezers/freezer-1"), { name: "Freezer" }));
+    await seedAppointment("owner-appointment", ["mechanic-1"]);
+    const appointmentRef = doc(db, "appointments/owner-appointment");
+    await assertSucceeds(updateDoc(appointmentRef, { assignees: ["owner-1"], assigneeNames: ["Owner"] }));
+    await assertSucceeds(deleteDoc(appointmentRef));
   });
 });
 
