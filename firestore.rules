@@ -1,77 +1,186 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ─── Helpers ───────────────────────────────────────────────────────────────
     function isAuth() {
       return request.auth != null;
     }
 
-    function myRole() {
-      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
+    function staffPath(userId) {
+      return /databases/$(database)/documents/staff/$(userId);
+    }
+
+    function hasStaffProfile() {
+      return isAuth() && exists(staffPath(request.auth.uid));
+    }
+
+    function hasStoredRole(role) {
+      return hasStaffProfile()
+        && get(staffPath(request.auth.uid)).data.role == role;
+    }
+
+    function isOwner() {
+      return isAuth()
+        && (("role" in request.auth.token && request.auth.token.role == "owner")
+          || hasStoredRole("owner"));
+    }
+
+    function isAdmin() {
+      return hasStoredRole("admin");
+    }
+
+    function isManager() {
+      return hasStoredRole("manager");
     }
 
     function isAdminOrOwner() {
-      return myRole() in ["admin", "owner"];
+      return isOwner() || isAdmin();
     }
 
-    // ─── Staff ──────────────────────────────────────────────────────────────────
-    // Запрещаем установку role: 'owner' через клиент — только через Admin SDK
+    function isManagerOrAbove() {
+      return isAdminOrOwner() || isManager();
+    }
+
+    function validOptionalString(data, field) {
+      return !(field in data) || data[field] is string;
+    }
+
+    function validSafeStaffFields(data) {
+      return validOptionalString(data, "name")
+        && validOptionalString(data, "email")
+        && (!("fcmTokens" in data) || data.fcmTokens is list)
+        && validOptionalString(data, "fcmUpdatedAt");
+    }
+
+    function validAdminPermissions(data) {
+      return data is map
+        && data.keys().hasOnly([
+          "dashboard_financials",
+          "reports_amounts",
+          "pl_panel"
+        ])
+        && (!("dashboard_financials" in data) || data.dashboard_financials is bool)
+        && (!("reports_amounts" in data) || data.reports_amounts is bool)
+        && (!("pl_panel" in data) || data.pl_panel is bool);
+    }
+
+    function isSafeSelfStaffUpdate(userId) {
+      return request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "email",
+          "fcmTokens",
+          "fcmUpdatedAt"
+        ])
+        && validSafeStaffFields(request.resource.data);
+    }
+
+    function isAdminStaffUpdate(userId) {
+      return isAdmin()
+        && request.auth.uid != userId
+        && resource.data.role != "owner"
+        && request.resource.data.role in ["admin", "manager", "mechanic"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "email",
+          "role"
+        ])
+        && validSafeStaffFields(request.resource.data);
+    }
+
+    function isOwnerStaffUpdate(userId) {
+      return isOwner()
+        && request.auth.uid != userId
+        && resource.data.role != "owner"
+        && request.resource.data.role in ["admin", "manager", "mechanic"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "email",
+          "role",
+          "permissions"
+        ])
+        && validSafeStaffFields(request.resource.data)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["permissions"])
+          || (request.resource.data.role == "admin"
+            && validAdminPermissions(request.resource.data.permissions)));
+    }
+
+    // Staff profiles are readable by coworkers because the CRM uses them for
+    // assignees and names. New users always start as mechanics. Client code can
+    // never create an owner or change its own role/permissions, including merge.
     match /staff/{userId} {
       allow read: if isAuth();
 
       allow create: if isAuth()
         && request.auth.uid == userId
-        && !(request.resource.data.role == "owner");
+        && request.resource.data.keys().hasOnly(["name", "email", "role"])
+        && request.resource.data.role == "mechanic"
+        && validSafeStaffFields(request.resource.data);
 
       allow update: if isAuth()
-        && (request.auth.uid == userId || isAdminOrOwner())
-        && !(request.resource.data.role == "owner");
+        && (isSafeSelfStaffUpdate(userId)
+          || isAdminStaffUpdate(userId)
+          || isOwnerStaffUpdate(userId));
 
-      allow delete: if isAuth() && isAdminOrOwner();
+      // The current Staff UI has no delete operation.
+      allow delete: if false;
     }
 
-    // ─── Clients ────────────────────────────────────────────────────────────────
+    // Mechanics use client documents to complete embedded repair tasks and the
+    // voice workflow can create clients. Destructive client actions are manager+.
     match /clients/{clientId} {
-      allow read, write: if isAuth();
+      allow read, create, update: if isAuth();
+      allow delete: if isAuth() && isManagerOrAbove();
     }
 
-    // ─── Service Tasks ──────────────────────────────────────────────────────────
+    // Standalone tasks are created/deleted by manager+, while assigned mechanics
+    // update task progress.
     match /servicetasks/{taskId} {
-      allow read, write: if isAuth();
-    }
-
-    // ─── Freezers ───────────────────────────────────────────────────────────────
-    match /freezers/{freezerId} {
-      allow read, write: if isAuth();
-    }
-
-    // ─── Settings ───────────────────────────────────────────────────────────────
-    match /settings/{doc} {
       allow read: if isAuth();
-      allow write: if isAuth() && isAdminOrOwner();
+      allow update: if isAuth()
+        && (isManagerOrAbove()
+          || (resource.data.assignees is list
+            && request.auth.uid in resource.data.assignees));
+      allow create, delete: if isAuth() && isManagerOrAbove();
     }
 
-    // ─── Appointments ────────────────────────────────────────────────────────────
+    // The freezer UI exposes all mutations to manager/admin/owner only.
+    match /freezers/{freezerId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth() && isManagerOrAbove();
+    }
+
+    // P&L is visible to manager/admin/owner. No other settings documents are
+    // currently used by the client application.
+    match /settings/finance {
+      allow read, create, update: if isAuth() && isManagerOrAbove();
+      allow delete: if false;
+    }
+
+    match /settings/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Voice can create appointments for any authenticated worker. Mechanics may
+    // update only appointments already assigned to them; manager+ can manage all.
     match /appointments/{docId} {
-      allow read:   if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth() && isAdminOrOwner();
+      allow read, create: if isAuth();
+      allow update: if isAuth()
+        && (isManagerOrAbove()
+          || (resource.data.assignees is list
+            && request.auth.uid in resource.data.assignees));
+      allow delete: if isAuth() && isManagerOrAbove();
     }
 
-    // ─── Expenses ────────────────────────────────────────────────────────────────
+    // Expenses are part of P&L. The UI creates and deletes them but has no update.
     match /expenses/{docId} {
-      allow read:   if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth() && isAdminOrOwner();
-      allow delete: if isAuth() && isAdminOrOwner();
+      allow read, create, delete: if isAuth() && isManagerOrAbove();
+      allow update: if false;
     }
 
-    // ─── Schedules (staff days off / vacations / sick leave) ──────────────────
+    // Schedule editing is exposed only to owner/admin; everyone may view it.
     match /schedules/{docId} {
-      allow read:   if isAuth();
-      allow write:  if isAuth() && isAdminOrOwner();
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth() && isAdminOrOwner();
     }
   }
 }

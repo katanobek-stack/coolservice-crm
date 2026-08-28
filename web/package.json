@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:rules": "node --test tests/firestore.rules.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
@@ -20,6 +21,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

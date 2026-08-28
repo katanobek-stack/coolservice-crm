@@ -1,6 +1,5 @@
 import { FormEvent, useState } from "react";
 import { useAuth } from "../context/AuthProvider";
-import type { StaffRole } from "../../../shared/types/staff";
 import "./auth.css";
 
 const PROFILE_ICON = (
@@ -20,16 +19,9 @@ const PROFILE_ICON = (
   </svg>
 );
 
-const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
-  { value: "admin", label: "Админ" },
-  { value: "manager", label: "Менеджер" },
-  { value: "mechanic", label: "Механик" },
-];
-
 export function SetupView() {
   const { saveProfile, signOutUser } = useAuth();
   const [name, setName] = useState("");
-  const [role, setRole] = useState<StaffRole>("mechanic");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,7 +35,7 @@ export function SetupView() {
     setError("");
 
     try {
-      await saveProfile(name, role);
+      await saveProfile(name);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -69,18 +61,7 @@ export function SetupView() {
           onChange={(event) => setName(event.target.value)}
           disabled={saving}
         />
-        <select
-          className="auth-input"
-          value={role}
-          onChange={(event) => setRole(event.target.value as StaffRole)}
-          disabled={saving}
-        >
-          {ROLE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="auth-setup-subtitle">Новый профиль будет создан с ролью «Механик»</div>
         <button className="auth-button" type="submit" disabled={saving}>
           {saving ? "Сохранение..." : "Сохранить"}
         </button>

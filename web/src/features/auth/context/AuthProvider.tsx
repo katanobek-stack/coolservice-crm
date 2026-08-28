@@ -28,7 +28,7 @@ interface AuthContextValue {
   isOwner: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
-  saveProfile: (name: string, role: StaffRole) => Promise<void>;
+  saveProfile: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -129,14 +129,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveProfile = useCallback(
-    async (name: string, role: StaffRole) => {
+    async (name: string) => {
       if (!user) {
         return;
       }
 
       await saveStaffProfile(user.uid, {
         name: name.trim(),
-        role,
+        role: "mechanic",
         email: user.email ?? "",
       });
     },
