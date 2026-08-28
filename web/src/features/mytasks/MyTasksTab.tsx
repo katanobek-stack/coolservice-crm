@@ -8,7 +8,21 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { CreatorLine } from "../../shared/ui/CreatorLine";
-import { updateClientArray, addServiceTask, updateServiceTask, deleteServiceTask } from "../../shared/firebase/firestore";
+import { addServiceTask } from "../../shared/firebase/firestore";
+import {
+  addRepairTask,
+  addServiceSubtask,
+  assertFieldsUnchanged,
+  findEntityIndex,
+  mutateClientRepair,
+  mutateRepairTask,
+  mutateServiceSubtask,
+  mutateStandaloneServiceTask,
+  removeClientRepair,
+  removeDocumentIfUnchanged,
+  removeRepairTask,
+  removeServiceSubtask,
+} from "../../shared/firebase/concurrency";
 import { deletePhoto } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
@@ -224,10 +238,7 @@ function AddRepairTaskModal({ client, repair, onClose }: {
       createdByName: myProfile?.name ?? user?.email ?? "Неизвестно",
       createdAt:     new Date().toISOString(),
     };
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id === repair.id ? { ...r, tasks: [...(r.tasks ?? []), newTask] } : r,
-    );
-    await updateClientArray(client.id, "repairs", repairs);
+    await addRepairTask(client.id, repair, newTask);
     onClose();
   }
 
@@ -392,7 +403,6 @@ function AddSubtaskModal({ task, onClose }: { task: ServiceTask; onClose: () => 
   async function handleSave() {
     if (!desc.trim()) return;
     setSaving(true);
-    const existing = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
     const newSub: Subtask = {
       id:          genId(),
       description: desc.trim(),
@@ -401,7 +411,7 @@ function AddSubtaskModal({ task, onClose }: { task: ServiceTask; onClose: () => 
       status:      "in_progress",
       workComment: "",
     };
-    await updateServiceTask(task.id, { subtasks: [...existing, newSub] } as Partial<ServiceTask>);
+    await addServiceSubtask(task.id, newSub);
     onClose();
   }
 
@@ -453,33 +463,31 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
     .join(", ");
 
   async function toggle() {
-    const existing  = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
-    const newDoneBy = myDone ? subtask.doneBy.filter((d) => d !== uid) : [...subtask.doneBy, uid];
-    const allDone   = subtask.assignees.length > 0 && subtask.assignees.every((a) => newDoneBy.includes(a));
-    const updated   = existing.map((s) =>
-      s.id === subtask.id ? { ...s, doneBy: newDoneBy, status: allDone ? "done" as const : "in_progress" as const } : s,
-    );
-    await updateServiceTask(task.id, { subtasks: updated } as Partial<ServiceTask>);
+    await mutateServiceSubtask(task.id, subtask, (current) => {
+      const doneBy = current.doneBy ?? [];
+      const newDoneBy = doneBy.includes(uid) ? doneBy.filter((id) => id !== uid) : [...doneBy, uid];
+      const allDone = current.assignees.length > 0 && current.assignees.every((id) => newDoneBy.includes(id));
+      return { ...current, doneBy: newDoneBy, status: allDone ? "done" : "in_progress" };
+    });
   }
 
   async function saveComment(comment: string) {
-    const existing = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
-    const updated  = existing.map((s) => s.id === subtask.id ? { ...s, workComment: comment } : s);
-    await updateServiceTask(task.id, { subtasks: updated } as Partial<ServiceTask>);
+    await mutateServiceSubtask(task.id, subtask, (current) => {
+      assertFieldsUnchanged(current, subtask, ["workComment"], "Подзадача");
+      return { ...current, workComment: comment };
+    });
   }
 
   async function addPhotos(photos: PhotoData[]) {
-    const existing = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
-    const updated  = existing.map((s) =>
-      s.id === subtask.id ? { ...s, photos: [...(s.photos ?? []), ...photos] } : s,
-    );
-    await updateServiceTask(task.id, { subtasks: updated } as Partial<ServiceTask>);
+    await mutateServiceSubtask(task.id, subtask, (current) => ({
+      ...current,
+      photos: [...(current.photos ?? []), ...photos],
+    }));
   }
 
   async function handleDelete() {
     if (!isAdmin || !confirm("Удалить подзадачу?")) return;
-    const existing = (task as ServiceTask & { subtasks?: Subtask[] }).subtasks ?? [];
-    await updateServiceTask(task.id, { subtasks: existing.filter((s) => s.id !== subtask.id) } as Partial<ServiceTask>);
+    await removeServiceSubtask(task.id, subtask);
   }
 
   return (
@@ -564,24 +572,31 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
     .join(", ");
 
   async function toggle() {
-    const doneBy    = task.doneBy ?? [];
-    const newDoneBy = myDone ? doneBy.filter((d) => d !== uid) : [...doneBy, uid];
-    const assignees = task.assignees ?? [];
-    const allDone   = assignees.length > 0 && assignees.every((a) => newDoneBy.includes(a));
-    await updateServiceTask(task.id, { doneBy: newDoneBy, status: allDone ? "done" : "in_progress" });
+    await mutateStandaloneServiceTask(task.id, (current) => {
+      const doneBy = current.doneBy ?? [];
+      const newDoneBy = doneBy.includes(uid) ? doneBy.filter((id) => id !== uid) : [...doneBy, uid];
+      const assignees = current.assignees ?? [];
+      const allDone = assignees.length > 0 && assignees.every((id) => newDoneBy.includes(id));
+      return { doneBy: newDoneBy, status: allDone ? "done" : "in_progress" };
+    });
   }
 
   async function handleDelete() {
     if (!confirm("Удалить задачу?")) return;
-    await deleteServiceTask(task.id);
+    await removeDocumentIfUnchanged("servicetasks", task);
   }
 
   async function saveComment(comment: string) {
-    await updateServiceTask(task.id, { workComment: comment });
+    await mutateStandaloneServiceTask(task.id, (current) => {
+      assertFieldsUnchanged(current, task, ["workComment"], "Задача");
+      return { workComment: comment };
+    });
   }
 
   async function addPhotos(photos: PhotoData[]) {
-    await updateServiceTask(task.id, { photos: [...(task.photos ?? []), ...photos] });
+    await mutateStandaloneServiceTask(task.id, (current) => ({
+      photos: [...(current.photos ?? []), ...photos],
+    }));
   }
 
   return (
@@ -714,24 +729,31 @@ function RepairTaskRow({ task, client, repair }: {
     : legacyTask.assignee ? (staff.find((s) => s.id === legacyTask.assignee)?.name ?? legacyTask.assignee) : "";
 
   async function patchTask(patch: Partial<RepairTask>) {
-    const repairs = (client.repairs ?? []).map((r) => {
-      if (r.id !== repair.id) return r;
-      return { ...r, tasks: (r.tasks ?? []).map((t) => t.id === task.id ? { ...t, ...patch } : t) };
+    await mutateRepairTask(client.id, repair, task, (current) => {
+      assertFieldsUnchanged(
+        current,
+        task,
+        Object.keys(patch) as (keyof RepairTask)[],
+        "Задача ремонта",
+      );
+      return { ...current, ...patch };
     });
-    await updateClientArray(client.id, "repairs", repairs);
   }
 
   // Syncs freonType to both task-level AND repair-level fields
   async function patchFreonType(freonType: string) {
-    const repairs = (client.repairs ?? []).map((r) => {
-      if (r.id !== repair.id) return r;
+    await mutateClientRepair(client.id, repair, (currentRepair) => {
+      const tasks = [...(currentRepair.tasks ?? [])];
+      const index = findEntityIndex(tasks, task, "repair task");
+      assertFieldsUnchanged(currentRepair, repair, ["freonType"], "Ремонт");
+      assertFieldsUnchanged(tasks[index], task, ["freonType"], "Задача ремонта");
       return {
-        ...r,
+        ...currentRepair,
         freonType,
-        tasks: (r.tasks ?? []).map((t) => t.id === task.id ? { ...t, freonType } : t),
+        tasks: tasks.map((current, currentIndex) =>
+          currentIndex === index ? { ...current, freonType } : current),
       };
     });
-    await updateClientArray(client.id, "repairs", repairs);
   }
 
   async function toggle() {
@@ -739,11 +761,13 @@ function RepairTaskRow({ task, client, repair }: {
       await patchTask({ status: isDone ? "in_progress" : "done" });
       return;
     }
-    const doneBy    = task.doneBy ?? [];
-    const newDoneBy = myDone ? doneBy.filter((d) => d !== uid) : [...doneBy, uid];
-    const assignees = getAssignees(task);
-    const allDone   = assignees.length > 0 && assignees.every((a) => newDoneBy.includes(a));
-    await patchTask({ doneBy: newDoneBy, status: allDone ? "done" : "in_progress" });
+    await mutateRepairTask(client.id, repair, task, (current) => {
+      const doneBy = current.doneBy ?? [];
+      const newDoneBy = doneBy.includes(uid) ? doneBy.filter((id) => id !== uid) : [...doneBy, uid];
+      const assignees = getAssignees(current);
+      const allDone = assignees.length > 0 && assignees.every((id) => newDoneBy.includes(id));
+      return { ...current, doneBy: newDoneBy, status: allDone ? "done" : "in_progress" };
+    });
   }
 
   async function saveFreon(done: boolean) {
@@ -755,35 +779,40 @@ function RepairTaskRow({ task, client, repair }: {
     }
     const patch: Partial<RepairTask> = { freonKg };
     if (done) patch.status = "done";
-    const repairs = (client.repairs ?? []).map((r) => {
-      if (r.id !== repair.id) return r;
+    await mutateClientRepair(client.id, repair, (currentRepair) => {
+      const tasks = [...(currentRepair.tasks ?? [])];
+      const index = findEntityIndex(tasks, task, "repair task");
+      assertFieldsUnchanged(currentRepair, repair, ["freonAmount", "freonType"], "Ремонт");
+      assertFieldsUnchanged(tasks[index], task, ["freonKg", "status"], "Задача ремонта");
       return {
-        ...r,
+        ...currentRepair,
         freonAmount: freonKg,
         ...(task.freonType ? { freonType: task.freonType } : {}),
-        tasks: (r.tasks ?? []).map((t) => t.id === task.id ? { ...t, ...patch } : t),
+        tasks: tasks.map((current, currentIndex) =>
+          currentIndex === index ? { ...current, ...patch } : current),
       };
     });
-    await updateClientArray(client.id, "repairs", repairs);
   }
 
   async function addPhotos(photos: PhotoData[]) {
-    await patchTask({ photos: [...(task.photos ?? []), ...photos] });
+    await mutateRepairTask(client.id, repair, task, (current) => ({
+      ...current,
+      photos: [...(current.photos ?? []), ...photos],
+    }));
   }
 
   async function removePhoto(photoId: string) {
     const photo = (task.photos ?? []).find((p) => p.id === photoId);
     if (photo?.path) await deletePhoto(photo.path);
-    await patchTask({ photos: (task.photos ?? []).filter((p) => p.id !== photoId) });
+    await mutateRepairTask(client.id, repair, task, (current) => ({
+      ...current,
+      photos: (current.photos ?? []).filter((item) => item.id !== photoId),
+    }));
   }
 
   async function handleDelete() {
     if (!isAdmin || !confirm("Удалить задачу?")) return;
-    const repairs = (client.repairs ?? []).map((r) => {
-      if (r.id !== repair.id) return r;
-      return { ...r, tasks: (r.tasks ?? []).filter((t) => t.id !== task.id) };
-    });
-    await updateClientArray(client.id, "repairs", repairs);
+    await removeRepairTask(client.id, repair, task);
   }
 
   return (
@@ -1017,16 +1046,12 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
   const [showAdd, setShowAdd] = useState(false);
 
   async function markDone() {
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : { ...r, status: "done" as const },
-    );
-    await updateClientArray(client.id, "repairs", repairs);
+    await mutateClientRepair(client.id, repair, (current) => ({ ...current, status: "done" }));
   }
 
   async function deleteRepair() {
     if (!confirm("Удалить наряд?")) return;
-    const repairs = (client.repairs ?? []).filter((r) => r.id !== repair.id);
-    await updateClientArray(client.id, "repairs", repairs);
+    await removeClientRepair(client.id, repair);
   }
 
   return (

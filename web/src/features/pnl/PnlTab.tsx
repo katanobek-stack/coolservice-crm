@@ -5,7 +5,13 @@ import { repairStatus } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate, genId } from "../../shared/utils/format";
 import { Button } from "../../shared/ui/Button";
 import { Input, FormGroup } from "../../shared/ui/Input";
-import { saveFinance, addExpense, deleteExpense } from "../../shared/firebase/firestore";
+import { addExpense, deleteExpense } from "../../shared/firebase/firestore";
+import {
+  addFinancePurchase,
+  removeFinancePurchase,
+  saveFinanceConfiguration,
+  setFinanceMapValue,
+} from "../../shared/firebase/concurrency";
 
 // ─── Types for finance document ───────────────────────────────────────────────
 
@@ -55,12 +61,14 @@ function ExpensesModal({ finance, onClose }: { finance: FinanceDoc; onClose: () 
 
   async function handleSave() {
     setSaving(true);
-    await saveFinance({
+    await saveFinanceConfiguration({
+      boxes: finance.boxes,
+      salaries: finance.salaries,
+      kwPrice: finance.kwPrice,
+    }, {
       boxes:    boxes.map((b) => ({ id: b.id || genId(), name: b.name, cost: parseFloat(String(b.cost)) || 0 })),
       salaries: salaries.map((s) => ({ uid: s.uid || genId(), name: s.name, salary: parseFloat(String(s.salary)) || 0 })),
       kwPrice:  parseFloat(kwPrice) || 0,
-      elecBills: finance.elecBills ?? {},
-      purchases: finance.purchases ?? [],
     });
     onClose();
   }
@@ -222,7 +230,7 @@ export function PnlTab() {
     const val = parseFloat(elecInput);
     if (isNaN(val)) return;
     setSavingElec(true);
-    await saveFinance({ elecBills: { ...elecBills, [elecMK]: val } });
+    await setFinanceMapValue("elecBills", elecMK, val);
     setSavingElec(false);
     setElecInput("");
   }
@@ -238,14 +246,14 @@ export function PnlTab() {
       amount:     amt,
       comment:    newPurCmt.trim(),
     };
-    await saveFinance({ purchases: [...purchases, newP] });
+    await addFinancePurchase(newP);
     setNewPurAmt("");
     setNewPurCmt("");
     setSavingPur(false);
   }
 
   async function deletePurchase(id: string) {
-    await saveFinance({ purchases: purchases.filter((p) => p.id !== id) });
+    await removeFinancePurchase(id);
   }
 
   const CURMONTH_LABEL = `${MONTH_NAMES_FULL[now.getMonth()]} ${now.getFullYear()}`;

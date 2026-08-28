@@ -4,9 +4,8 @@ import { useAuth } from "../auth";
 import { repairStatus, taskStatus, getAssignees, SERVICE_TYPES } from "../../shared/utils/repair";
 import { fmtDate } from "../../shared/utils/format";
 import { Button } from "../../shared/ui/Button";
-import { saveFinance } from "../../shared/firebase/firestore";
 import { getFirebaseDb } from "../../shared/firebase/app";
-import { doc, setDoc, writeBatch } from "firebase/firestore";
+import { restoreDocumentFromBackup } from "../../shared/firebase/concurrency";
 import * as XLSX from "xlsx";
 
 // ─── JSON backup ──────────────────────────────────────────────────────────────
@@ -164,16 +163,19 @@ async function importJSON(file: File, onStatus: (msg: string) => void): Promise<
   async function writeCollection(name: string, items: Array<Record<string, unknown>>, key: keyof typeof stats) {
     if (!items?.length) return;
     onStatus(`Записываю ${name} (${items.length})...`);
-    for (const batch_items of chunk(items, 400)) {
-      const b = writeBatch(db);
-      batch_items.forEach((item) => {
+    for (const batch_items of chunk(items, 20)) {
+      await Promise.all(batch_items.map(async (item) => {
         const id = item.id as string;
         if (!id) return;
         const clean = { ...item }; delete clean.id;
-        b.set(doc(db, name, id), clean, { merge: true });
-        stats[key]++;
-      });
-      await b.commit().catch((err) => { stats.errors++; console.warn(`${name} batch err`, err); });
+        try {
+          await restoreDocumentFromBackup(name, id, clean, db);
+          stats[key]++;
+        } catch (err) {
+          stats.errors++;
+          console.warn(`${name}/${id} restore err`, err);
+        }
+      }));
     }
   }
 
@@ -183,7 +185,12 @@ async function importJSON(file: File, onStatus: (msg: string) => void): Promise<
 
   if (data.settings && (data.settings as Record<string, unknown>).finance) {
     onStatus("Записываю настройки финансов...");
-    await setDoc(doc(db, "settings", "finance"), (data.settings as Record<string, unknown>).finance as Record<string, unknown>, { merge: true });
+    await restoreDocumentFromBackup(
+      "settings",
+      "finance",
+      (data.settings as Record<string, unknown>).finance as Record<string, unknown>,
+      db,
+    );
   }
 
   return stats;

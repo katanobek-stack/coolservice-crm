@@ -3,7 +3,8 @@ import { httpsCallable } from "firebase/functions";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import { getFirebaseFunctions } from "../../shared/firebase";
-import { addClient, updateClient, addAppointment } from "../../shared/firebase/firestore";
+import { addClient, addAppointment } from "../../shared/firebase/firestore";
+import { addClientRepairWithVehicle } from "../../shared/firebase/concurrency";
 import { genId } from "../../shared/utils/format";
 import type { Vehicle, Repair, RepairTask } from "../../shared/types/client";
 
@@ -330,13 +331,9 @@ export function FloatingMicButton() {
       if (cmd.action === "add_task") {
         const existing = findClient(cmd.client.name, vData?.plate);
         if (existing) {
-          const repairs  = [...(existing.repairs ?? [])];
-          if (repair) repairs.push(repair);
-          const vehicles = [...(existing.vehicles ?? [])];
-          if (vehicle && !vehicles.some((v) => v.plate === vehicle.plate)) {
-            vehicles.push(vehicle);
+          if (repair) {
+            await addClientRepairWithVehicle(existing.id, repair, vehicle ?? undefined);
           }
-          await updateClient(existing.id, clean({ repairs, vehicles }));
           setState("done");
           flash(`✅ Задача добавлена → ${existing.name}`);
           setTimeout(() => setState("idle"), 1500);

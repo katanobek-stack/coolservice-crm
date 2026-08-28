@@ -7,7 +7,7 @@ import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
-import { updateClientArray } from "../../shared/firebase/firestore";
+import { addClientAppointment, removeClientAppointment } from "../../shared/firebase/concurrency";
 import type { Appointment, Client, ServiceType } from "../../shared/types/client";
 
 // ─── Add appointment modal ────────────────────────────────────────────────────
@@ -38,8 +38,7 @@ function AddAppointmentModal({
 
     (appt as Appointment & { serviceType?: string }).serviceType = serviceType;
 
-    const appointments = [...(client.appointments ?? []), appt];
-    await updateClientArray(client.id, "appointments", appointments);
+    await addClientAppointment(client.id, appt);
     onClose();
   }
 
@@ -251,8 +250,8 @@ export function CalendarTab() {
   async function deleteAppt(clientId: string, apptId: string) {
     const client = clients.find((c) => c.id === clientId);
     if (!client) return;
-    const appointments = (client.appointments ?? []).filter((a) => a.id !== apptId);
-    await updateClientArray(clientId, "appointments", appointments);
+    const appointment = (client.appointments ?? []).find((item) => item.id === apptId);
+    if (appointment) await removeClientAppointment(clientId, appointment);
   }
 
   return (

@@ -1,7 +1,7 @@
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFirebaseApp } from "../firebase/app";
 import { getFirebaseDb } from "../firebase/app";
-import { doc, setDoc } from "firebase/firestore";
+import { arrayUnion, doc, setDoc } from "firebase/firestore";
 import { getFirebaseVapidKey } from "../config/env";
 
 let fcmInitialized = false;
@@ -24,10 +24,9 @@ export async function initFCM(uid: string, fcmTokens: string[] = []): Promise<vo
     const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: reg });
 
     if (token && !fcmTokens.includes(token)) {
-      const newTokens = [...fcmTokens, token];
       await setDoc(
         doc(getFirebaseDb(), "staff", uid),
-        { fcmTokens: newTokens, fcmUpdatedAt: new Date().toISOString() },
+        { fcmTokens: arrayUnion(token), fcmUpdatedAt: new Date().toISOString() },
         { merge: true },
       );
     }

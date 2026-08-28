@@ -4,10 +4,15 @@ import { useAuth } from "../auth";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
-import { addFreezer, updateFreezer, deleteFreezer } from "../../shared/firebase/firestore";
+import { addFreezer } from "../../shared/firebase/firestore";
+import {
+  endFreezerRental,
+  removeDocumentIfUnchanged,
+  updateDocumentFieldsIfUnchanged,
+} from "../../shared/firebase/concurrency";
 import { fmtDate } from "../../shared/utils/format";
 import { FREEZER_TYPES } from "../../shared/types/freezer";
-import type { Freezer, RentHistoryEntry } from "../../shared/types/freezer";
+import type { Freezer } from "../../shared/types/freezer";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,7 +60,7 @@ function FreezerFormModal({ freezer, onClose }: { freezer?: Freezer; onClose: ()
       notes:    notes.trim()    || undefined,
     };
     if (isEdit && freezer) {
-      await updateFreezer(freezer.id, data);
+      await updateDocumentFieldsIfUnchanged("freezers", freezer, data);
     } else {
       await addFreezer({ ...data, rented: false, rentHistory: [] } as Omit<Freezer, "id" | "createdAt">);
     }
@@ -107,7 +112,7 @@ function StartRentModal({ freezer, onClose }: { freezer: Freezer; onClose: () =>
   async function handleSave() {
     if (!tenant.trim() || !amount) return;
     setSaving(true);
-    await updateFreezer(freezer.id, {
+    await updateDocumentFieldsIfUnchanged("freezers", freezer, {
       rented:      true,
       tenant:      tenant.trim(),
       rentAmount:  parseFloat(amount),
@@ -170,38 +175,19 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
     const val = parseFloat(meterInput);
     if (isNaN(val)) return;
     setSavingMeter(true);
-    await updateFreezer(freezer.id, { meterCurrent: val });
+    await updateDocumentFieldsIfUnchanged("freezers", freezer, { meterCurrent: val });
     setSavingMeter(false);
   }
 
   async function endRent() {
     if (!confirm("Завершить аренду? Камера будет отмечена как свободная.")) return;
-    const hist: RentHistoryEntry = {
-      tenant:     freezer.tenant ?? "",
-      rentFrom:   freezer.rentFrom ?? "",
-      rentTo:     new Date().toISOString().slice(0, 10),
-      rentAmount: rentAmt,
-      meterStart: freezer.meterStart ?? null,
-      meterEnd:   freezer.meterCurrent ?? null,
-      paidUntil:  freezer.paidUntil,
-    };
-    await updateFreezer(freezer.id, {
-      rented:       false,
-      tenant:       "",
-      rentFrom:     "",
-      rentAmount:   0,
-      meterStart:   null,
-      meterCurrent: null,
-      paidUntil:    "",
-      status:       "active",
-      rentHistory:  [...(freezer.rentHistory ?? []), hist],
-    });
+    await endFreezerRental(freezer.id, new Date().toISOString().slice(0, 10));
     onClose();
   }
 
   async function handleDelete() {
     if (!confirm(`Удалить камеру «${freezer.name ?? freezer.type}»?`)) return;
-    await deleteFreezer(freezer.id);
+    await removeDocumentIfUnchanged("freezers", freezer);
     onClose();
   }
 

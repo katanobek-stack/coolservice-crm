@@ -4,10 +4,14 @@ import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
   addAppointment,
-  updateAppointment,
   addClient,
-  updateClient,
 } from "../../shared/firebase/firestore";
+import {
+  addClientRepair,
+  ensureClientVehicle,
+  removeDocumentIfUnchanged,
+  updateDocumentFieldsIfUnchanged,
+} from "../../shared/firebase/concurrency";
 import { genId } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import type { AppointmentDoc } from "../../shared/types/appointment";
@@ -673,7 +677,7 @@ function EditAppointmentModal({
 
     setSaving(true);
     try {
-      await updateAppointment(appt.id, clean({
+      await updateDocumentFieldsIfUnchanged("appointments", appt, clean({
         clientName:    clientName.trim(),
         clientPhone:   clientPhone.trim() || undefined,
         carBrand:      carBrand.trim() || undefined,
@@ -982,16 +986,15 @@ function CloseAppointmentModal({
           if (matchV) {
             vId = matchV.id;
           } else {
-            vId = genId();
             const newVehicle = clean<Vehicle>({
-              id:    vId,
+              id:    genId(),
               plate: plate.trim() || "—",
               brand: carBrand.trim() || undefined,
               model: carModel.trim() || undefined,
             });
-            await updateClient(createdClientId, {
-              vehicles: [...existingClient.vehicles, newVehicle],
-            });
+            vId = await ensureClientVehicle(createdClientId, newVehicle, (current) =>
+              (!carBrand || current.brand === carBrand) &&
+              (!carModel || current.model === carModel));
           }
         }
       }
@@ -1025,11 +1028,8 @@ function CloseAppointmentModal({
         createdAt:     new Date().toISOString(),
       });
 
-      const finalClient = clients.find((c) => c.id === createdClientId);
-      await updateClient(createdClientId, {
-        repairs: [...(finalClient?.repairs ?? []), repair],
-      });
-      await updateAppointment(appt.id, {
+      await addClientRepair(createdClientId, repair);
+      await updateDocumentFieldsIfUnchanged("appointments", appt, {
         status:   "closed",
         outcome:  "repair",
         clientId: createdClientId,
@@ -1047,7 +1047,7 @@ function CloseAppointmentModal({
   async function handleDeclined() {
     setSaving(true);
     try {
-      await updateAppointment(appt.id, clean({
+      await updateDocumentFieldsIfUnchanged("appointments", appt, clean({
         status:   "closed" as const,
         outcome:  "declined" as const,
         clientId: createdClientId ?? undefined,
@@ -1232,10 +1232,13 @@ export function AppointmentsTab() {
           if (matchVehicle) {
             vehicleId = matchVehicle.id;
           } else {
-            vehicleId = genId();
-            await updateClient(clientId, {
-              vehicles: [...existingClient.vehicles, makeVehicle(vehicleId)],
-            });
+            vehicleId = await ensureClientVehicle(
+              clientId,
+              makeVehicle(genId()),
+              (current) =>
+                (!appt.carBrand || current.brand === appt.carBrand) &&
+                (!appt.carModel || current.model === appt.carModel),
+            );
           }
         } else {
           clientId = null;
@@ -1281,12 +1284,9 @@ export function AppointmentsTab() {
         createdAt:     new Date().toISOString(),
       });
 
-      const finalClient = clients.find((c) => c.id === clientId);
-      await updateClient(clientId!, {
-        repairs: [...(finalClient?.repairs ?? []), repair],
-      });
+      await addClientRepair(clientId!, repair);
 
-      await updateAppointment(appt.id, {
+      await updateDocumentFieldsIfUnchanged("appointments", appt, {
         status:   "closed",
         outcome:  "repair",
         clientId: clientId!,
@@ -1325,8 +1325,7 @@ export function AppointmentsTab() {
 
   async function handleDelete(appt: AppointmentDoc) {
     if (!confirm(`Удалить запись «${appt.clientName}»?`)) return;
-    const { deleteAppointment } = await import("../../shared/firebase/firestore");
-    await deleteAppointment(appt.id);
+    await removeDocumentIfUnchanged("appointments", appt);
   }
 
 

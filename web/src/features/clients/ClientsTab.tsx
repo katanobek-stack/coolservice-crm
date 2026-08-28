@@ -11,7 +11,25 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, Select, FormGroup } from "../../shared/ui/Input";
 import { PhotoGrid, DualPhotoButton } from "../../shared/ui/PhotoUploader";
 import { CreatorLine } from "../../shared/ui/CreatorLine";
-import { addClient, updateClient, deleteClient, updateClientArray, addAppointment } from "../../shared/firebase/firestore";
+import { addClient, addAppointment } from "../../shared/firebase/firestore";
+import {
+  addClientAppointment,
+  addClientChamber,
+  addClientRepair,
+  addClientVehicle,
+  assertFieldsUnchanged,
+  ensureClientVehicle,
+  mutateClientChamber,
+  mutateClientRepair,
+  mutateClientVehicle,
+  mutateRepairTask,
+  removeClientAppointment,
+  removeClientChamber,
+  removeClientRepair,
+  removeClientVehicle,
+  removeDocumentIfUnchanged,
+  updateDocumentFieldsIfUnchanged,
+} from "../../shared/firebase/concurrency";
 import type { Appointment, Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
 import type { AppointmentDoc } from "../../shared/types/appointment";
 import { uploadPhoto, getStorageErrorMessage } from "../../shared/utils/photos";
@@ -62,7 +80,7 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
         const s = parseFloat(sub);
         if (!isNaN(s)) data.subscription = s;
       }
-      await updateClient(client.id, data as Partial<Client>);
+      await updateDocumentFieldsIfUnchanged("clients", client, data as Partial<Client>);
       onClose();
     } catch (err) {
       console.error("[EditClientModal] handleSave failed:", err);
@@ -115,7 +133,7 @@ function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: (
       if (bankAccount.trim())  data.bankAccount  = bankAccount.trim();
       if (legalAddress.trim()) data.legalAddress = legalAddress.trim();
       if (comment.trim())      data.comment      = comment.trim();
-      await updateClient(client.id, data as Partial<Client>);
+      await updateDocumentFieldsIfUnchanged("clients", client, data as Partial<Client>);
       onClose();
     } catch (err) {
       console.error("[ConvertToCompanyModal] handleConvert failed:", err);
@@ -253,20 +271,23 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
       const norm     = plate.trim().toUpperCase();
       const brandVal = brand.trim() || undefined;
       if (isEdit) {
-        await updateClient(client.id, {
-          vehicles: (client.vehicles ?? []).map((v): Vehicle => {
-            if (v.id !== vehicle.id) return v;
-            const upd: Vehicle = { ...v, plate: norm, serviceType };
-            if (brandVal) upd.brand = brandVal; else delete upd.brand;
-            if (photo)    upd.photo = photo;    else delete upd.photo;
-            return upd;
-          }),
+        await mutateClientVehicle(client.id, vehicle, (current) => {
+          assertFieldsUnchanged(
+            current,
+            vehicle,
+            ["plate", "serviceType", "brand", "photo"],
+            "Автомобиль",
+          );
+          const updated: Vehicle = { ...current, plate: norm, serviceType };
+          if (brandVal) updated.brand = brandVal; else delete updated.brand;
+          if (photo) updated.photo = photo; else delete updated.photo;
+          return updated;
         });
       } else {
         const newV: Vehicle = { id: genId(), plate: norm, serviceType };
         if (brandVal) newV.brand = brandVal;
         if (photo)    newV.photo = photo;
-        await updateClient(client.id, { vehicles: [...(client.vehicles ?? []), newV] });
+        await addClientVehicle(client.id, newV);
       }
       onClose();
     } catch (err) {
@@ -277,11 +298,7 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
 
   async function handleDelete() {
     if (!vehicle || !confirm(`Удалить авто ${vehicle.plate}?`)) return;
-    await updateClient(client.id, {
-      vehicles:     (client.vehicles ?? []).filter((v) => v.id !== vehicle.id),
-      repairs:      (client.repairs ?? []).filter((r) => r.vehicleId !== vehicle.id),
-      appointments: (client.appointments ?? []).filter((a) => (a as Appointment & { vehicleId?: string }).vehicleId !== vehicle.id),
-    });
+    await removeClientVehicle(client.id, vehicle);
     onClose();
   }
 
@@ -437,11 +454,18 @@ function ChamberModal({ client, chamber, onClose }: { client: Client; chamber?: 
         ...(parseFloat(wallThickness) ? { wallThickness: parseFloat(wallThickness) } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
-      const chambers = client.chambers ?? [];
       if (isEdit) {
-        await updateClient(client.id, { chambers: chambers.map((c) => c.id === chamber!.id ? data : c) });
+        await mutateClientChamber(client.id, chamber!, (current) => {
+          assertFieldsUnchanged(
+            current,
+            chamber!,
+            ["photo", "length", "width", "height", "wallThickness", "notes"],
+            "Камера",
+          );
+          return data;
+        });
       } else {
-        await updateClient(client.id, { chambers: [...chambers, data] });
+        await addClientChamber(client.id, data);
       }
       onClose();
     } catch (err) {
@@ -452,10 +476,7 @@ function ChamberModal({ client, chamber, onClose }: { client: Client; chamber?: 
 
   async function handleDelete() {
     if (!chamber || !confirm("Удалить камеру?")) return;
-    await updateClient(client.id, {
-      chambers: (client.chambers ?? []).filter((c) => c.id !== chamber.id),
-      repairs:  (client.repairs  ?? []).filter((r) => r.chamberId !== chamber.id),
-    });
+    await removeClientChamber(client.id, chamber);
     onClose();
   }
 
@@ -616,10 +637,7 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
       };
       if (desc.trim()) localAppt.description = desc.trim();
       if (vId)         localAppt.vehicleId   = vId;
-      await updateClientArray(client.id, "appointments", [
-        ...(client.appointments ?? []),
-        localAppt as unknown as Appointment,
-      ]);
+      await addClientAppointment(client.id, localAppt as unknown as Appointment);
 
       onClose();
     } catch (e) {
@@ -694,12 +712,9 @@ function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client:
     setSaving(true);
     try {
       let finalVehicleId = vehicleId;
-      let vehicles = client.vehicles ?? [];
       if (!vehicleId && newPlate.trim()) {
         const newV: Vehicle = { id: genId(), plate: newPlate.trim().toUpperCase() };
-        vehicles = [...vehicles, newV];
-        finalVehicleId = newV.id;
-        await updateClient(client.id, { vehicles });
+        finalVehicleId = await ensureClientVehicle(client.id, newV);
       }
       const creatorFields = {
         createdBy:     user?.uid ?? "",
@@ -727,7 +742,7 @@ function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client:
         ...(finalVehicleId ? { vehicleId: finalVehicleId } : {}),
         ...(preChamber ? { chamberId: preChamber.id } : {}),
       };
-      await updateClientArray(client.id, "repairs", [...(client.repairs ?? []), repair]);
+      await addClientRepair(client.id, repair);
       onClose();
     } catch (err) {
       console.error("[AddRepairModal] handleSave failed:", err);
@@ -912,8 +927,15 @@ function EditRepairModal({ client, repair, onClose }: { client: Client; repair: 
       freonType: freonType || undefined, freonAmount: freonAmt.trim() || undefined,
     };
     if (isAdmin) updates.cost = cost.trim() || undefined;
-    const repairs = (client.repairs ?? []).map((r) => r.id === repair.id ? { ...r, ...updates } : r);
-    await updateClientArray(client.id, "repairs", repairs);
+    await mutateClientRepair(client.id, repair, (current) => {
+      assertFieldsUnchanged(
+        current,
+        repair,
+        ["serviceType", "description", "date", "freonType", "freonAmount", ...(isAdmin ? ["cost" as const] : [])],
+        "Ремонт",
+      );
+      return { ...current, ...updates };
+    });
     onClose();
   }
 
@@ -971,29 +993,31 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
       newStatus === "done"      ? { closedByManager: true, status: "in_progress" } :
       newStatus === "cancelled" ? { status: "cancelled", closedByManager: false } :
                                   { status: "in_progress", closedByManager: false };
-    await updateClientArray(client.id, "repairs",
-      (client.repairs ?? []).map((r) => r.id === repair.id ? { ...r, ...updates } : r));
+    await mutateClientRepair(client.id, repair, (current) => {
+      assertFieldsUnchanged(current, repair, ["status", "closedByManager"], "Ремонт");
+      return { ...current, ...updates };
+    });
   }
 
   async function handleDelete() {
     if (!confirm("Удалить заказ-наряд?")) return;
-    await updateClientArray(client.id, "repairs", (client.repairs ?? []).filter((r) => r.id !== repair.id));
+    await removeClientRepair(client.id, repair);
   }
 
   async function addPhotos(photos: PhotoData[]) {
-    await updateClientArray(client.id, "repairs",
-      (client.repairs ?? []).map((r) =>
-        r.id === repair.id ? { ...r, photos: [...(r.photos ?? []), ...photos] } : r));
+    await mutateClientRepair(client.id, repair, (current) => ({
+      ...current,
+      photos: [...(current.photos ?? []), ...photos],
+    }));
   }
 
   async function saveFreonType(taskId: string, freonType: string) {
-    await updateClientArray(client.id, "repairs",
-      (client.repairs ?? []).map((r) =>
-        r.id === repair.id
-          ? { ...r, tasks: (r.tasks ?? []).map((t) => t.id === taskId ? { ...t, freonType } : t) }
-          : r,
-      ),
-    );
+    const target = (repair.tasks ?? []).find((task) => task.id === taskId);
+    if (!target) return;
+    await mutateRepairTask(client.id, repair, target, (current) => {
+      assertFieldsUnchanged(current, target, ["freonType"], "Задача ремонта");
+      return { ...current, freonType };
+    });
   }
 
   const borderLeft = status === "done" ? "var(--green)" : isCancelled ? "var(--text3)" : "var(--accent)";
@@ -1197,7 +1221,8 @@ function AppointmentsList({ client, isAdmin }: { client: Client; isAdmin: boolea
   if (!appts.length) return null;
 
   async function deleteAppt(id: string) {
-    await updateClientArray(client.id, "appointments", (client.appointments ?? []).filter((a) => a.id !== id));
+    const appointment = appts.find((item) => item.id === id);
+    if (appointment) await removeClientAppointment(client.id, appointment);
   }
 
   return (
@@ -1579,7 +1604,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
 
   async function handleDeleteClient() {
     if (!confirm(`Удалить клиента "${client.name}"?`)) return;
-    await deleteClient(client.id);
+    await removeDocumentIfUnchanged("clients", client);
     onClose();
   }
 

@@ -12,7 +12,13 @@ import { Button } from "../../shared/ui/Button";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
 import { PhotoLightbox } from "../../shared/ui/PhotoLightbox";
 import { CreatorLine } from "../../shared/ui/CreatorLine";
-import { updateClientArray } from "../../shared/firebase/firestore";
+import {
+  assertFieldsUnchanged,
+  canonicalEntityJson,
+  ConcurrentMutationError,
+  mutateClientRepair,
+  mutateRepairTask,
+} from "../../shared/firebase/concurrency";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import type { ServiceTask } from "../../shared/types/task";
 import type { PhotoData } from "../../shared/utils/photos";
@@ -81,30 +87,29 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
     const trimmed = closeSum.trim();
     if (!trimmed || unresolvedFreon) return;
     setClosing(true);
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : {
-        ...r,
+    const closedAt = new Date().toISOString();
+    await mutateClientRepair(client.id, repair, (current) => {
+      assertFieldsUnchanged(current, repair, ["cost", "status", "closedByManager"], "Ремонт");
+      return {
+        ...current,
         cost:            trimmed,
         closedByManager: true,
-        closedAt:        new Date().toISOString(),
+        closedAt,
         status:          "done" as const,
-      },
-    );
-    await updateClientArray(client.id, "repairs", repairs);
+      };
+    });
     setClosing(false);
   }
 
   async function handleReopenTask(taskId: string) {
     setReopeningId(taskId);
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : {
-        ...r,
-        tasks: (r.tasks ?? []).map((t) =>
-          t.id !== taskId ? t : { ...t, status: "in_progress" as const, doneBy: [] },
-        ),
-      },
-    );
-    await updateClientArray(client.id, "repairs", repairs);
+    const task = (repair.tasks ?? []).find((item) => item.id === taskId);
+    if (task) {
+      await mutateRepairTask(client.id, repair, task, (current) => {
+        assertFieldsUnchanged(current, task, ["status", "doneBy"], "Задача ремонта");
+        return { ...current, status: "in_progress", doneBy: [] };
+      });
+    }
     setReopeningId(null);
   }
 
@@ -683,15 +688,15 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
     const label = vehicle?.plate ?? client.name;
     if (!window.confirm(`Вернуть заявку «${label}» обратно в ремонт?`)) return;
     setReturning(true);
-    const repairs = (client.repairs ?? []).map((r) =>
-      r.id !== repair.id ? r : {
-        ...r,
+    await mutateClientRepair(client.id, repair, (current) => {
+      assertFieldsUnchanged(current, repair, ["status", "closedByManager", "closedAt"], "Ремонт");
+      return {
+        ...current,
         status:          "in_progress" as const,
         closedByManager: false,
         closedAt:        undefined,
-      },
-    );
-    await updateClientArray(client.id, "repairs", repairs);
+      };
+    });
     setReturning(false);
   }
 
@@ -958,15 +963,14 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
 
   async function applyType(item: UnknownFreonItem, freonType: string) {
     setSaving(item.repair.id);
-    const newRepairs = (item.client.repairs ?? []).map((r) => {
-      if (r.id !== item.repair.id) return r;
+    await mutateClientRepair(item.client.id, item.repair, (current) => {
+      assertFieldsUnchanged(current, item.repair, ["freonType", "tasks"], "Ремонт");
       return {
-        ...r,
+        ...current,
         freonType,
-        tasks: (r.tasks ?? []).map((t) => t.freonTask ? { ...t, freonType } : t),
+        tasks: (current.tasks ?? []).map((task) => task.freonTask ? { ...task, freonType } : task),
       };
     });
-    await updateClientArray(item.client.id, "repairs", newRepairs);
     setSaving(null);
   }
 
@@ -1055,23 +1059,36 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
 
   async function handleSave() {
     setSaving(true);
-    const updatedRepairs = (client.repairs ?? []).map((r) => {
-      if (r.id !== repair.id) return r;
-      return {
-        ...r,
-        freonType:   freonType   || undefined,
-        freonAmount: freonAmount || undefined,
-        cost,
-        status,
-        date,
-        tasks,
-        editedBy: uid,
-        editedAt: new Date().toISOString(),
-      };
-    });
-    await updateClientArray(client.id, "repairs", updatedRepairs);
-    setSaving(false);
-    onClose();
+    const editedAt = new Date().toISOString();
+    try {
+      await mutateClientRepair(client.id, repair, (current) => {
+        assertFieldsUnchanged(
+          current,
+          repair,
+          ["freonType", "freonAmount", "cost", "status", "date"],
+          "Ремонт",
+        );
+        if (canonicalEntityJson(current.tasks ?? []) !== canonicalEntityJson(repair.tasks ?? [])) {
+          throw new ConcurrentMutationError("Задачи ремонта уже изменены другим сотрудником");
+        }
+        return {
+          ...current,
+          freonType:   freonType   || undefined,
+          freonAmount: freonAmount || undefined,
+          cost,
+          status,
+          date,
+          tasks,
+          editedBy: uid,
+          editedAt,
+        };
+      });
+      onClose();
+    } catch (error) {
+      if (!(error instanceof ConcurrentMutationError)) alert("Не удалось сохранить изменения");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function updateTask(id: string, patch: Partial<RepairTask>) {
