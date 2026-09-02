@@ -23,7 +23,7 @@ import {
   removeRepairTask,
   removeServiceSubtask,
 } from "../../shared/firebase/concurrency";
-import { deletePhoto } from "../../shared/utils/photos";
+import { deletePhoto, deletePhotoObjects, repairPhotos, serviceTaskPhotos } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 import type { ServiceTask } from "../../shared/types/task";
 import type { RepairTask, Repair, Client } from "../../shared/types/client";
@@ -488,6 +488,7 @@ function SubtaskRow({ subtask, task }: { subtask: Subtask; task: ServiceTask }) 
   async function handleDelete() {
     if (!isAdmin || !confirm("Удалить подзадачу?")) return;
     await removeServiceSubtask(task.id, subtask);
+    void deletePhotoObjects(subtask.photos);
   }
 
   return (
@@ -584,6 +585,7 @@ function ServiceTaskCard({ task }: { task: ServiceTask }) {
   async function handleDelete() {
     if (!confirm("Удалить задачу?")) return;
     await removeDocumentIfUnchanged("servicetasks", task);
+    void deletePhotoObjects(serviceTaskPhotos(task));
   }
 
   async function saveComment(comment: string) {
@@ -813,6 +815,7 @@ function RepairTaskRow({ task, client, repair }: {
   async function handleDelete() {
     if (!isAdmin || !confirm("Удалить задачу?")) return;
     await removeRepairTask(client.id, repair, task);
+    void deletePhotoObjects(task.photos);
   }
 
   return (
@@ -1052,6 +1055,7 @@ function RepairGroup({ client, repair, tasks, canAdd, onOpenClient }: {
   async function deleteRepair() {
     if (!confirm("Удалить наряд?")) return;
     await removeClientRepair(client.id, repair);
+    void deletePhotoObjects(repairPhotos(repair));
   }
 
   return (

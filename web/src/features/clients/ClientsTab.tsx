@@ -32,7 +32,7 @@ import {
 import type { Chamber, Client, Repair, RepairTask, ClientType, ServiceType, Vehicle } from "../../shared/types/client";
 import type { Appointment } from "../../shared/types/appointment";
 import { legacyAppointmentsForDisplay } from "../../shared/appointments/legacy";
-import { uploadPhoto, getStorageErrorMessage } from "../../shared/utils/photos";
+import { uploadPhoto, getStorageErrorMessage, deletePhotoObjects, repairPhotos } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -993,6 +993,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
   async function handleDelete() {
     if (!confirm("Удалить заказ-наряд?")) return;
     await removeClientRepair(client.id, repair);
+    void deletePhotoObjects(repairPhotos(repair));
   }
 
   async function addPhotos(photos: PhotoData[]) {
@@ -1611,6 +1612,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
   async function handleDeleteClient() {
     if (!confirm(`Удалить клиента "${client.name}"?`)) return;
     await removeDocumentIfUnchanged("clients", client);
+    void deletePhotoObjects((client.repairs ?? []).flatMap(repairPhotos));
     onClose();
   }
 

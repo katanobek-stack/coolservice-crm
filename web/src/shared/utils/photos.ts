@@ -64,6 +64,44 @@ export async function deletePhoto(path: string): Promise<void> {
   }
 }
 
+type WithPhotos = { photos?: PhotoData[] };
+
+/** Every photo attached to a repair, including photos on its tasks. */
+export function repairPhotos(repair: (WithPhotos & { tasks?: WithPhotos[] }) | undefined | null): PhotoData[] {
+  if (!repair) return [];
+  return [
+    ...(repair.photos ?? []),
+    ...(repair.tasks ?? []).flatMap((task) => task?.photos ?? []),
+  ];
+}
+
+/** Every photo attached to a standalone service task, including its subtasks. */
+export function serviceTaskPhotos(task: (WithPhotos & { subtasks?: WithPhotos[] }) | undefined | null): PhotoData[] {
+  if (!task) return [];
+  return [
+    ...(task.photos ?? []),
+    ...(task.subtasks ?? []).flatMap((subtask) => subtask?.photos ?? []),
+  ];
+}
+
+/**
+ * Best-effort deletion of the Storage objects backing `photos`. Legacy base64
+ * photos (no `path`) are skipped. Never throws — orphaned files are preferable
+ * to a failed delete, and this is meant to be fired without awaiting.
+ */
+export async function deletePhotoObjects(
+  photos: Array<PhotoData | undefined | null> | undefined,
+): Promise<void> {
+  const paths = Array.from(
+    new Set(
+      (photos ?? [])
+        .map((photo) => photo?.path)
+        .filter((path): path is string => typeof path === "string" && path.length > 0),
+    ),
+  );
+  await Promise.all(paths.map((path) => deletePhoto(path)));
+}
+
 // Firebase Storage error codes → понятные сообщения для пользователя
 export function getStorageErrorMessage(err: unknown): string {
   const code = (err as { code?: string })?.code ?? "";
