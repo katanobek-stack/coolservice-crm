@@ -4,6 +4,7 @@ import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
 import { repairStatus, taskStatus, repairFinancialMonth } from "../../shared/utils/repair";
+import { resolveFixedCosts } from "../../shared/utils/finance";
 import { fmtDate, fmtMoney, fmtDayMonth } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
@@ -1541,10 +1542,14 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
       if (!type) return;
       map[type] = (map[type] ?? 0) + (parseFloat(amt ?? "0") || 0);
     };
+    // Freon is stored redundantly on the repair and on its "Заправка фреона"
+    // task — count it once per repair (repair value wins, task is the fallback),
+    // matching the per-row logic below.
     const freonMap: Record<string, number> = {};
     monthItems.forEach((i) => {
-      addFreon(freonMap, i.repair.freonType, i.repair.freonAmount);
-      (i.repair.tasks ?? []).forEach((t) => addFreon(freonMap, t.freonType, t.freonKg));
+      const type = i.repair.freonType ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType;
+      const amt  = i.repair.freonAmount ?? (i.repair.tasks ?? []).find((t) => t.freonKg)?.freonKg;
+      addFreon(freonMap, type, amt);
     });
 
     const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Создал заявку", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
@@ -1580,21 +1585,29 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
     const salaries   = (finance.salaries   ?? []) as Array<{ uid: string; name: string; salary: number }>;
 
     const elecCost   = parseFloat(String(elecBills[exportMK] ?? 0)) || 0;
-    const boxCost    = boxes.reduce((s, b) => s + (parseFloat(String(b.cost)) || 0), 0);
-    const salCost    = salaries.reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+    const liveBoxCost = boxes.reduce((s, b) => s + (parseFloat(String(b.cost)) || 0), 0);
+    const liveSalCost = salaries.reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
+    const liveRentalInc = freezers
+      .filter((f) => (f as { rented?: boolean }).rented || (f as { status?: string }).status === "rented")
+      .reduce((s, f) => s + (parseFloat(String((f as { rentAmount?: number }).rentAmount ?? 0)) || 0), 0);
+    // Fixed costs frozen for the exported month (see finance.ts). When a snapshot
+    // applies its total may not match the current per-item list, so those months
+    // are itemised as one aggregated line instead of the live breakdown.
+    const { boxCost, salCost, rentalIncome: rentalInc } = resolveFixedCosts(finance, liveRentalInc, exportMK);
+    const boxIsLive = boxCost === liveBoxCost;
+    const salIsLive = salCost === liveSalCost;
     const mkPurchases = purchases.filter((p) => p.date?.slice(0, 7) === exportMK);
     const purTotal   = mkPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
     const mkCommissions = expenses.filter((e) => e.category === "commission" && e.month === exportMK);
     const commTotal  = mkCommissions.reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
-    const rentalInc  = freezers
-      .filter((f) => (f as { rented?: boolean }).rented || (f as { status?: string }).status === "rented")
-      .reduce((s, f) => s + (parseFloat(String((f as { rentAmount?: number }).rentAmount ?? 0)) || 0), 0);
     const totalExp   = boxCost + salCost + elecCost + purTotal + commTotal;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const expRows: any[][] = [["Статья расхода", "Сумма ₽"]];
-    boxes.filter((b) => b.cost > 0).forEach((b) => expRows.push([`Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0]));
-    salaries.filter((s) => s.salary > 0).forEach((s) => expRows.push([`Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0]));
+    if (boxIsLive) boxes.filter((b) => b.cost > 0).forEach((b) => expRows.push([`Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0]));
+    else if (boxCost > 0) expRows.push(["Аренда боксов (на тот период)", boxCost]);
+    if (salIsLive) salaries.filter((s) => s.salary > 0).forEach((s) => expRows.push([`Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0]));
+    else if (salCost > 0) expRows.push(["Зарплаты (на тот период)", salCost]);
     if (elecCost > 0) expRows.push([`Электричество (${mLabel})`, elecCost]);
     mkPurchases.forEach((p) => expRows.push([`Закупка: ${p.comment}`, parseFloat(String(p.amount)) || 0]));
     mkCommissions.forEach((c) => expRows.push([`Комиссионные${c.comment ? `: ${c.comment}` : ""}`, parseFloat(String(c.amount)) || 0]));
@@ -1618,8 +1631,12 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
       ["ИТОГО ДОХОДЫ", totalInc,     "₽"],
       [],
       ["═══ РАСХОДЫ ═══"],
-      ...boxes.filter((b) => b.cost > 0).map((b) => [`  Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0, "₽"]),
-      ...salaries.filter((s) => s.salary > 0).map((s) => [`  Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0, "₽"]),
+      ...(boxIsLive
+        ? boxes.filter((b) => b.cost > 0).map((b) => [`  Аренда бокса: ${b.name || "Бокс"}`, parseFloat(String(b.cost)) || 0, "₽"])
+        : boxCost > 0 ? [["  Аренда боксов (на тот период)", boxCost, "₽"]] : []),
+      ...(salIsLive
+        ? salaries.filter((s) => s.salary > 0).map((s) => [`  Зарплата: ${s.name || "Сотрудник"}`, parseFloat(String(s.salary)) || 0, "₽"])
+        : salCost > 0 ? [["  Зарплаты (на тот период)", salCost, "₽"]] : []),
       ...(elecCost > 0  ? [[`  Электричество`, elecCost, "₽"]] : []),
       ...(purTotal > 0  ? [[`  Закупки и материалы`, purTotal, "₽"]] : []),
       ...(commTotal > 0 ? [[`  Комиссионные`, commTotal, "₽"]] : []),

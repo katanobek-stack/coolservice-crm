@@ -7,6 +7,12 @@ import {
   type Transaction,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./app";
+import {
+  backfillFixedCostHistory,
+  sumBoxCost,
+  sumSalaries,
+  type FixedCosts,
+} from "../utils/finance";
 import type {
   Chamber,
   Client,
@@ -543,6 +549,7 @@ export function removeFinancePurchase(
 export function saveFinanceConfiguration(
   expected: Record<string, unknown>,
   updates: Record<string, unknown>,
+  liveRentalIncome: number,
   firestore: Firestore = getFirebaseDb(),
 ): Promise<void> {
   const guardedFields = ["boxes", "salaries", "kwPrice"];
@@ -552,7 +559,20 @@ export function saveFinanceConfiguration(
         throw new ConcurrentMutationError("Финансовые настройки уже изменены другим сотрудником");
       }
     }
-    return updates;
+    // Freeze the fixed costs that applied up to this change onto past months
+    // so historical P&L is not rewritten by the new configuration.
+    const priorSnapshot: FixedCosts = {
+      boxCost: sumBoxCost(current.boxes as Parameters<typeof sumBoxCost>[0]),
+      salCost: sumSalaries(current.salaries as Parameters<typeof sumSalaries>[0]),
+      rentalIncome: liveRentalIncome,
+    };
+    const nowMk = new Date().toISOString().slice(0, 7);
+    const fixedCostHistory = backfillFixedCostHistory(
+      current.fixedCostHistory as Record<string, Partial<FixedCosts> | undefined> | undefined,
+      priorSnapshot,
+      nowMk,
+    );
+    return { ...updates, fixedCostHistory };
   }, firestore);
 }
 

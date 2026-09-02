@@ -10,6 +10,7 @@ import {
   repairFinancialDay,
   isRepairClosedInMonth,
 } from "../../shared/utils/repair";
+import { resolveFixedCosts } from "../../shared/utils/finance";
 import { fmtMoney, fmtDate } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
@@ -477,6 +478,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
     salaries?:  Array<{ uid: string; name: string; salary: number }>;
     elecBills?: Record<string, number>;
     purchases?: Array<{ id: string; date: string; amount: number; comment: string }>;
+    fixedCostHistory?: Record<string, { boxCost?: number; salCost?: number; rentalIncome?: number }>;
   };
   const fin = rawFinance as FinDoc;
 
@@ -492,11 +494,13 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
       clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
     });
   const clientRevList = Array.from(clientRevMap.values()).filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
-  const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0) + rentalIncome;
+
+  // Fixed costs frozen for this month (falls back to live values for the
+  // current month and any month saved before snapshots existed).
+  const { boxCost: rent, salCost: salary, rentalIncome: monthRental } = resolveFixedCosts(fin, rentalIncome, mk);
+  const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0) + monthRental;
 
   // Expenses
-  const salary      = (fin.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
-  const rent        = (fin.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0);
   const electricity = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
   const purchases   = (fin.purchases ?? []).filter((p) => p.date?.slice(0, 7) === mk).reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
   const commission  = expenses.filter((e) => e.category === "commission" && e.month === mk).reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
@@ -749,13 +753,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       salaries?:  Array<{ salary: number }>;
       elecBills?: Record<string, number>;
       purchases?: Array<{ date?: string; amount: number }>;
+      fixedCostHistory?: Record<string, { boxCost?: number; salCost?: number; rentalIncome?: number }>;
     };
     const fin = rawFinance as FinDoc;
-
-    // Fixed monthly costs (box rent + salaries — same every month)
-    const fixedMonthly =
-      (fin.boxes    ?? []).reduce((s, b)  => s + (parseFloat(String(b.cost))    || 0), 0) +
-      (fin.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
 
     // One-off purchases grouped by month
     const purchByMonth: Record<string, number> = {};
@@ -776,10 +776,11 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     for (let i = 5; i >= 0; i--) {
       const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk  = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const { boxCost, salCost, rentalIncome } = resolveFixedCosts(fin, totalRentIncome, mk);
       const elec  = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
       const purch = purchByMonth[mk] ?? 0;
       const comm  = commByMonth[mk] ?? 0;
-      map.set(mk, { rev: totalRentIncome, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
+      map.set(mk, { rev: rentalIncome, exp: boxCost + salCost + elec + purch + comm, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
       const mk = repairFinancialMonth(r);

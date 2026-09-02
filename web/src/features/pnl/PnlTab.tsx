@@ -26,6 +26,8 @@ interface FinanceDoc {
   kwPrice?:   number;
   elecBills?: ElecBills;
   purchases?: Purchase[];
+  // Per-month frozen fixed costs, written on each config change (see finance.ts).
+  fixedCostHistory?: Record<string, { boxCost?: number; salCost?: number; rentalIncome?: number }>;
 }
 
 // ─── Month names ──────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ function SectionCard({ title, icon, children }: { title: string; icon?: string; 
 
 // ─── Expenses settings modal ──────────────────────────────────────────────────
 
-function ExpensesModal({ finance, onClose }: { finance: FinanceDoc; onClose: () => void }) {
+function ExpensesModal({ finance, rentalIncome, onClose }: { finance: FinanceDoc; rentalIncome: number; onClose: () => void }) {
   const [boxes,    setBoxes]    = useState<Box[]>(finance.boxes?.length ? [...finance.boxes] : [{ id: genId(), name: "", cost: 0 }]);
   const [salaries, setSalaries] = useState<Salary[]>(finance.salaries?.length ? [...finance.salaries] : [{ uid: genId(), name: "", salary: 0 }]);
   const [kwPrice,  setKwPrice]  = useState(String(finance.kwPrice ?? ""));
@@ -69,7 +71,7 @@ function ExpensesModal({ finance, onClose }: { finance: FinanceDoc; onClose: () 
       boxes:    boxes.map((b) => ({ id: b.id || genId(), name: b.name, cost: parseFloat(String(b.cost)) || 0 })),
       salaries: salaries.map((s) => ({ uid: s.uid || genId(), name: s.name, salary: parseFloat(String(s.salary)) || 0 })),
       kwPrice:  parseFloat(kwPrice) || 0,
-    });
+    }, rentalIncome);
     onClose();
   }
 
@@ -648,7 +650,7 @@ export function PnlTab() {
       </div>
 
       {showExpenses && (
-        <ExpensesModal finance={finance} onClose={() => setShowExpenses(false)} />
+        <ExpensesModal finance={finance} rentalIncome={rentalIncome} onClose={() => setShowExpenses(false)} />
       )}
     </div>
   );
