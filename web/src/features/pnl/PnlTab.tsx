@@ -1,7 +1,7 @@
 ﻿import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
-import { repairStatus } from "../../shared/utils/repair";
+import { repairStatus, repairFinancialMonth } from "../../shared/utils/repair";
 import { fmtMoney, fmtDate, genId } from "../../shared/utils/format";
 import { Button } from "../../shared/ui/Button";
 import { Input, FormGroup } from "../../shared/ui/Input";
@@ -173,7 +173,7 @@ export function PnlTab() {
       map.set(mk, { revenue: 0, repairs: 0, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` });
     }
     allDone.forEach((r) => {
-      const mk = r.date?.slice(0,7);
+      const mk = repairFinancialMonth(r);
       if (!mk || !map.has(mk)) return;
       const prev = map.get(mk)!;
       map.set(mk, { ...prev, revenue: prev.revenue + (parseFloat(r.cost ?? "0") || 0), repairs: prev.repairs + 1 });

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
-import { repairStatus, taskStatus } from "../../shared/utils/repair";
+import { repairStatus, taskStatus, repairFinancialMonth } from "../../shared/utils/repair";
 import { fmtDate, fmtMoney, fmtDayMonth } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
 import { Modal } from "../../shared/ui/Modal";
@@ -1439,7 +1439,10 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
       (c.repairs ?? []).forEach((r) => {
         if (repairStatus(r) === "in_progress") return;
         const vehicle = (c.vehicles ?? []).find((v) => v.id === r.vehicleId);
-        const mk      = r.date?.slice(0, 7) ?? "0000-00";
+        // Group closed repairs (and the Excel export) by the month they were
+        // closed; fall back to the start date for repairs closed before
+        // closedAt existed.
+        const mk      = repairFinancialMonth(r) || "0000-00";
 
         // Collect unique assignees from all tasks
         const uids = new Set<string>();

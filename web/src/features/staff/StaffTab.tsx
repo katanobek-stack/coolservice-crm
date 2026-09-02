@@ -5,13 +5,10 @@ import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
 import { saveStaffProfile, saveStaffPermissions } from "../../shared/firebase/firestore";
+import { isRepairClosedInMonth } from "../../shared/utils/repair";
 import type { StaffMember, StaffRole, StaffPermissions } from "../../shared/types/staff";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isClosedThisMonth(r: any, targetMonth: string): boolean {
-  if (!r.closedAt) return false;
-  return String(r.closedAt).slice(0, 7) === targetMonth;
-}
+const isClosedThisMonth = isRepairClosedInMonth;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getMechanics(r: any): string[] {

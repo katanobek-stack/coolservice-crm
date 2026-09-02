@@ -2,17 +2,20 @@
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
-import { repairStatus, taskStatus, SERVICE_TYPES } from "../../shared/utils/repair";
+import {
+  repairStatus,
+  taskStatus,
+  SERVICE_TYPES,
+  repairFinancialMonth,
+  repairFinancialDay,
+  isRepairClosedInMonth,
+} from "../../shared/utils/repair";
 import { fmtMoney, fmtDate } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isClosedThisMonth(r: any, targetMonth: string): boolean {
-  if (!r.closedAt) return false;
-  return String(r.closedAt).slice(0, 7) === targetMonth;
-}
+const isClosedThisMonth = isRepairClosedInMonth;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getMechanics(r: any): string[] {
@@ -483,7 +486,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
   // Revenue by client
   const clientRevMap = new Map<string, { name: string; amount: number }>();
   doneRepairs
-    .filter((r) => r.date?.slice(0, 7) === mk)
+    .filter((r) => repairFinancialMonth(r) === mk)
     .forEach((r) => {
       const prev = clientRevMap.get(r.clientId) ?? { name: r.clientName, amount: 0 };
       clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
@@ -729,7 +732,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   const inProgressRepairs = allRepairs.filter((r) => repairStatus(r) === "in_progress");
   const doneRepairs       = allRepairs.filter((r) => repairStatus(r) === "done");
-  const doneToday         = doneRepairs.filter((r) => r.date?.slice(0,10) === now.toISOString().slice(0,10)).length;
+  const doneToday         = doneRepairs.filter((r) => repairFinancialDay(r) === now.toISOString().slice(0,10)).length;
   const activeTasks       = tasks.filter((t) => t.status !== "done").length;
 
   const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
@@ -779,7 +782,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       map.set(mk, { rev: totalRentIncome, exp: fixedMonthly + elec + purch + comm, cnt: 0 });
     }
     doneRepairs.forEach((r) => {
-      const mk = r.date?.slice(0, 7);
+      const mk = repairFinancialMonth(r);
       if (!mk || !map.has(mk)) return;
       const prev = map.get(mk)!;
       map.set(mk, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
@@ -791,9 +794,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     }));
   }, [doneRepairs, rawFinance, expenses, totalRentIncome]);
 
-  const curMonthRev  = doneRepairs.filter((r) => r.date?.slice(0,7) === curMonthKey)
+  const curMonthRev  = doneRepairs.filter((r) => repairFinancialMonth(r) === curMonthKey)
     .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
-  const prevMonthRev = doneRepairs.filter((r) => r.date?.slice(0,7) === prevMonthKey)
+  const prevMonthRev = doneRepairs.filter((r) => repairFinancialMonth(r) === prevMonthKey)
     .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
   const revDiff = prevMonthRev > 0 ? Math.round(((curMonthRev-prevMonthRev)/prevMonthRev)*100) : null;
 
@@ -869,10 +872,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   // ── Mechanic crown rating (current month revenue share) ───────────────────
   const mechRating = useMemo(() => {
     const mechRevenueMap = new Map<string, number>();
-    const closedThisMonthAll = allRepairs.filter((r) => {
-      const month = typeof r.date === "string" ? r.date.slice(0, 7) : "";
-      return month === curMonthKey;
-    });
+    const closedThisMonthAll = allRepairs.filter(
+      (r) => repairFinancialMonth(r) === curMonthKey,
+    );
     closedThisMonthAll.forEach((r) => {
         const cost = parseFloat(String(r.cost ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
         if (cost <= 0) return;
