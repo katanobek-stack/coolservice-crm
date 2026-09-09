@@ -192,5 +192,12 @@ service cloud.firestore {
       allow read: if isAuth();
       allow create, update, delete: if isAuth() && isAdminOrOwner();
     }
+
+    // Walk-in repairs a mechanic opens on a car with no client yet. Any worker
+    // may create, edit and delete one (matching how clients/{id} is open) —
+    // assigning it to a client happens through the manager-only Отчёты screen.
+    match /intakeRepairs/{docId} {
+      allow read, create, update, delete: if isAuth();
+    }
   }
 }

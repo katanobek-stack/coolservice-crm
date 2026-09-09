@@ -15,7 +15,9 @@
     "test:appointments": "npm run build:test:appointments && node --test .test-dist/firestore.appointments.test.mjs",
     "build:test:concurrency": "esbuild tests/firestore.concurrency.test.ts --bundle --packages=external --platform=node --format=esm --outfile=.test-dist/firestore.concurrency.test.mjs",
     "test:concurrency": "npm run build:test:concurrency && node --test .test-dist/firestore.concurrency.test.mjs",
-    "test": "npm run test:unit && npm run test:rules && npm run test:appointments && npm run test:concurrency",
+    "build:test:intake": "esbuild tests/firestore.intake.test.ts --bundle --packages=external --platform=node --format=esm --outfile=.test-dist/firestore.intake.test.mjs",
+    "test:intake": "npm run build:test:intake && node --test .test-dist/firestore.intake.test.mjs",
+    "test": "npm run test:unit && npm run test:rules && npm run test:appointments && npm run test:concurrency && npm run test:intake",
     "test:emulator": "cd .. && firebase emulators:exec --only firestore --project demo-coolservice-crm \"cd web && npm test\""
   },
   "dependencies": {

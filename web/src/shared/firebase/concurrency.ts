@@ -33,7 +33,7 @@ export class ConcurrentMutationError extends Error {
   }
 }
 
-async function runSafeTransaction<T>(
+export async function runSafeTransaction<T>(
   firestore: Firestore,
   callback: (transaction: Transaction) => Promise<T>,
 ): Promise<T> {
@@ -120,7 +120,7 @@ function requireNewEntityId(entity: object, label: string): string {
   return id;
 }
 
-function cleanForFirestore<T>(value: T): T {
+export function cleanForFirestore<T>(value: T): T {
   return canonical(value) as T;
 }
 
