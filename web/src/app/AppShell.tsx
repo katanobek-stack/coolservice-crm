@@ -6,6 +6,7 @@ import { repairStatus } from "../shared/utils/repair";
 import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
 import { MyTasksTab } from "../features/mytasks/MyTasksTab";
+import { IntakeTab } from "../features/intake/IntakeTab";
 import { ClientsTab } from "../features/clients/ClientsTab";
 import { AppointmentsTab } from "../features/appointments/AppointmentsTab";
 import { FreezersTab } from "../features/freezers/FreezersTab";
@@ -20,7 +21,7 @@ import type { StaffMember, StaffRole } from "../shared/types/staff";
 import type { Client } from "../shared/types/client";
 
 export type Tab =
-  | "stats" | "mytasks" | "phys" | "legal"
+  | "stats" | "mytasks" | "intake" | "phys" | "legal"
   | "calendar" | "freezers" | "done"
   | "pnl" | "staff" | "backup" | "schedule";
 
@@ -38,6 +39,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: "stats",    label: "Дашборд",   icon: "ti-layout-dashboard", emoji: "📊", group: "main" },
   { id: "mytasks",  label: "Заявки",    icon: "ti-clipboard-list",   emoji: "🔧", group: "main" },
+  { id: "intake",   label: "Приёмка",   icon: "ti-car-garage",       emoji: "📥", group: "main" },
   { id: "phys",     label: "Клиенты",   icon: "ti-users",            emoji: "👤", group: "main" },
   { id: "legal",    label: "Компании",  icon: "ti-building",         emoji: "🏢", group: "main" },
   { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service" },
@@ -58,6 +60,7 @@ function canSeeTab(t: TabDef, role: StaffRole, hidePnl = false): boolean {
 const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   stats:    { title: "Дашборд",   sub: "главные показатели" },
   mytasks:  { title: "Заявки",    sub: "ремонты и задачи" },
+  intake:   { title: "Приёмка",   sub: "машины без клиента" },
   phys:     { title: "Клиенты",   sub: "физические лица" },
   legal:    { title: "Компании",  sub: "юридические лица" },
   calendar: { title: "Записи",    sub: "предстоящие визиты" },
@@ -108,12 +111,13 @@ function useFCMAndNotifications(myProfile: StaffMember | undefined) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients, freezersCount, pendingAppts, hidePnl }: {
+function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, intakeCount, totalClients, freezersCount, pendingAppts, hidePnl }: {
   tab:           Tab;
   onTab:         (t: Tab) => void;
   myProfile:     StaffMember | undefined;
   onSignOut:     () => void;
   activeRepairs: number;
+  intakeCount:   number;
   totalClients:  number;
   freezersCount: number;
   pendingAppts:  number;
@@ -134,6 +138,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, totalClients
 
   function getBadge(id: Tab): { count?: number; variant: "red" | "blue" | "pulse" | "" } | null {
     if (id === "mytasks" && activeRepairs > 0)  return { count: activeRepairs, variant: "red" };
+    if (id === "intake" && intakeCount > 0)     return { count: intakeCount, variant: "pulse" };
     if ((id === "phys" || id === "legal") && totalClients > 0) return { count: totalClients, variant: "blue" };
     if (id === "freezers" && freezersCount > 0) return { count: freezersCount, variant: "red" };
     if (id === "calendar" && pendingAppts > 0)  return { count: pendingAppts, variant: "pulse" };
@@ -238,7 +243,7 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "phys", "calendar", "schedule", "freezers", "done", "pnl"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "intake", "phys", "calendar", "schedule", "freezers", "done", "pnl"];
 
 function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
   tab:          Tab;
@@ -315,7 +320,7 @@ function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hide
 
 function Shell() {
   const { myProfile, signOutUser }              = useAuth();
-  const { tasks, clients, freezers, appointments } = useData();
+  const { tasks, clients, freezers, appointments, intakeRepairs } = useData();
   const { canSeePLPanel }            = usePermissions();
   const [tab, setTab]                = useState<Tab>("stats");
   const [showSearch, setShowSearch]  = useState(false);
@@ -365,6 +370,7 @@ function Shell() {
     switch (tab) {
       case "stats":    return <StatsTab onNavigate={setTab} />;
       case "mytasks":  return <MyTasksTab onOpenClient={openClientProfile} />;
+      case "intake":   return <IntakeTab />;
       case "phys":     return <ClientsTab type="phys"  openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
       case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
       case "calendar": return <AppointmentsTab />;
@@ -399,6 +405,7 @@ function Shell() {
           myProfile={myProfile}
           onSignOut={() => void signOutUser()}
           activeRepairs={activeRepairs}
+          intakeCount={intakeRepairs.length}
           totalClients={clients.length}
           freezersCount={freezers.length}
           pendingAppts={pendingAppts}

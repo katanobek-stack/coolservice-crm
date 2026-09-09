@@ -19,6 +19,7 @@ import type { ServiceTask } from "../types/task";
 import type { Freezer } from "../types/freezer";
 import type { StaffMember } from "../types/staff";
 import type { Appointment } from "../types/appointment";
+import type { IntakeRepair } from "../types/intake";
 
 export interface Expense {
   id:         string;
@@ -38,6 +39,7 @@ interface DataContextValue {
   finance:      Record<string, unknown>;
   expenses:     Expense[];
   appointments: Appointment[];
+  intakeRepairs: IntakeRepair[];
   loaded:       boolean;
 }
 
@@ -51,6 +53,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [finance,      setFinance]      = useState<Record<string, unknown>>({});
   const [expenses,     setExpenses]     = useState<Expense[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [intakeRepairs, setIntakeRepairs] = useState<IntakeRepair[]>([]);
   const [loadCount,    setLoadCount]    = useState(0);
 
   useEffect(() => {
@@ -109,6 +112,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setLoadCount((n) => n + 1);
         },
       ),
+      onSnapshot(
+        query(collection(db, "intakeRepairs"), orderBy("createdAt", "desc")),
+        (snap) => {
+          setIntakeRepairs(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as IntakeRepair));
+          setLoadCount((n) => n + 1);
+        },
+        () => {
+          setIntakeRepairs([]);
+          setLoadCount((n) => n + 1);
+        },
+      ),
     ];
 
     return () => unsubs.forEach((u) => u());
@@ -123,9 +137,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       finance,
       expenses,
       appointments,
-      loaded: loadCount >= 7,
+      intakeRepairs,
+      loaded: loadCount >= 8,
     }),
-    [clients, staff, tasks, freezers, finance, expenses, appointments, loadCount],
+    [clients, staff, tasks, freezers, finance, expenses, appointments, intakeRepairs, loadCount],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
