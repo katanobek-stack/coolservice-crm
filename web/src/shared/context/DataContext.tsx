@@ -112,13 +112,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setLoadCount((n) => n + 1);
         },
       ),
+      // No orderBy: the collection is small and transient, IntakeTab sorts by
+      // createdAt itself. A query orderBy would also silently drop any doc
+      // missing the field.
       onSnapshot(
-        query(collection(db, "intakeRepairs"), orderBy("createdAt", "desc")),
+        collection(db, "intakeRepairs"),
         (snap) => {
           setIntakeRepairs(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as IntakeRepair));
           setLoadCount((n) => n + 1);
         },
-        () => {
+        (err) => {
+          console.error("[DataProvider] intakeRepairs listener error:", err);
           setIntakeRepairs([]);
           setLoadCount((n) => n + 1);
         },

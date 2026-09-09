@@ -1696,7 +1696,7 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
   // Intake repairs whose tasks are all done — need a client + sum before closing
   const intakeReady = useMemo(
     () => intakeRepairs
-      .filter((i) => repairStatus(i.repair) === "done")
+      .filter((i) => i && i.repair && i.vehicle && repairStatus(i.repair) === "done")
       .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
     [intakeRepairs],
   );

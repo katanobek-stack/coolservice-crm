@@ -228,7 +228,9 @@ export function IntakeTab() {
   const [showNew, setShowNew] = useState(false);
 
   const sorted = useMemo(
-    () => [...intakeRepairs].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+    () => [...intakeRepairs]
+      .filter((i) => i && i.repair && i.vehicle)
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
     [intakeRepairs],
   );
   const ready = sorted.filter((i) => repairStatus(i.repair) === "done");
