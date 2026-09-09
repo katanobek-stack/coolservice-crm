@@ -247,7 +247,16 @@ export const notifyClientCreated = onDocumentCreated(
     const clientName = esc(data.name) || "Клиент";
     for (const repair of data.repairs ?? []) {
       const label = vehicleLabel(data.vehicles, repair.vehicleId);
-      await sendTelegram(`🆕 *Новая заявка:* ${clientName}${label ? ` — ${label}` : ""}`);
+      const vehiclePart = label ? ` — ${label}` : "";
+      if (repair.closedByManager) {
+        // Car came in through Приёмка, was worked, and is closed on assignment.
+        await sendTelegram([
+          `✅ *Заявка из приёмки закрыта:* ${clientName}${vehiclePart}`,
+          `Сумма: ${fmtMoney(repair.cost)}`,
+        ].join("\n"));
+      } else {
+        await sendTelegram(`🆕 *Новая заявка:* ${clientName}${vehiclePart}`);
+      }
     }
   },
 );
@@ -273,8 +282,16 @@ export const notifyClientUpdated = onDocumentUpdated(
       const prevRepair  = beforeRepairs.get(repair.id);
 
       if (!prevRepair) {
-        // Новая заявка (added to an existing client via updateClientArray)
-        await sendTelegram(`🆕 *Новая заявка:* ${clientName}${vehiclePart}`);
+        if (repair.closedByManager) {
+          // Assigned from Приёмка straight into an existing client as a closed job.
+          await sendTelegram([
+            `✅ *Заявка из приёмки закрыта:* ${clientName}${vehiclePart}`,
+            `Сумма: ${fmtMoney(repair.cost)}`,
+          ].join("\n"));
+        } else {
+          // Новая заявка (added to an existing client via updateClientArray)
+          await sendTelegram(`🆕 *Новая заявка:* ${clientName}${vehiclePart}`);
+        }
         continue;
       }
 
@@ -320,6 +337,87 @@ export const notifyClientUpdated = onDocumentUpdated(
           await notifyNewPhotos(newPhotos, taskCaption(task, clientName, label, repair.createdByName));
         }
       }
+    }
+  },
+);
+
+// ─── intakeRepairs/{id} — walk-in repairs opened before a client is known ────
+// The car and repair live here (mechanic-driven); a manager assigns a client
+// at close, which moves the repair to clients/{id} and deletes this doc.
+
+interface IntakeDoc {
+  vehicle?:      { plate?: string; brand?: string; model?: string };
+  repair?:       Repair;
+  createdByName?: string;
+}
+
+function intakeVehicleLabel(v: IntakeDoc["vehicle"]): string {
+  if (!v) return "";
+  const brand = v.brand ?? v.model ?? "";
+  return [brand, v.plate].filter(Boolean).map(esc).join(" · ");
+}
+
+export const notifyIntakeCreated = onDocumentCreated(
+  { document: "intakeRepairs/{id}", secrets: SECRETS },
+  async (event) => {
+    const data = event.data?.data() as IntakeDoc | undefined;
+    if (!data) return;
+    const label = intakeVehicleLabel(data.vehicle);
+    const who   = esc(data.createdByName) || "Механик";
+    await sendTelegram([
+      `🚚 *Новая машина в приёмке*${label ? `: ${label}` : ""}`,
+      `Добавил: ${who}`,
+    ].join("\n"));
+  },
+);
+
+export const notifyIntakeUpdated = onDocumentUpdated(
+  { document: "intakeRepairs/{id}", secrets: SECRETS },
+  async (event) => {
+    const before = event.data?.before.data() as IntakeDoc | undefined;
+    const after  = event.data?.after.data()  as IntakeDoc | undefined;
+    if (!before || !after) return;
+
+    const label       = intakeVehicleLabel(after.vehicle);
+    const beforeTasks  = byId(before.repair?.tasks);
+    const afterTasks   = after.repair?.tasks ?? [];
+    const allDoneBefore = (before.repair?.tasks?.length ?? 0) > 0 && (before.repair?.tasks ?? []).every(taskDone);
+    const allDoneAfter  = afterTasks.length > 0 && afterTasks.every(taskDone);
+
+    for (const task of afterTasks) {
+      const taskLabel = esc(task.description) || "Задача";
+      const prevTask  = beforeTasks.get(task.id);
+
+      if (!prevTask) {
+        const creator = esc(task.createdByName ?? after.createdByName) || "Неизвестно";
+        await sendTelegram([
+          `➕ *Задача (приёмка):* ${taskLabel}`,
+          ...vehicleLines(label),
+          `Создал: ${creator}`,
+        ].join("\n"));
+        continue;
+      }
+
+      if (!taskDone(prevTask) && taskDone(task)) {
+        await sendTelegram([
+          `✅ *Задача закрыта (приёмка):* ${taskLabel}`,
+          ...vehicleLines(label),
+        ].join("\n"));
+      }
+
+      const beforePhotoIds = new Set((prevTask.photos ?? []).map((p) => p.id));
+      const newPhotos       = (task.photos ?? []).filter((p) => !beforePhotoIds.has(p.id));
+      if (newPhotos.length > 0) {
+        await notifyNewPhotos(newPhotos, taskCaption(task, "Приёмка", label, after.createdByName));
+      }
+    }
+
+    if (!allDoneBefore && allDoneAfter) {
+      await sendTelegram([
+        `🏁 *Машина готова к закрытию (приёмка)*`,
+        ...vehicleLines(label),
+        `Назначьте клиента и сумму в «Отчётах».`,
+      ].join("\n"));
     }
   },
 );
