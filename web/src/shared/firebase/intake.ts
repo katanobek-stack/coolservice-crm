@@ -11,6 +11,7 @@ import { getFirebaseDb } from "./app";
 import {
   ConcurrentMutationError,
   cleanForFirestore,
+  findEntityIndex,
   runSafeTransaction,
 } from "./concurrency";
 import { genId } from "../utils/format";
@@ -130,6 +131,52 @@ export function mutateIntakeRepairEmbedded(
     editedBy: editor.uid,
     editedAt: new Date().toISOString(),
   }), firestore);
+}
+
+/** Update one task inside the embedded repair; `taskMutation` gets the fresh task. */
+export function mutateIntakeRepairTask(
+  id: string,
+  task: RepairTask,
+  taskMutation: (task: RepairTask) => RepairTask,
+  editor: { uid: string; name: string },
+  firestore: Firestore = getFirebaseDb(),
+): Promise<void> {
+  return mutateIntakeRepairEmbedded(id, (repair) => {
+    const tasks = [...(repair.tasks ?? [])];
+    const index = findEntityIndex(tasks, task, "задача приёмки");
+    return {
+      ...repair,
+      tasks: tasks.map((item, i) => (i === index ? taskMutation(item) : item)),
+    };
+  }, editor, firestore);
+}
+
+/** Append a task to the embedded repair. */
+export function addIntakeRepairTask(
+  id: string,
+  task: RepairTask,
+  editor: { uid: string; name: string },
+  firestore: Firestore = getFirebaseDb(),
+): Promise<void> {
+  return mutateIntakeRepairEmbedded(id, (repair) => {
+    const tasks = repair.tasks ?? [];
+    if (tasks.some((t) => t.id === task.id)) return repair;
+    return { ...repair, tasks: [...tasks, task] };
+  }, editor, firestore);
+}
+
+/** Remove a task from the embedded repair. */
+export function removeIntakeRepairTask(
+  id: string,
+  task: RepairTask,
+  editor: { uid: string; name: string },
+  firestore: Firestore = getFirebaseDb(),
+): Promise<void> {
+  return mutateIntakeRepairEmbedded(id, (repair) => {
+    const tasks = [...(repair.tasks ?? [])];
+    const index = findEntityIndex(tasks, task, "задача приёмки");
+    return { ...repair, tasks: tasks.filter((_, i) => i !== index) };
+  }, editor, firestore);
 }
 
 export interface IntakeVehiclePatch {
