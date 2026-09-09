@@ -17,8 +17,14 @@ import {
 import { genId } from "../utils/format";
 import { normalizePlate, platesMatch } from "../utils/plate";
 import { deletePhoto, deletePhotoObjects, repairPhotos } from "../utils/photos";
-import type { IntakeRepair, IntakeServiceType, IntakeVehicle } from "../types/intake";
-import type { Client, Repair, RepairTask, Vehicle } from "../types/client";
+import {
+  intakeKind,
+  type IntakeChamber,
+  type IntakeRepair,
+  type IntakeServiceType,
+  type IntakeVehicle,
+} from "../types/intake";
+import type { Chamber, Client, Repair, RepairTask, Vehicle } from "../types/client";
 
 const COLLECTION = "intakeRepairs";
 
@@ -26,30 +32,16 @@ function intakeRef(firestore: Firestore, id: string) {
   return doc(firestore, COLLECTION, id);
 }
 
-// ─── Create ───────────────────────────────────────────────────────────────────
-
-export interface NewIntakeInput {
-  plate: string;
-  brand?: string;
-  model?: string;
-  photo?: string;
-  photoPath?: string;
-  serviceType: IntakeServiceType;
+interface Creator {
   creatorUid: string;
   creatorName: string;
   /** Assignees for the auto "Заправка фреона" task. Defaults to the creator. */
   assignees?: string[];
 }
 
-/** Opens a walk-in repair on a car that has no client yet. Returns the new doc id. */
-export async function createIntakeRepair(
-  input: NewIntakeInput,
-  firestore: Firestore = getFirebaseDb(),
-): Promise<string> {
-  const id = genId();
-  const now = new Date().toISOString();
-  const assignees = input.assignees?.length ? input.assignees : [input.creatorUid];
-
+/** The embedded repair every intake starts with: one auto "Заправка фреона" task. */
+function buildIntakeRepair(serviceType: Repair["serviceType"], creator: Creator, now: string): Repair {
+  const assignees = creator.assignees?.length ? creator.assignees : [creator.creatorUid];
   const freonTask: RepairTask = {
     id: genId(),
     description: "Заправка фреона",
@@ -57,23 +49,42 @@ export async function createIntakeRepair(
     doneBy: [],
     status: "in_progress",
     freonTask: true,
-    createdBy: input.creatorUid,
-    createdByName: input.creatorName,
+    createdBy: creator.creatorUid,
+    createdByName: creator.creatorName,
     createdAt: now,
   };
-
-  const repair: Repair = {
+  return {
     id: genId(),
-    serviceType: input.serviceType,
+    serviceType,
     date: now.slice(0, 10),
     status: "in_progress",
     tasks: [freonTask],
     photos: [],
     mechanics: assignees,
-    createdBy: input.creatorUid,
-    createdByName: input.creatorName,
+    createdBy: creator.creatorUid,
+    createdByName: creator.creatorName,
     createdAt: now,
   };
+}
+
+// ─── Create ───────────────────────────────────────────────────────────────────
+
+export interface NewVehicleIntakeInput extends Creator {
+  plate: string;
+  brand?: string;
+  model?: string;
+  photo?: string;
+  photoPath?: string;
+  serviceType: IntakeServiceType;
+}
+
+/** Opens a walk-in repair on a car that has no client yet. Returns the new doc id. */
+export async function createIntakeRepair(
+  input: NewVehicleIntakeInput,
+  firestore: Firestore = getFirebaseDb(),
+): Promise<string> {
+  const id = genId();
+  const now = new Date().toISOString();
 
   const vehicle: IntakeVehicle = {
     plate: input.plate.trim(),
@@ -87,8 +98,55 @@ export async function createIntakeRepair(
 
   const document: IntakeRepair = {
     id,
+    kind: "vehicle",
     vehicle,
-    repair,
+    repair: buildIntakeRepair(input.serviceType, input, now),
+    createdBy: input.creatorUid,
+    createdByName: input.creatorName,
+    createdAt: now,
+  };
+
+  await setDoc(intakeRef(firestore, id), cleanForFirestore(document) as DocumentData);
+  return id;
+}
+
+export interface NewChamberIntakeInput extends Creator {
+  label: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  wallThickness?: number;
+  notes?: string;
+  photo?: string;
+  photoPath?: string;
+}
+
+function chamberFromInput(input: NewChamberIntakeInput): IntakeChamber {
+  return {
+    label: input.label.trim(),
+    ...(input.length ? { length: input.length } : {}),
+    ...(input.width ? { width: input.width } : {}),
+    ...(input.height ? { height: input.height } : {}),
+    ...(input.wallThickness ? { wallThickness: input.wallThickness } : {}),
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    ...(input.photo ? { photo: input.photo } : {}),
+    ...(input.photoPath ? { photoPath: input.photoPath } : {}),
+  };
+}
+
+/** Opens a walk-in repair on a production chamber that has no client yet. */
+export async function createChamberIntake(
+  input: NewChamberIntakeInput,
+  firestore: Firestore = getFirebaseDb(),
+): Promise<string> {
+  const id = genId();
+  const now = new Date().toISOString();
+
+  const document: IntakeRepair = {
+    id,
+    kind: "chamber",
+    chamber: chamberFromInput(input),
+    repair: buildIntakeRepair("refrigerator", input, now),
     createdBy: input.creatorUid,
     createdByName: input.creatorName,
     createdAt: now,
@@ -110,7 +168,7 @@ export async function mutateIntakeRepair(
     const ref = intakeRef(firestore, id);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) {
-      throw new ConcurrentMutationError("Машина в приёмке уже удалена или обработана");
+      throw new ConcurrentMutationError("Заявка в приёмке уже удалена или обработана");
     }
     const current = { id: snapshot.id, ...snapshot.data() } as IntakeRepair;
     const next = mutation(current);
@@ -196,7 +254,8 @@ export function updateIntakeVehicle(
   firestore: Firestore = getFirebaseDb(),
 ): Promise<void> {
   return mutateIntakeRepair(id, (current) => {
-    const vehicle: IntakeVehicle = { ...current.vehicle };
+    const base = current.vehicle ?? { plate: "", plateNormalized: "", serviceType: "refrigerator" as IntakeServiceType };
+    const vehicle: IntakeVehicle = { ...base };
     if (patch.plate !== undefined) {
       vehicle.plate = patch.plate.trim();
       vehicle.plateNormalized = normalizePlate(patch.plate);
@@ -207,21 +266,45 @@ export function updateIntakeVehicle(
     if (patch.photoPath !== undefined) vehicle.photoPath = patch.photoPath || undefined;
 
     let repair = current.repair;
-    if (patch.serviceType && patch.serviceType !== current.vehicle.serviceType) {
+    if (patch.serviceType && patch.serviceType !== base.serviceType) {
       vehicle.serviceType = patch.serviceType;
-      // keep the repair's own type in sync only while it still mirrors the car
-      if (repair.serviceType === current.vehicle.serviceType) {
+      if (repair.serviceType === base.serviceType) {
         repair = { ...repair, serviceType: patch.serviceType };
       }
     }
 
-    return {
-      ...current,
-      vehicle,
-      repair,
-      editedBy: editor.uid,
-      editedAt: new Date().toISOString(),
-    };
+    return { ...current, vehicle, repair, editedBy: editor.uid, editedAt: new Date().toISOString() };
+  }, firestore);
+}
+
+export interface IntakeChamberPatch {
+  label?: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  wallThickness?: number;
+  notes?: string;
+  photo?: string;
+  photoPath?: string;
+}
+
+/** Edit the chamber description before it is assigned to a client. */
+export function updateIntakeChamber(
+  id: string,
+  patch: IntakeChamberPatch,
+  editor: { uid: string; name: string },
+  firestore: Firestore = getFirebaseDb(),
+): Promise<void> {
+  return mutateIntakeRepair(id, (current) => {
+    const chamber: IntakeChamber = { label: "", ...current.chamber };
+    if (patch.label !== undefined) chamber.label = patch.label.trim();
+    for (const key of ["length", "width", "height", "wallThickness"] as const) {
+      if (patch[key] !== undefined) chamber[key] = patch[key] || undefined;
+    }
+    if (patch.notes !== undefined) chamber.notes = patch.notes.trim() || undefined;
+    if (patch.photo !== undefined) chamber.photo = patch.photo || undefined;
+    if (patch.photoPath !== undefined) chamber.photoPath = patch.photoPath || undefined;
+    return { ...current, chamber, editedBy: editor.uid, editedAt: new Date().toISOString() };
   }, firestore);
 }
 
@@ -239,7 +322,8 @@ export async function deleteIntakeRepair(
     transaction.delete(ref);
   });
   void deletePhotoObjects(repairPhotos(intake.repair));
-  if (intake.vehicle.photoPath) void deletePhoto(intake.vehicle.photoPath);
+  if (intake.vehicle?.photoPath) void deletePhoto(intake.vehicle.photoPath);
+  if (intake.chamber?.photoPath) void deletePhoto(intake.chamber.photoPath);
 }
 
 // ─── Assign to a client (close) ───────────────────────────────────────────────
@@ -259,8 +343,8 @@ export interface NewClientData {
 export interface AssignIntakeTarget {
   /** Attach to an existing client, or create a new one. */
   client: { existingId: string } | { create: NewClientData };
-  /** Attach to one of the client's existing vehicles, or create a new one from the intake car. */
-  vehicle: { existingId: string } | { create: true };
+  /** Attach to an existing car/chamber of the client, or create a new one from the intake. */
+  equipment: { existingId: string } | { create: true };
   cost: string;
   closedBy: string;
   closedByName: string;
@@ -269,7 +353,7 @@ export interface AssignIntakeTarget {
 /**
  * Moves the intake repair into `clients/{id}.repairs[]` as a closed job and
  * deletes the intake document — all in one transaction. Creates the client
- * and/or vehicle when requested. Returns the client id the repair landed on.
+ * and/or the car/chamber when requested. Returns the client id.
  */
 export async function assignIntakeRepairToClient(
   intake: IntakeRepair,
@@ -288,12 +372,13 @@ export async function assignIntakeRepairToClient(
     const intakeR = intakeRef(firestore, intake.id);
     const intakeSnap = await transaction.get(intakeR);
     if (!intakeSnap.exists()) {
-      throw new ConcurrentMutationError("Машина в приёмке уже обработана другим сотрудником");
+      throw new ConcurrentMutationError("Заявка в приёмке уже обработана другим сотрудником");
     }
     const current = { id: intakeSnap.id, ...intakeSnap.data() } as IntakeRepair;
     if (current.repair.id !== intake.repair.id) {
       throw new ConcurrentMutationError("Ремонт в приёмке изменился — обновите страницу");
     }
+    const kind = intakeKind(current);
 
     let existingClient: Client | null = null;
     if ("existingId" in target.client) {
@@ -302,30 +387,11 @@ export async function assignIntakeRepairToClient(
       existingClient = { id: clientSnap.id, ...clientSnap.data() } as Client;
     }
 
-    // ---- resolve vehicle ----
+    // ---- resolve the car / chamber ----
     const vehicles: Vehicle[] = [...(existingClient?.vehicles ?? [])];
-    let vehicleId: string;
-    if ("existingId" in target.vehicle) {
-      vehicleId = target.vehicle.existingId;
-      if (!vehicles.some((v) => v.id === vehicleId)) {
-        throw new ConcurrentMutationError("Выбранная машина не найдена у клиента");
-      }
-    } else {
-      vehicleId = genId();
-      vehicles.push({
-        id: vehicleId,
-        plate: current.vehicle.plate,
-        serviceType: current.vehicle.serviceType,
-        ...(current.vehicle.brand ? { brand: current.vehicle.brand } : {}),
-        ...(current.vehicle.model ? { model: current.vehicle.model } : {}),
-        ...(current.vehicle.photo ? { photo: current.vehicle.photo } : {}),
-      });
-    }
-
-    // ---- move the repair in as a closed job ----
+    const chambers: Chamber[] = [...(existingClient?.chambers ?? [])];
     const movedRepair: Repair = {
       ...current.repair,
-      vehicleId,
       cost: target.cost.trim(),
       status: "done",
       closedByManager: true,
@@ -334,10 +400,54 @@ export async function assignIntakeRepairToClient(
       editedAt: now,
     };
 
+    if (kind === "chamber") {
+      const c = current.chamber;
+      let chamberId: string;
+      if ("existingId" in target.equipment) {
+        chamberId = target.equipment.existingId;
+        if (!chambers.some((x) => x.id === chamberId)) {
+          throw new ConcurrentMutationError("Выбранная камера не найдена у клиента");
+        }
+      } else {
+        chamberId = genId();
+        chambers.push({
+          id: chamberId,
+          ...(c?.label ? { notes: [c.label, c.notes].filter(Boolean).join(" — ") } : (c?.notes ? { notes: c.notes } : {})),
+          ...(c?.length ? { length: c.length } : {}),
+          ...(c?.width ? { width: c.width } : {}),
+          ...(c?.height ? { height: c.height } : {}),
+          ...(c?.wallThickness ? { wallThickness: c.wallThickness } : {}),
+          ...(c?.photo ? { photo: c.photo } : {}),
+        });
+      }
+      movedRepair.chamberId = chamberId;
+    } else {
+      const v = current.vehicle;
+      let vehicleId: string;
+      if ("existingId" in target.equipment) {
+        vehicleId = target.equipment.existingId;
+        if (!vehicles.some((x) => x.id === vehicleId)) {
+          throw new ConcurrentMutationError("Выбранная машина не найдена у клиента");
+        }
+      } else {
+        vehicleId = genId();
+        vehicles.push({
+          id: vehicleId,
+          plate: v?.plate ?? "—",
+          serviceType: v?.serviceType ?? "refrigerator",
+          ...(v?.brand ? { brand: v.brand } : {}),
+          ...(v?.model ? { model: v.model } : {}),
+          ...(v?.photo ? { photo: v.photo } : {}),
+        });
+      }
+      movedRepair.vehicleId = vehicleId;
+    }
+
     // ---- writes ----
     if (existingClient) {
       transaction.update(clientRef, cleanForFirestore({
         vehicles,
+        chambers,
         repairs: [...(existingClient.repairs ?? []), movedRepair],
       }) as DocumentData);
     } else {
@@ -353,8 +463,8 @@ export async function assignIntakeRepairToClient(
         ...(data.bankAccount?.trim() ? { bankAccount: data.bankAccount.trim() } : {}),
         ...(data.note?.trim() ? { note: data.note.trim() } : {}),
         vehicles,
+        chambers,
         repairs: [movedRepair],
-        chambers: [],
         createdAt: serverTimestamp(),
       }) as DocumentData);
     }

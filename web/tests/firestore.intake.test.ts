@@ -10,6 +10,7 @@ import {
 import { deleteDoc, doc, getDoc, setDoc, type Firestore } from "firebase/firestore";
 import {
   createIntakeRepair,
+  createChamberIntake,
   mutateIntakeRepairEmbedded,
   assignIntakeRepairToClient,
   deleteIntakeRepair,
@@ -78,9 +79,9 @@ describe("createIntakeRepair", () => {
     const id = await newIntake("к 483 ер 61");
     const intake = await readIntake(id);
     assert.ok(intake);
-    assert.equal(intake!.vehicle.plate, "к 483 ер 61");
-    assert.equal(intake!.vehicle.plateNormalized, "K483EP61");
-    assert.equal(intake!.vehicle.serviceType, "refrigerator");
+    assert.equal(intake!.vehicle!.plate, "к 483 ер 61");
+    assert.equal(intake!.vehicle!.plateNormalized, "K483EP61");
+    assert.equal(intake!.vehicle!.serviceType, "refrigerator");
     const tasks = intake!.repair.tasks ?? [];
     assert.equal(tasks.length, 1);
     assert.equal(tasks[0].description, "Заправка фреона");
@@ -119,7 +120,7 @@ describe("assignIntakeRepairToClient", () => {
       intake,
       {
         client: { create: { name: "Иван Петров", clientType: "phys", phone: "+7 900 000-00-00" } },
-        vehicle: { create: true },
+        equipment: { create: true },
         cost: "15000",
         closedBy: "manager-1",
         closedByName: "Менеджер",
@@ -156,7 +157,7 @@ describe("assignIntakeRepairToClient", () => {
 
     await assignIntakeRepairToClient(
       intake,
-      { client: { existingId: "c1" }, vehicle: { existingId: "v1" }, cost: "9000", closedBy: "manager-1", closedByName: "Менеджер" },
+      { client: { existingId: "c1" }, equipment: { existingId: "v1" }, cost: "9000", closedBy: "manager-1", closedByName: "Менеджер" },
       dbFor("manager-1"),
     );
 
@@ -172,7 +173,7 @@ describe("assignIntakeRepairToClient", () => {
     const intake = (await readIntake(id))!;
     const target = {
       client: { create: { name: "Дубль" } },
-      vehicle: { create: true as const },
+      equipment: { create: true as const },
       cost: "1000",
       closedBy: "manager-1",
       closedByName: "Менеджер",
@@ -185,6 +186,71 @@ describe("assignIntakeRepairToClient", () => {
     const ok = results.filter((r) => r.status === "fulfilled");
     assert.equal(ok.length, 1);
     assert.equal(await readIntake(id), undefined);
+  });
+});
+
+describe("chamber intake", () => {
+  test("createChamberIntake stores the chamber and the auto freon task", async () => {
+    const id = await createChamberIntake(
+      { label: "Магазин на Светланской", length: 3000, width: 2000, height: 2400, creatorUid: "mech-1", creatorName: "Механик" },
+      dbFor("mech-1"),
+    );
+    const intake = (await readIntake(id))!;
+    assert.equal(intake.kind, "chamber");
+    assert.equal(intake.chamber?.label, "Магазин на Светланской");
+    assert.equal(intake.chamber?.length, 3000);
+    assert.equal(intake.vehicle, undefined);
+    assert.equal((intake.repair.tasks ?? [])[0].description, "Заправка фреона");
+  });
+
+  test("assign creates a new chamber on a new client with the repair by chamberId", async () => {
+    const id = await createChamberIntake(
+      { label: "Кафе «Уют»", notes: "не морозит", creatorUid: "mech-1", creatorName: "Механик" },
+      dbFor("mech-1"),
+    );
+    const intake = (await readIntake(id))!;
+
+    const { clientId } = await assignIntakeRepairToClient(
+      intake,
+      {
+        client: { create: { name: "ИП Сидоров" } },
+        equipment: { create: true },
+        cost: "8000", closedBy: "manager-1", closedByName: "Менеджер",
+      },
+      dbFor("manager-1"),
+    );
+
+    const client = (await getDoc(doc(dbFor("reader"), "clients", clientId))).data() as Client;
+    assert.equal(client.chambers?.length, 1);
+    assert.equal((client.vehicles ?? []).length, 0);
+    assert.equal(client.repairs.length, 1);
+    const moved = client.repairs[0] as Repair;
+    assert.equal(moved.chamberId, client.chambers![0].id);
+    assert.equal(moved.vehicleId, undefined);
+    assert.equal(moved.closedByManager, true);
+    assert.equal(await readIntake(id), undefined);
+  });
+
+  test("assign to an existing chamber of an existing client", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "clients/cc"), {
+        name: "ООО Холод", clientType: "legal",
+        vehicles: [], repairs: [], chambers: [{ id: "ch1", notes: "склад" }],
+      });
+    });
+    const id = await createChamberIntake({ label: "склад", creatorUid: "mech-1", creatorName: "Механик" }, dbFor("mech-1"));
+    const intake = (await readIntake(id))!;
+
+    await assignIntakeRepairToClient(
+      intake,
+      { client: { existingId: "cc" }, equipment: { existingId: "ch1" }, cost: "5000", closedBy: "m", closedByName: "М" },
+      dbFor("manager-1"),
+    );
+
+    const client = (await getDoc(doc(dbFor("reader"), "clients/cc"))).data() as Client;
+    assert.equal(client.chambers!.length, 1);
+    assert.equal(client.repairs.length, 1);
+    assert.equal((client.repairs[0] as Repair).chamberId, "ch1");
   });
 });
 

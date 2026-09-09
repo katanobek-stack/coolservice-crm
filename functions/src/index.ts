@@ -346,12 +346,20 @@ export const notifyClientUpdated = onDocumentUpdated(
 // at close, which moves the repair to clients/{id} and deletes this doc.
 
 interface IntakeDoc {
+  kind?:         "vehicle" | "chamber";
   vehicle?:      { plate?: string; brand?: string; model?: string };
+  chamber?:      { label?: string };
   repair?:       Repair;
   createdByName?: string;
 }
 
-function intakeVehicleLabel(v: IntakeDoc["vehicle"]): string {
+function intakeIsChamber(d: IntakeDoc): boolean {
+  return (d.kind ?? (d.chamber ? "chamber" : "vehicle")) === "chamber";
+}
+
+function intakeLabel(d: IntakeDoc): string {
+  if (intakeIsChamber(d)) return esc(d.chamber?.label);
+  const v = d.vehicle;
   if (!v) return "";
   const brand = v.brand ?? v.model ?? "";
   return [brand, v.plate].filter(Boolean).map(esc).join(" · ");
@@ -362,10 +370,11 @@ export const notifyIntakeCreated = onDocumentCreated(
   async (event) => {
     const data = event.data?.data() as IntakeDoc | undefined;
     if (!data) return;
-    const label = intakeVehicleLabel(data.vehicle);
+    const label = intakeLabel(data);
     const who   = esc(data.createdByName) || "Механик";
+    const head  = intakeIsChamber(data) ? "🧊 *Новая камера в приёмке*" : "🚚 *Новая машина в приёмке*";
     await sendTelegram([
-      `🚚 *Новая машина в приёмке*${label ? `: ${label}` : ""}`,
+      `${head}${label ? `: ${label}` : ""}`,
       `Добавил: ${who}`,
     ].join("\n"));
   },
@@ -378,7 +387,7 @@ export const notifyIntakeUpdated = onDocumentUpdated(
     const after  = event.data?.after.data()  as IntakeDoc | undefined;
     if (!before || !after) return;
 
-    const label       = intakeVehicleLabel(after.vehicle);
+    const label       = intakeLabel(after);
     const beforeTasks  = byId(before.repair?.tasks);
     const afterTasks   = after.repair?.tasks ?? [];
     const allDoneBefore = (before.repair?.tasks?.length ?? 0) > 0 && (before.repair?.tasks ?? []).every(taskDone);
@@ -414,7 +423,7 @@ export const notifyIntakeUpdated = onDocumentUpdated(
 
     if (!allDoneBefore && allDoneAfter) {
       await sendTelegram([
-        `🏁 *Машина готова к закрытию (приёмка)*`,
+        `🏁 *${intakeIsChamber(after) ? "Камера" : "Машина"} готова к закрытию (приёмка)*`,
         ...vehicleLines(label),
         `Назначьте клиента и сумму в «Отчётах».`,
       ].join("\n"));

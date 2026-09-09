@@ -27,7 +27,7 @@ import {
 } from "../../shared/firebase/intake";
 import { RepairTaskWork, intakeRepairEditor } from "../../shared/repair-work";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
-import type { IntakeRepair } from "../../shared/types/intake";
+import { intakeKind, type IntakeRepair } from "../../shared/types/intake";
 import type { ServiceTask } from "../../shared/types/task";
 import type { PhotoData } from "../../shared/utils/photos";
 
@@ -82,12 +82,18 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
     name: myProfile?.name ?? user?.email ?? "Неизвестно",
   });
 
-  const matches = useMemo(() => findPlateMatches(clients, intake.vehicle.plate), [clients, intake.vehicle.plate]);
+  const kind = intakeKind(intake);
+  const isChamber = kind === "chamber";
+  const plate = intake.vehicle?.plate ?? "";
+  const matches = useMemo(
+    () => (isChamber ? [] : findPlateMatches(clients, plate)),
+    [clients, plate, isChamber],
+  );
 
   const [sum, setSum] = useState(intake.repair.cost ?? "");
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [clientId, setClientId] = useState(matches[0]?.client.id ?? "");
-  const [vehicleChoice, setVehicleChoice] = useState<string>(matches[0]?.vehicle.id ?? "new");
+  const [equipChoice, setEquipChoice] = useState<string>(matches[0]?.vehicle.id ?? "new");
   const [search, setSearch] = useState("");
   const [nName, setNName] = useState("");
   const [nType, setNType] = useState<"phys" | "legal">("phys");
@@ -98,9 +104,15 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const { vehicle, repair } = intake;
+  const { repair } = intake;
   const tasks = repair.tasks ?? [];
-  const title = [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "Автомобиль";
+  const equipName = isChamber
+    ? `камера «${intake.chamber?.label ?? ""}»`
+    : `машина «${plate}»`;
+  const title = isChamber
+    ? (intake.chamber?.label || "Камера")
+    : ([intake.vehicle?.brand, intake.vehicle?.model].filter(Boolean).join(" ") || "Автомобиль");
+  const photo = isChamber ? intake.chamber?.photo : intake.vehicle?.photo;
   const selectedClient = clients.find((c) => c.id === clientId);
 
   const filtered = useMemo(() => {
@@ -115,6 +127,9 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
     setError("");
     if (!sum.trim()) { setError("Укажите сумму"); return; }
 
+    const equipment: AssignIntakeTarget["equipment"] =
+      mode === "new" || equipChoice === "new" ? { create: true } : { existingId: equipChoice };
+
     let target: AssignIntakeTarget;
     if (mode === "new") {
       if (!nName.trim()) { setError("Укажите имя клиента"); return; }
@@ -128,14 +143,14 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
             note: nNote || undefined,
           },
         },
-        vehicle: { create: true },
+        equipment,
         cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
       };
     } else {
       if (!clientId) { setError("Выберите клиента"); return; }
       target = {
         client: { existingId: clientId },
-        vehicle: vehicleChoice === "new" ? { create: true } : { existingId: vehicleChoice },
+        equipment,
         cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
       };
     }
@@ -152,12 +167,14 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
   return (
     <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderLeft: "3px solid #16a34a", borderRadius: 14, padding: "14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
-        {vehicle.photo
-          ? <img src={vehicle.photo} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
-          : <div style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🚚</div>}
+        {photo
+          ? <img src={photo} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+          : <div style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{isChamber ? "🧊" : "🚚"}</div>}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-          <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>{vehicle.plate}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>
+            {isChamber ? "камера" : plate}
+          </div>
           <CreatorLine name={intake.createdByName} date={intake.createdAt} style={{ marginTop: 2 }} />
         </div>
       </div>
@@ -176,12 +193,12 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
               <button
                 key={`${m.client.id}-${m.vehicle.id}`}
                 type="button"
-                onClick={() => { setMode("existing"); setClientId(m.client.id); setVehicleChoice(m.vehicle.id); }}
+                onClick={() => { setMode("existing"); setClientId(m.client.id); setEquipChoice(m.vehicle.id); }}
                 style={{
                   display: "block", width: "100%", textAlign: "left", marginTop: 4, padding: "6px 8px", borderRadius: 8,
                   fontSize: 12, cursor: "pointer",
-                  border: `1px solid ${clientId === m.client.id && vehicleChoice === m.vehicle.id ? "#16a34a" : "var(--border)"}`,
-                  background: clientId === m.client.id && vehicleChoice === m.vehicle.id ? "rgba(34,197,94,0.15)" : "var(--bg3)",
+                  border: `1px solid ${clientId === m.client.id && equipChoice === m.vehicle.id ? "#16a34a" : "var(--border)"}`,
+                  background: clientId === m.client.id && equipChoice === m.vehicle.id ? "rgba(34,197,94,0.15)" : "var(--bg3)",
                   color: "var(--text)",
                 }}
               >
@@ -218,12 +235,18 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
                   <button type="button" onClick={() => { setClientId(""); setSearch(""); }} style={{ fontSize: 11, color: "var(--accent2)", background: "transparent", border: "none", cursor: "pointer" }}>сменить</button>
                 </div>
                 <div style={{ marginTop: 6 }}>
-                  <FormGroup label="Машина">
-                    <Select value={vehicleChoice} onChange={(e) => setVehicleChoice(e.target.value)}>
-                      {(selectedClient.vehicles ?? []).map((v) => (
-                        <option key={v.id} value={v.id}>{[v.brand, v.plate].filter(Boolean).join(" ")}</option>
-                      ))}
-                      <option value="new">➕ Новая машина «{vehicle.plate}»</option>
+                  <FormGroup label={isChamber ? "Камера" : "Машина"}>
+                    <Select value={equipChoice} onChange={(e) => setEquipChoice(e.target.value)}>
+                      {isChamber
+                        ? (selectedClient.chambers ?? []).map((ch) => (
+                            <option key={ch.id} value={ch.id}>
+                              {ch.notes ? ch.notes.slice(0, 40) : `Камера ${ch.id.slice(0, 4)}`}
+                            </option>
+                          ))
+                        : (selectedClient.vehicles ?? []).map((v) => (
+                            <option key={v.id} value={v.id}>{[v.brand, v.plate].filter(Boolean).join(" ")}</option>
+                          ))}
+                      <option value="new">➕ {isChamber ? `Новая камера «${intake.chamber?.label ?? ""}»` : `Новая машина «${plate}»`}</option>
                     </Select>
                   </FormGroup>
                 </div>
@@ -236,7 +259,10 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => { setClientId(c.id); setVehicleChoice(c.vehicles?.[0]?.id ?? "new"); }}
+                      onClick={() => {
+                        setClientId(c.id);
+                        setEquipChoice((isChamber ? c.chambers?.[0]?.id : c.vehicles?.[0]?.id) ?? "new");
+                      }}
                       style={{ textAlign: "left", padding: "7px 10px", borderRadius: 8, fontSize: 13, cursor: "pointer", background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text)" }}
                     >
                       {c.name}
@@ -274,7 +300,7 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
               </>
             )}
             <FormGroup label="Примечание"><Input value={nNote} onChange={(e) => setNNote(e.target.value)} /></FormGroup>
-            <div style={{ fontSize: 11, color: "var(--text3)" }}>Машина «{vehicle.plate}» будет добавлена этому клиенту.</div>
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>{equipName[0].toUpperCase() + equipName.slice(1)} будет добавлена этому клиенту.</div>
           </>
         )}
 
