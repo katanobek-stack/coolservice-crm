@@ -20,7 +20,14 @@ import {
   mutateClientRepair,
   mutateRepairTask,
 } from "../../shared/firebase/concurrency";
+import {
+  assignIntakeRepairToClient,
+  findPlateMatches,
+  type AssignIntakeTarget,
+} from "../../shared/firebase/intake";
+import { RepairTaskWork, intakeRepairEditor } from "../../shared/repair-work";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
+import type { IntakeRepair } from "../../shared/types/intake";
 import type { ServiceTask } from "../../shared/types/task";
 import type { PhotoData } from "../../shared/utils/photos";
 
@@ -64,6 +71,220 @@ interface DoneItem {
   assigneeNames: string;
   createdByName: string;
   mk:            string;
+}
+
+// ─── Intake close card — assign the car to a client, then close ───────────────
+
+function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: Client[] }) {
+  const { myProfile, user } = useAuth();
+  const editor = intakeRepairEditor(intake.id, {
+    uid: user?.uid ?? "",
+    name: myProfile?.name ?? user?.email ?? "Неизвестно",
+  });
+
+  const matches = useMemo(() => findPlateMatches(clients, intake.vehicle.plate), [clients, intake.vehicle.plate]);
+
+  const [sum, setSum] = useState(intake.repair.cost ?? "");
+  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [clientId, setClientId] = useState(matches[0]?.client.id ?? "");
+  const [vehicleChoice, setVehicleChoice] = useState<string>(matches[0]?.vehicle.id ?? "new");
+  const [search, setSearch] = useState("");
+  const [nName, setNName] = useState("");
+  const [nType, setNType] = useState<"phys" | "legal">("phys");
+  const [nPhone, setNPhone] = useState("");
+  const [nInn, setNInn] = useState("");
+  const [nContact, setNContact] = useState("");
+  const [nNote, setNNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const { vehicle, repair } = intake;
+  const tasks = repair.tasks ?? [];
+  const title = [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "Автомобиль";
+  const selectedClient = clients.find((c) => c.id === clientId);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return clients.slice(0, 8);
+    return clients
+      .filter((c) => c.name.toLowerCase().includes(q) || (c.vehicles ?? []).some((v) => v.plate.toLowerCase().includes(q)))
+      .slice(0, 12);
+  }, [clients, search]);
+
+  async function handleAssign() {
+    setError("");
+    if (!sum.trim()) { setError("Укажите сумму"); return; }
+
+    let target: AssignIntakeTarget;
+    if (mode === "new") {
+      if (!nName.trim()) { setError("Укажите имя клиента"); return; }
+      target = {
+        client: {
+          create: {
+            name: nName, clientType: nType,
+            phone: nPhone || undefined,
+            inn: nType === "legal" ? (nInn || undefined) : undefined,
+            contactPerson: nType === "legal" ? (nContact || undefined) : undefined,
+            note: nNote || undefined,
+          },
+        },
+        vehicle: { create: true },
+        cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
+      };
+    } else {
+      if (!clientId) { setError("Выберите клиента"); return; }
+      target = {
+        client: { existingId: clientId },
+        vehicle: vehicleChoice === "new" ? { create: true } : { existingId: vehicleChoice },
+        cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
+      };
+    }
+
+    setBusy(true);
+    try {
+      await assignIntakeRepairToClient(intake, target);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось закрыть");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderLeft: "3px solid #16a34a", borderRadius: 14, padding: "14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
+        {vehicle.photo
+          ? <img src={vehicle.photo} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
+          : <div style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0, background: "rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🚚</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>{vehicle.plate}</div>
+          <CreatorLine name={intake.createdByName} date={intake.createdAt} style={{ marginTop: 2 }} />
+        </div>
+      </div>
+
+      <RepairTaskWork repair={repair} tasks={tasks} editor={editor} canManageTasks />
+
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+        <FormGroup label="Сумма к оплате, ₽">
+          <Input type="number" placeholder="0" value={sum} onChange={(e) => setSum(e.target.value)} />
+        </FormGroup>
+
+        {matches.length > 0 && (
+          <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#16a34a", marginBottom: 4 }}>Номер уже в базе</div>
+            {matches.map((m) => (
+              <button
+                key={`${m.client.id}-${m.vehicle.id}`}
+                type="button"
+                onClick={() => { setMode("existing"); setClientId(m.client.id); setVehicleChoice(m.vehicle.id); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left", marginTop: 4, padding: "6px 8px", borderRadius: 8,
+                  fontSize: 12, cursor: "pointer",
+                  border: `1px solid ${clientId === m.client.id && vehicleChoice === m.vehicle.id ? "#16a34a" : "var(--border)"}`,
+                  background: clientId === m.client.id && vehicleChoice === m.vehicle.id ? "rgba(34,197,94,0.15)" : "var(--bg3)",
+                  color: "var(--text)",
+                }}
+              >
+                {m.client.name} · {[m.vehicle.brand, m.vehicle.plate].filter(Boolean).join(" ")}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["existing", "new"] as const).map((mo) => (
+            <button
+              key={mo}
+              type="button"
+              onClick={() => setMode(mo)}
+              style={{
+                flex: 1, padding: "7px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                border: mode === mo ? "1px solid var(--accent)" : "1px solid var(--border2)",
+                background: mode === mo ? "var(--accent)" : "var(--bg3)",
+                color: mode === mo ? "white" : "var(--text2)",
+              }}
+            >
+              {mo === "existing" ? "Существующий клиент" : "Новый клиент"}
+            </button>
+          ))}
+        </div>
+
+        {mode === "existing" ? (
+          <>
+            {selectedClient ? (
+              <div style={{ fontSize: 13, color: "var(--text)", padding: "8px 10px", background: "var(--bg3)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span><b>{selectedClient.name}</b></span>
+                  <button type="button" onClick={() => { setClientId(""); setSearch(""); }} style={{ fontSize: 11, color: "var(--accent2)", background: "transparent", border: "none", cursor: "pointer" }}>сменить</button>
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <FormGroup label="Машина">
+                    <Select value={vehicleChoice} onChange={(e) => setVehicleChoice(e.target.value)}>
+                      {(selectedClient.vehicles ?? []).map((v) => (
+                        <option key={v.id} value={v.id}>{[v.brand, v.plate].filter(Boolean).join(" ")}</option>
+                      ))}
+                      <option value="new">➕ Новая машина «{vehicle.plate}»</option>
+                    </Select>
+                  </FormGroup>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Input placeholder="Поиск клиента по имени или номеру" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {filtered.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { setClientId(c.id); setVehicleChoice(c.vehicles?.[0]?.id ?? "new"); }}
+                      style={{ textAlign: "left", padding: "7px 10px", borderRadius: 8, fontSize: 13, cursor: "pointer", background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    >
+                      {c.name}
+                      {(c.vehicles ?? []).length > 0 && (
+                        <span style={{ color: "var(--text3)", fontSize: 11 }}> · {(c.vehicles ?? []).map((v) => v.plate).join(", ")}</span>
+                      )}
+                    </button>
+                  ))}
+                  {filtered.length === 0 && <div style={{ fontSize: 12, color: "var(--text3)", padding: 6 }}>Ничего не найдено</div>}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(["phys", "legal"] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setNType(t)} style={{
+                  flex: 1, padding: "6px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  border: nType === t ? "1px solid var(--accent)" : "1px solid var(--border2)",
+                  background: nType === t ? "var(--accent)" : "var(--bg3)", color: nType === t ? "white" : "var(--text2)",
+                }}>
+                  {t === "phys" ? "Физлицо" : "Компания"}
+                </button>
+              ))}
+            </div>
+            <FormGroup label={nType === "phys" ? "ФИО *" : "Название *"}>
+              <Input placeholder={nType === "phys" ? "Иван Иванов" : "ООО «Пример»"} value={nName} onChange={(e) => setNName(e.target.value)} />
+            </FormGroup>
+            <FormGroup label="Телефон"><Input type="tel" placeholder="+7 924 000 00 00" value={nPhone} onChange={(e) => setNPhone(e.target.value)} /></FormGroup>
+            {nType === "legal" && (
+              <>
+                <FormGroup label="ИНН"><Input value={nInn} onChange={(e) => setNInn(e.target.value)} /></FormGroup>
+                <FormGroup label="Контактное лицо"><Input value={nContact} onChange={(e) => setNContact(e.target.value)} /></FormGroup>
+              </>
+            )}
+            <FormGroup label="Примечание"><Input value={nNote} onChange={(e) => setNNote(e.target.value)} /></FormGroup>
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>Машина «{vehicle.plate}» будет добавлена этому клиенту.</div>
+          </>
+        )}
+
+        {error && <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600 }}>⚠ {error}</div>}
+        <Button size="lg" onClick={() => void handleAssign()} disabled={busy}>
+          {busy ? "Закрытие..." : "Привязать клиента и закрыть"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Close repair card (needs manager action) ─────────────────────────────────
@@ -1420,7 +1641,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehicleId?: string) => void } = {}) {
-  const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance, expenses, intakeRepairs } = useData();
   const { myProfile, isOwner, user }   = useAuth();
   const { canSeeReportsAmounts }       = usePermissions();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
@@ -1470,6 +1691,14 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
   const needsClose = useMemo(
     () => allItems.filter((i) => repairStatus(i.repair) === "done" && !i.repair.closedByManager),
     [allItems],
+  );
+
+  // Intake repairs whose tasks are all done — need a client + sum before closing
+  const intakeReady = useMemo(
+    () => intakeRepairs
+      .filter((i) => repairStatus(i.repair) === "done")
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+    [intakeRepairs],
   );
 
   // Closed history: closedByManager OR cancelled
@@ -1663,6 +1892,22 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Intake — assign a client, then close — admin/manager only */}
+      {isAdmin && intakeReady.length > 0 && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.4s ease 0.08s both" }}>
+          <div className="section-header">
+            <i className="ti ti-car-garage" style={{ fontSize: 17, color: "#16a34a" }} />
+            <span className="section-title" style={{ color: "#16a34a" }}>Приёмка — назначить клиента</span>
+            <span className="section-count">{intakeReady.length}</span>
+          </div>
+          <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
+            {intakeReady.map((i) => (
+              <IntakeCloseCard key={i.id} intake={i} clients={clients} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Needs close section — admin/manager only */}
       {isAdmin && needsClose.length > 0 && (
