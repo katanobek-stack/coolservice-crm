@@ -1,4 +1,9 @@
-import type { MonitoringDeviceState, TemperaturePoint } from "../types/monitoring";
+import type {
+  MonitoringDeviceState,
+  MonitoringPeriod,
+  MonitoringTemperatureRule,
+  TemperaturePoint,
+} from "../types/monitoring";
 
 export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
@@ -35,36 +40,29 @@ export function sortAndDedupePoints(points: TemperaturePoint[]): TemperaturePoin
   );
 }
 
-export function splitAtGaps(
+export function pointsInHistoryWindow(
   points: TemperaturePoint[],
-  gapThresholdMs = 30_000,
-): TemperaturePoint[][] {
-  const sorted = sortAndDedupePoints(points);
-  const segments: TemperaturePoint[][] = [];
-  sorted.forEach((point) => {
-    const segment = segments[segments.length - 1];
-    const previous = segment?.[segment.length - 1];
-    if (!previous || point.measuredAt.getTime() - previous.measuredAt.getTime() > gapThresholdMs) {
-      segments.push([point]);
-    } else {
-      segment.push(point);
-    }
-  });
-  return segments;
+  startedAtMs: number,
+  nowMs: number,
+): TemperaturePoint[] {
+  return sortAndDedupePoints(points.filter((point) => {
+    const measuredAtMs = point.measuredAt.getTime();
+    return measuredAtMs > startedAtMs && measuredAtMs <= nowMs + 10 * 60_000;
+  }));
 }
 
-export function downsampleSegments(
-  segments: TemperaturePoint[][],
-  maximumPoints = 1_200,
-): TemperaturePoint[][] {
-  const total = segments.reduce((sum, segment) => sum + segment.length, 0);
-  if (total <= maximumPoints) return segments;
-  const stride = Math.ceil(total / maximumPoints);
-  return segments.map((segment) => {
-    if (segment.length <= 2) return segment;
-    const sampled = segment.filter((_, index) => index === 0 || index % stride === 0);
-    const last = segment[segment.length - 1];
-    if (sampled[sampled.length - 1] !== last) sampled.push(last);
-    return sampled;
-  });
+export function monitoringPeriodMs(period: MonitoringPeriod): number {
+  if (period === "hour") return 60 * 60_000;
+  if (period === "halfDay") return 12 * 60 * 60_000;
+  return 24 * 60 * 60_000;
+}
+
+export function violatesTemperatureRule(
+  temperatureC: number,
+  rule: Pick<MonitoringTemperatureRule, "enabled" | "direction" | "thresholdC">,
+): boolean {
+  if (!rule.enabled) return false;
+  return rule.direction === "above"
+    ? temperatureC > rule.thresholdC
+    : temperatureC < rule.thresholdC;
 }

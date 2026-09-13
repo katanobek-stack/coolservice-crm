@@ -19,7 +19,7 @@ React + TypeScript + Vite + Firebase + Tailwind CSS.
 
 ### Клиентское приложение
 - SPA без URL-роутера: текущая вкладка хранится в состоянии `AppShell`.
-- Вкладка `monitoring` доступна всем рабочим ролям. `MonitoringTab` сам подписывается только на `monitoringDevices`, `monitoringDeviceState` и `settings/monitoring`; история одного устройства лениво читается из вложенной `packets` только при открытой карточке и не входит в `DataProvider`.
+- Вкладка `monitoring` доступна всем рабочим ролям. `MonitoringTab` сам подписывается только на `monitoringDevices`, `monitoringDeviceState` и `settings/monitoring`; история одного устройства лениво читается из вложенной `packets` только при открытой карточке и не входит в `DataProvider`. Общий `MonitoringAlertCenter` отдельно подписывается максимум на 200 последних `monitoringAlertEvents`; отметка просмотра индивидуальна для UID.
 - `web/src/app/` — инициализация Firebase, auth gate, error boundary, desktop/mobile navigation.
 - `web/src/shared/` — типы, Firebase CRUD, realtime-контекст, разрешения, фото, форматирование и FCM.
 - `web/src/features/` — функциональные модули CRM.
@@ -45,7 +45,7 @@ UI ведения задач вынесен в `web/src/shared/repair-work/` (`R
 
 ### Cloud Functions
 - `functions/src/` — Cloud Functions Node 20, TypeScript, `firebase-functions` v2.
-- `ingestTelemetry` (`europe-west1`) принимает пакетные показания оборудования по HTTP. У каждого устройства свой отзываемый ключ; в Firestore хранится только salted scrypt hash. Текущее состояние — `monitoringDeviceState/{deviceId}`, история — `monitoringTelemetry/{deviceId}/packets/{packetId}`, реестр/привязка — `monitoringDevices`, закрытые credentials — `monitoringDeviceCredentials`. Устройства не получают Firestore Auth/доступ. Контракт и эмуляторные команды: `functions/TELEMETRY.md`.
+- `ingestTelemetry` (`europe-west1`) принимает пакетные показания оборудования по HTTP. У каждого устройства свой отзываемый ключ; в Firestore хранится только salted scrypt hash. Текущее состояние — `monitoringDeviceState/{deviceId}`, история — `monitoringTelemetry/{deviceId}/packets/{packetId}`, реестр/привязка — `monitoringDevices`, независимые версионируемые правила температуры — `monitoringDevices/{deviceId}/temperatureRules`, события аварий — `monitoringAlertEvents`, закрытые credentials — `monitoringDeviceCredentials`. `saveMonitoringTemperatureRule` меняет правила через доверенный callable-процесс, а `closeAlertsOnMonitoringDeviceDisable` закрывает все активные эпизоды отключённого устройства. Устройства не получают Firestore Auth/доступ. Контракт и эмуляторные команды: `functions/TELEMETRY.md`.
 - Триггеры `onCreate/onUpdate` работают на `clients/{clientId}`, потому что ремонты, задачи и фото хранятся вложенными массивами.
 - Telegram-секреты задаются через `firebase functions:secrets:set`: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_GROUP_CHAT_ID`.
 - Получатели: личные chat id из `TELEGRAM_CHAT_ID` плюс группа из `TELEGRAM_GROUP_CHAT_ID`.
@@ -81,7 +81,7 @@ UI ведения задач вынесен в `web/src/shared/repair-work/` (`R
 - `vite build` проходит (один бандл ~1.4 МБ, ~373 КБ gzip — code-splitting нет).
 - Тесты в `web/tests/` (не в `src/`): `repair.financial.test.ts` (чистый юнит, `npm run test:unit`, эмулятор не нужен); `firestore.rules.test.mjs`, `firestore.appointments.test.ts`, `firestore.concurrency.test.ts` — требуют Firestore-эмулятор (`npm run test:emulator` в `web/`, нужен firebase CLI + Java). `npm test` гоняет все четыре. Широкого покрытия бизнес-логики UI пока нет.
 - HTTP-приём телеметрии проверяется через Functions + Firestore Emulator: `functions/tests/telemetry.emulator.test.js`; рабочую базу тест не поддерживает намеренно.
-- Чистая логика статусов/сортировки/разрывов графика покрыта `web/tests/monitoring.test.ts`. Локальный UI-контур с demo Auth и тестовыми устройствами создаётся командой `npm --prefix functions run seed:monitoring-demo`; подробности в `functions/TELEMETRY.md`.
+- Чистая логика статусов, сортировки графика, периодов и строгого температурного порога покрыта `web/tests/monitoring.test.ts`. Локальный UI-контур с demo Auth и тестовыми устройствами создаётся командой `npm --prefix functions run seed:monitoring-demo`; подробности в `functions/TELEMETRY.md`.
 - CI: `.github/workflows/ci.yml` гоняет typecheck + build + тесты (web) и build (functions) на каждый push/PR. `deploy.yml` — деплой на GitHub Pages.
 - CRM опубликована на GitHub Pages: `katanobek-stack.github.io/coolservice-crm/app` — проверено 2026-09-02, работает, задеплоена актуальная сборка, ключа Anthropic в бандле нет.
 - Старая HTML-версия: `katanobek-stack.github.io/coolservice-crm`.

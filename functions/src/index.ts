@@ -5,6 +5,8 @@ import * as admin from "firebase-admin";
 
 export { parseVoiceCommand } from "./parseVoiceCommand";
 export { ingestTelemetry } from "./telemetry";
+export { closeAlertsOnMonitoringDeviceDisable } from "./monitoringDeviceSettings";
+export { saveMonitoringTemperatureRule } from "./monitoringTemperatureRules";
 
 admin.initializeApp();
 

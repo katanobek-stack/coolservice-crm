@@ -11,6 +11,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -404,6 +405,15 @@ describe("equipment monitoring access", () => {
       keySalt: "hidden",
       keyHash: "hidden",
     });
+    await seed("monitoringDevices/device-001/temperatureRules/high", {
+      id: "high", name: "Выше -15", enabled: true,
+      direction: "above", thresholdC: -15, revision: 1, versions: [],
+    });
+    await seed("monitoringAlertEvents/alert-001", {
+      deviceId: "device-001",
+      state: "active",
+      viewedBy: {},
+    });
   });
 
   test("authenticated workers can read registry, state and requested history", async () => {
@@ -436,6 +446,36 @@ describe("equipment monitoring access", () => {
     await assertFails(updateDoc(doc(db, "monitoringDeviceCredentials/device-001"), { active: false }));
   });
 
+  test("workers can read rules but only the trusted callable backend can change versions", async () => {
+    const mechanicRule = doc(dbFor("mechanic-1"), "monitoringDevices/device-001/temperatureRules/high");
+    const managerRule = doc(dbFor("manager-1"), "monitoringDevices/device-001/temperatureRules/high");
+    await assertSucceeds(getDoc(mechanicRule));
+    await assertSucceeds(getDoc(managerRule));
+    await assertFails(updateDoc(mechanicRule, { thresholdC: -10 }));
+    await assertFails(updateDoc(managerRule, { thresholdC: -10 }));
+    await assertFails(setDoc(
+      doc(dbFor("manager-1"), "monitoringDevices/device-001/temperatureRules/forged"),
+      { enabled: true, direction: "above", thresholdC: -15 },
+    ));
+  });
+
+  test("workers can mark only their own alert as viewed and cannot change lifecycle fields", async () => {
+    const mechanicRef = doc(dbFor("mechanic-1"), "monitoringAlertEvents/alert-001");
+    await assertSucceeds(getDoc(mechanicRef));
+    await assertSucceeds(updateDoc(mechanicRef, {
+      "viewedBy.mechanic-1": serverTimestamp(),
+    }));
+    await assertFails(updateDoc(mechanicRef, {
+      "viewedBy.manager-1": serverTimestamp(),
+    }));
+    await assertFails(updateDoc(mechanicRef, { state: "recovered" }));
+    await assertFails(setDoc(doc(dbFor("manager-1"), "monitoringAlertEvents/forged"), {
+      deviceId: "device-001",
+      state: "active",
+      viewedBy: {},
+    }));
+  });
+
   test("workers read the threshold while only manager+ can change a valid value", async () => {
     await seed("settings/monitoring", { offlineThresholdMinutes: 5 });
     await assertSucceeds(getDoc(doc(dbFor("mechanic-1"), "settings/monitoring")));
@@ -458,6 +498,8 @@ describe("equipment monitoring access", () => {
     await assertFails(getDoc(doc(db, "monitoringDevices/device-001")));
     await assertFails(getDoc(doc(db, "monitoringDeviceState/device-001")));
     await assertFails(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
+    await assertFails(getDoc(doc(db, "monitoringDevices/device-001/temperatureRules/high")));
+    await assertFails(getDoc(doc(db, "monitoringAlertEvents/alert-001")));
   });
 });
 

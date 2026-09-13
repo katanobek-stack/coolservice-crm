@@ -4,16 +4,18 @@ import { useData } from "../../shared/context/DataContext";
 import {
   DEFAULT_OFFLINE_THRESHOLD_MINUTES,
   HISTORY_PACKET_LIMITS,
+  deleteMonitoringTemperatureRule,
   listenDeviceHistory,
   listenMonitoringDevices,
   listenMonitoringSettings,
   listenMonitoringStates,
+  listenMonitoringTemperatureRules,
+  saveMonitoringTemperatureRule,
   saveOfflineThreshold,
 } from "../../shared/firebase/monitoring";
 import {
-  downsampleSegments,
   monitoringStatus,
-  splitAtGaps,
+  monitoringPeriodMs,
   type ConnectionStatus,
   type ReadingStatus,
 } from "../../shared/monitoring/logic";
@@ -22,6 +24,7 @@ import type {
   MonitoringDeviceState,
   MonitoringHistoryResult,
   MonitoringPeriod,
+  MonitoringTemperatureRule,
   TemperaturePoint,
 } from "../../shared/types/monitoring";
 import "./monitoring.css";
@@ -78,16 +81,27 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   return <span className={`monitor-badge monitor-badge--connection-${status}`}>{labels[status]}</span>;
 }
 
-function TemperatureChart({ points, period }: {
+function ActiveAlertBadge({ count }: { count: number }) {
+  return <span className="monitor-badge monitor-badge--alert-active">Активных аварий: {count}</span>;
+}
+
+function periodLabel(period: MonitoringPeriod): string {
+  if (period === "hour") return "1 час";
+  if (period === "halfDay") return "12 часов";
+  return "24 часа";
+}
+
+function TemperatureChart({ points, period, rules }: {
   points: TemperaturePoint[];
   period: MonitoringPeriod;
+  rules: MonitoringTemperatureRule[];
 }) {
-  const segments = useMemo(
-    () => downsampleSegments(splitAtGaps(points)),
+  const [selectedPointMs, setSelectedPointMs] = useState<number | null>(null);
+  const sorted = useMemo(
+    () => [...points].sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime()),
     [points],
   );
-  const flattened = segments.flat();
-  if (flattened.length === 0) {
+  if (sorted.length === 0) {
     return (
       <div className="monitor-empty monitor-empty--chart">
         <i className="ti ti-chart-line-off" />
@@ -103,13 +117,20 @@ function TemperatureChart({ points, period }: {
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const nowMs = Date.now();
-  const startMs = nowMs - (period === "hour" ? 60 * 60_000 : 24 * 60 * 60_000);
-  const temperatures = flattened.map((point) => point.temperatureC);
+  const startMs = nowMs - monitoringPeriodMs(period);
+  const temperatures = sorted.map((point) => point.temperatureC);
+  const enabledRules = rules.filter((rule) => rule.enabled);
+  const scaleTemperatures = [
+    ...temperatures,
+    ...enabledRules.map((rule) => rule.thresholdC),
+  ];
   const rawMin = Math.min(...temperatures);
   const rawMax = Math.max(...temperatures);
-  const spread = Math.max(rawMax - rawMin, 1);
-  const min = rawMin - spread * 0.12;
-  const max = rawMax + spread * 0.12;
+  const scaleMin = Math.min(...scaleTemperatures);
+  const scaleMax = Math.max(...scaleTemperatures);
+  const spread = Math.max(scaleMax - scaleMin, 1);
+  const min = scaleMin - spread * 0.12;
+  const max = scaleMax + spread * 0.12;
 
   const x = (date: Date) => padding.left
     + ((date.getTime() - startMs) / (nowMs - startMs)) * chartWidth;
@@ -118,6 +139,12 @@ function TemperatureChart({ points, period }: {
   const yTicks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
   const xTicks = Array.from({ length: 5 }, (_, index) => startMs + ((nowMs - startMs) * index) / 4);
   const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
+  const selectedPoint = selectedPointMs === null
+    ? null
+    : sorted.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
+  const path = sorted.map((point, pointIndex) => (
+    `${pointIndex === 0 ? "M" : "L"} ${x(point.measuredAt).toFixed(2)} ${y(point.temperatureC).toFixed(2)}`
+  )).join(" ");
 
   return (
     <>
@@ -129,7 +156,7 @@ function TemperatureChart({ points, period }: {
       </div>
       <div className="monitor-chart-scroll" aria-label="График температуры">
         <svg className="monitor-chart" viewBox={`0 0 ${width} ${height}`} role="img">
-          <title>Температура за {period === "hour" ? "последний час" : "последние сутки"}</title>
+          <title>Температура за {periodLabel(period)}</title>
           {yTicks.map((tick) => (
             <g key={tick}>
               <line
@@ -155,23 +182,54 @@ function TemperatureChart({ points, period }: {
               {new Date(tick).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
             </text>
           ))}
-          {segments.map((segment, index) => {
-            const path = segment.map((point, pointIndex) => (
-              `${pointIndex === 0 ? "M" : "L"} ${x(point.measuredAt).toFixed(2)} ${y(point.temperatureC).toFixed(2)}`
-            )).join(" ");
-            const last = segment[segment.length - 1];
+          {enabledRules.map((rule) => (
+            <g key={rule.id}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y(rule.thresholdC)}
+                y2={y(rule.thresholdC)}
+                className={`monitor-chart-limit monitor-chart-limit--${rule.direction}`}
+              />
+              <text x={width - padding.right} y={y(rule.thresholdC) - 7} textAnchor="end" className={`monitor-chart-limit-label monitor-chart-limit-label--${rule.direction}`}>
+                {rule.name}: {rule.direction === "above" ? "выше" : "ниже"} {rule.thresholdC.toFixed(1)} °C
+              </text>
+            </g>
+          ))}
+          <path d={path} className="monitor-chart-line" />
+          {sorted.map((point) => {
+            const pointMs = point.measuredAt.getTime();
             return (
-              <g key={`${segment[0].measuredAt.getTime()}-${index}`}>
-                <path d={path} className="monitor-chart-line" />
-                <circle cx={x(last.measuredAt)} cy={y(last.temperatureC)} r="3.5" className="monitor-chart-point" />
-              </g>
+              <circle
+                key={pointMs}
+                cx={x(point.measuredAt)}
+                cy={y(point.temperatureC)}
+                r={selectedPointMs === pointMs ? 5 : 3.2}
+                className="monitor-chart-point"
+                role="button"
+                tabIndex={0}
+                aria-label={`${formatDateTime(point.measuredAt)}, ${point.temperatureC.toFixed(2)} °C`}
+                onClick={() => setSelectedPointMs(pointMs)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") setSelectedPointMs(pointMs);
+                }}
+              >
+                <title>{formatDateTime(point.measuredAt)} · {point.temperatureC.toFixed(2)} °C</title>
+              </circle>
             );
           })}
         </svg>
       </div>
+      {selectedPoint && (
+        <div className="monitor-point-detail" role="status">
+          <strong>{selectedPoint.temperatureC.toFixed(2)} °C</strong>
+          <span>{formatDateTime(selectedPoint.measuredAt)}</span>
+        </div>
+      )}
       <div className="monitor-chart-legend">
-        <span><i className="monitor-legend-line" /> Измерения по времени датчика</span>
-        <span><i className="monitor-legend-gap" /> Разрыв линии — нет измерений более 30 секунд</span>
+        <span><i className="monitor-legend-line" /> Точки — реальные измерения по времени датчика</span>
+        <span>Линия лишь соединяет соседние измерения и не означает наличие данных между ними</span>
+        {enabledRules.length > 0 && <span><i className="monitor-legend-limit" /> Пороги включённых правил</span>}
       </div>
     </>
   );
@@ -192,7 +250,145 @@ function objectLabel(device: MonitoringDevice, clients: ReturnType<typeof useDat
   return `${client.name} · ${chamber?.notes?.trim() || `камера ${device.targetId}`}`;
 }
 
-export function MonitoringTab() {
+function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
+  deviceId: string;
+  rules: MonitoringTemperatureRule[];
+  loading: boolean;
+  error: string;
+  canManage: boolean;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [ruleId, setRuleId] = useState("");
+  const [name, setName] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [direction, setDirection] = useState<"above" | "below">("above");
+  const [threshold, setThreshold] = useState("-15");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  function resetForm() {
+    setEditingId(null);
+    setRuleId(`rule-${Date.now().toString(36)}`);
+    setName("");
+    setEnabled(true);
+    setDirection("above");
+    setThreshold("-15");
+    setMessage("");
+  }
+
+  function edit(rule: MonitoringTemperatureRule) {
+    setEditingId(rule.id);
+    setRuleId(rule.id);
+    setName(rule.name);
+    setEnabled(rule.enabled);
+    setDirection(rule.direction);
+    setThreshold(String(rule.thresholdC));
+    setMessage("");
+  }
+
+  async function save() {
+    const thresholdC = Number(threshold);
+    if (!/^[a-z0-9][a-z0-9_-]{2,63}$/.test(ruleId) || !name.trim() || !Number.isFinite(thresholdC)) {
+      setMessage("Проверьте ID, название и числовой порог правила.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      await saveMonitoringTemperatureRule(deviceId, {
+        id: ruleId,
+        name: name.trim(),
+        enabled,
+        direction,
+        thresholdC,
+      });
+      setMessage("Правило сохранено");
+      setEditingId(null);
+      setRuleId("");
+    } catch (nextError) {
+      setMessage(nextError instanceof Error ? nextError.message : "Не удалось сохранить правило");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(rule: MonitoringTemperatureRule) {
+    if (!window.confirm(`Удалить правило «${rule.name}»? Его история сохранится.`)) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      await deleteMonitoringTemperatureRule(deviceId, rule.id);
+      if (editingId === rule.id) setEditingId(null);
+    } catch (nextError) {
+      setMessage(nextError instanceof Error ? nextError.message : "Не удалось удалить правило");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="crm-section monitor-alert-settings">
+      <div className="section-header">
+        <div>
+          <div className="section-title">Правила температурных аварий</div>
+          <div className="monitor-history-subtitle">Правила работают одновременно; равенство порогу не считается аварией</div>
+        </div>
+        {canManage && (
+          <button type="button" className="btn-primary" onClick={resetForm} disabled={saving}>
+            <i className="ti ti-plus" /> Добавить правило
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="monitor-loading">Загружаем правила…</div>
+      ) : error ? (
+        <div className="monitor-settings-message">{error}</div>
+      ) : rules.length === 0 ? (
+        <div className="monitor-rules-empty">Правила ещё не созданы. Температурный контроль выключен.</div>
+      ) : (
+        <div className="monitor-rule-list">
+          {rules.map((rule) => (
+            <article className="monitor-rule-card" key={rule.id}>
+              <div>
+                <strong>{rule.name}</strong>
+                <span>ID: {rule.id} · версия {rule.revision}</span>
+              </div>
+              <div className="monitor-rule-threshold">
+                {rule.direction === "above" ? "Выше" : "Ниже"} {rule.thresholdC.toFixed(1)} °C
+              </div>
+              <span className={`monitor-badge ${rule.enabled ? "monitor-badge--reading-fresh" : "monitor-badge--disabled"}`}>
+                {rule.enabled ? "Включено" : "Выключено"}
+              </span>
+              {canManage && (
+                <div className="monitor-rule-actions">
+                  <button type="button" onClick={() => edit(rule)}>Изменить</button>
+                  <button type="button" className="danger" onClick={() => void remove(rule)}>Удалить</button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      {canManage && (editingId !== null || ruleId !== "") && (
+        <div className="monitor-rule-form">
+          <label><span>ID правила</span><input value={ruleId} disabled={editingId !== null || saving} onChange={(event) => setRuleId(event.target.value.toLowerCase())} /></label>
+          <label><span>Название</span><input value={name} disabled={saving} onChange={(event) => setName(event.target.value)} /></label>
+          <label><span>Направление</span><select value={direction} disabled={saving} onChange={(event) => setDirection(event.target.value as "above" | "below")}><option value="above">Выше порога</option><option value="below">Ниже порога</option></select></label>
+          <label><span>Порог, °C</span><input type="number" min="-55" max="125" step="0.1" value={threshold} disabled={saving} onChange={(event) => setThreshold(event.target.value)} /></label>
+          <label className="monitor-alert-toggle"><input type="checkbox" checked={enabled} disabled={saving} onChange={(event) => setEnabled(event.target.checked)} /><span>{enabled ? "Правило включено" : "Правило выключено"}</span></label>
+          <div className="monitor-rule-form-actions">
+            <button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Сохраняем…" : "Сохранить правило"}</button>
+            <button type="button" onClick={() => { setEditingId(null); setRuleId(""); }} disabled={saving}>Отмена</button>
+          </div>
+        </div>
+      )}
+      {message && <div className="monitor-settings-message">{message}</div>}
+    </section>
+  );
+}
+
+export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null }) {
   const { clients } = useData();
   const { myProfile } = useAuth();
   const [devices, setDevices] = useState<MonitoringDevice[]>([]);
@@ -207,12 +403,19 @@ export function MonitoringTab() {
   const [history, setHistory] = useState<MonitoringHistoryResult>(EMPTY_HISTORY);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [rules, setRules] = useState<MonitoringTemperatureRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [rulesError, setRulesError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (focusDeviceId) setSelectedId(focusDeviceId);
+  }, [focusDeviceId]);
 
   useEffect(() => {
     setOverviewError("");
@@ -260,6 +463,25 @@ export function MonitoringTab() {
     return unsubscribe;
   }, [selectedId, period]);
 
+  useEffect(() => {
+    if (!selectedId) {
+      setRules([]);
+      setRulesLoading(false);
+      setRulesError("");
+      return;
+    }
+    setRules([]);
+    setRulesLoading(true);
+    setRulesError("");
+    return listenMonitoringTemperatureRules(selectedId, (nextRules) => {
+      setRules(nextRules);
+      setRulesLoading(false);
+    }, (error) => {
+      setRulesError(error.message || "Не удалось загрузить правила");
+      setRulesLoading(false);
+    });
+  }, [selectedId]);
+
   const selectedDevice = devices.find((device) => device.id === selectedId);
   const role = myProfile?.role ?? "mechanic";
   const canManageSettings = role === "owner" || role === "admin" || role === "manager";
@@ -280,6 +502,7 @@ export function MonitoringTab() {
   if (selectedDevice) {
     const state = states.get(selectedDevice.id);
     const status = monitoringStatus(state, nowMs, threshold);
+    const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
     return (
       <div className="monitor-page">
         <button type="button" className="monitor-back" onClick={() => setSelectedId(null)}>
@@ -294,6 +517,7 @@ export function MonitoringTab() {
             <p>{objectLabel(selectedDevice, clients)}</p>
           </div>
           <div className="monitor-detail-badges">
+            {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
             <ReadingBadge status={status.reading} />
             <ConnectionBadge status={status.connection} />
           </div>
@@ -317,6 +541,14 @@ export function MonitoringTab() {
           </div>
         </div>
 
+        <TemperatureRulesPanel
+          deviceId={selectedDevice.id}
+          rules={rules}
+          loading={rulesLoading}
+          error={rulesError}
+          canManage={canManageSettings}
+        />
+
         <section className="crm-section monitor-history">
           <div className="section-header monitor-history-header">
             <div>
@@ -326,14 +558,14 @@ export function MonitoringTab() {
               </div>
             </div>
             <div className="monitor-period-tabs" aria-label="Период графика">
-              {(["hour", "day"] as MonitoringPeriod[]).map((value) => (
+              {(["hour", "halfDay", "day"] as MonitoringPeriod[]).map((value) => (
                 <button
                   key={value}
                   type="button"
                   className={period === value ? "active" : ""}
                   onClick={() => setPeriod(value)}
                 >
-                  {value === "hour" ? "1 час" : "24 часа"}
+                  {periodLabel(value)}
                 </button>
               ))}
             </div>
@@ -353,7 +585,11 @@ export function MonitoringTab() {
                     Достигнут лимит {HISTORY_PACKET_LIMITS[period]} пакетов. Показаны самые новые данные периода.
                   </div>
                 )}
-                <TemperatureChart points={history.points} period={period} />
+                <TemperatureChart
+                  points={history.points}
+                  period={period}
+                  rules={rules}
+                />
               </>
             )}
           </div>
@@ -404,6 +640,7 @@ export function MonitoringTab() {
           {devices.map((device) => {
             const state = states.get(device.id);
             const status = monitoringStatus(state, nowMs, threshold);
+            const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
             return (
               <button
                 type="button"
@@ -425,6 +662,7 @@ export function MonitoringTab() {
                 <div className="monitor-card-badges">
                   {device.isTest && <span className="monitor-test-badge">Тест</span>}
                   {!device.enabled && <span className="monitor-badge monitor-badge--disabled">Отключено</span>}
+                  {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
                   <ReadingBadge status={status.reading} />
                   <ConnectionBadge status={status.connection} />
                 </div>
