@@ -1,7 +1,16 @@
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { onRequest } from "firebase-functions/v2/https";
 import { verifyDeviceKey } from "./telemetryKey";
+import {
+  alertEventId,
+  eventUsesRuleVersion,
+  parseTemperatureRule,
+  ruleVersionAt,
+  temperatureViolatesRule,
+  type TemperatureRule,
+  type TemperatureRuleVersion,
+} from "./telemetryAlerts";
 
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{2,63}$/;
 const PACKET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
@@ -23,6 +32,11 @@ interface ValidPacket {
   deviceId: string;
   packetId: string;
   measurements: ValidMeasurement[];
+}
+
+interface PendingAlertEvent {
+  isNew: boolean;
+  data: Record<string, unknown>;
 }
 
 class RequestValidationError extends Error {}
@@ -156,17 +170,19 @@ export const ingestTelemetry = onRequest(
       `monitoringTelemetry/${packet.deviceId}/packets/${packet.packetId}`,
     );
     const stateRef = firestore.doc(`monitoringDeviceState/${packet.deviceId}`);
+    const rulesQuery = deviceRef.collection("temperatureRules");
 
     try {
       const receivedAt = Timestamp.now();
       const latest = packet.measurements[packet.measurements.length - 1];
 
       const duplicate = await firestore.runTransaction(async (transaction) => {
-        const [currentDevice, currentCredential, existingPacket, currentState] = await Promise.all([
+        const [currentDevice, currentCredential, existingPacket, currentState, currentRules] = await Promise.all([
           transaction.get(deviceRef),
           transaction.get(credentialRef),
           transaction.get(packetRef),
           transaction.get(stateRef),
+          transaction.get(rulesQuery),
         ]);
         const currentCredentialData = currentCredential.data();
         if (
@@ -180,6 +196,243 @@ export const ingestTelemetry = onRequest(
           throw new DeviceAuthenticationError("device is missing, disabled or has invalid credentials");
         }
         if (existingPacket.exists) return true;
+
+        const deviceData = currentDevice.data() ?? {};
+        const stateData = currentState.data() ?? {};
+        const rules = currentRules.docs
+          .map((item) => parseTemperatureRule(item.id, item.data()))
+          .filter((rule): rule is TemperatureRule => rule !== null);
+        const storedActiveAlerts = typeof stateData.activeAlertIds === "object"
+          && stateData.activeAlertIds !== null
+          && !Array.isArray(stateData.activeAlertIds)
+          ? stateData.activeAlertIds as Record<string, unknown>
+          : {};
+        const activeAlertIds = Object.fromEntries(Object.entries(storedActiveAlerts).filter(
+          ([ruleId, eventId]) => typeof ruleId === "string" && typeof eventId === "string",
+        )) as Record<string, string>;
+        const activeEventRefs = Object.entries(activeAlertIds).map(([ruleId, eventId]) => ({
+          ruleId,
+          ref: firestore.doc(`monitoringAlertEvents/${eventId}`),
+        }));
+        const activeEventSnapshots = activeEventRefs.length
+          ? await transaction.getAll(...activeEventRefs.map((item) => item.ref))
+          : [];
+        const activeEvents = new Map<string, { id: string; data: Record<string, unknown>; isNew: boolean }>();
+        activeEventSnapshots.forEach((snapshot, index) => {
+          if (snapshot.exists && snapshot.data()?.state === "active") {
+            activeEvents.set(activeEventRefs[index].ruleId, {
+              id: snapshot.id,
+              data: snapshot.data() ?? {},
+              isNew: false,
+            });
+          }
+        });
+
+        const eventWrites = new Map<string, PendingAlertEvent>();
+        const assignment = {
+          deviceId: packet.deviceId,
+          deviceName: typeof deviceData.name === "string" ? deviceData.name : packet.deviceId,
+          clientId: typeof deviceData.clientId === "string" ? deviceData.clientId : null,
+          targetType: deviceData.targetType === "vehicle" || deviceData.targetType === "chamber"
+            ? deviceData.targetType
+            : null,
+          targetId: typeof deviceData.targetId === "string" ? deviceData.targetId : null,
+        };
+        const storedCursor = stateData.alertProcessedThroughMeasuredAt;
+        const fallbackCursor = stateData.measuredAt;
+        const initialCursorMs = storedCursor instanceof Timestamp
+          ? storedCursor.toMillis()
+          : fallbackCursor instanceof Timestamp ? fallbackCursor.toMillis() : Number.NEGATIVE_INFINITY;
+        const processedThroughMs = Math.max(
+          initialCursorMs,
+          ...packet.measurements.map((measurement) => measurement.measuredAt.getTime()),
+        );
+        const peak = (
+          event: Record<string, unknown>,
+          temperatureC: number,
+          direction: "above" | "below",
+        ): number => {
+          const previous = typeof event.peakTemperatureC === "number"
+            && Number.isFinite(event.peakTemperatureC)
+            ? event.peakTemperatureC
+            : temperatureC;
+          return direction === "above"
+            ? Math.max(previous, temperatureC)
+            : Math.min(previous, temperatureC);
+        };
+
+        function newAlertEvent(
+          rule: TemperatureRule,
+          version: TemperatureRuleVersion,
+          measurement: ValidMeasurement,
+          measurementIndex: number,
+          state: "active" | "historical",
+        ): { id: string; data: Record<string, unknown>; isNew: true } {
+          const id = alertEventId(packet.deviceId, rule.id, packet.packetId, measurementIndex);
+          const measuredAt = Timestamp.fromDate(measurement.measuredAt);
+          const created = {
+            id,
+            isNew: true as const,
+            data: {
+              ...assignment,
+              ruleId: rule.id,
+              ruleName: version.name,
+              ruleRevision: version.revision,
+              direction: version.direction,
+              thresholdC: version.thresholdC,
+              packetId: packet.packetId,
+              measurementIndex,
+              temperatureC: measurement.temperatureC,
+              detectedMeasuredAt: measuredAt,
+              detectedReceivedAt: receivedAt,
+              lastExceededMeasuredAt: measuredAt,
+              lastReceivedAt: receivedAt,
+              peakTemperatureC: measurement.temperatureC,
+              state,
+              viewedBy: {},
+            } as Record<string, unknown>,
+          };
+          eventWrites.set(id, created);
+          return created;
+        }
+
+        for (const rule of rules) {
+          let activeEvent = activeEvents.get(rule.id) ?? null;
+          let historicalEvent: { id: string; data: Record<string, unknown>; isNew: true } | null = null;
+          let historicalRevision: number | null = null;
+          const remember = (event: { id: string; data: Record<string, unknown>; isNew: boolean }) => {
+            eventWrites.set(event.id, { isNew: event.isNew, data: event.data });
+          };
+
+          for (const [measurementIndex, measurement] of packet.measurements.entries()) {
+            const measurementMs = measurement.measuredAt.getTime();
+            const version = ruleVersionAt(rule, measurementMs);
+            const violated = version
+              ? temperatureViolatesRule(measurement.temperatureC, version)
+              : false;
+
+            if (measurementMs <= initialCursorMs) {
+              const activeDetectedAt = activeEvent?.data.detectedMeasuredAt;
+              if (
+                violated
+                && version
+                && activeEvent
+                && eventUsesRuleVersion(activeEvent.data, version)
+                && activeDetectedAt instanceof Timestamp
+                && measurementMs >= activeDetectedAt.toMillis()
+              ) {
+                activeEvent.data.peakTemperatureC = peak(
+                  activeEvent.data,
+                  measurement.temperatureC,
+                  version.direction,
+                );
+                remember(activeEvent);
+                continue;
+              }
+              if (!version || !version.enabled || historicalRevision !== version.revision) {
+                historicalEvent = null;
+                historicalRevision = version?.revision ?? null;
+              }
+              if (violated && version) {
+                if (!historicalEvent) {
+                  historicalEvent = newAlertEvent(rule, version, measurement, measurementIndex, "historical");
+                  historicalRevision = version.revision;
+                } else {
+                  historicalEvent.data.lastExceededMeasuredAt = Timestamp.fromDate(measurement.measuredAt);
+                  historicalEvent.data.lastReceivedAt = receivedAt;
+                  historicalEvent.data.peakTemperatureC = peak(
+                    historicalEvent.data,
+                    measurement.temperatureC,
+                    version.direction,
+                  );
+                }
+              } else if (historicalEvent) {
+                historicalEvent.data.recoveredMeasuredAt = Timestamp.fromDate(measurement.measuredAt);
+                historicalEvent.data.recoveryReceivedAt = receivedAt;
+                historicalEvent = null;
+              }
+              continue;
+            }
+
+            if (activeEvent && (!version || !eventUsesRuleVersion(activeEvent.data, version))) {
+              activeEvent.data = {
+                ...activeEvent.data,
+                state: "closed_by_settings",
+                closedAt: receivedAt,
+                closedReason: version?.enabled === false ? "rule_disabled" : "rule_changed",
+              };
+              remember(activeEvent);
+              activeEvent = null;
+            }
+            if (historicalEvent) {
+              if (
+                violated
+                && version
+                && historicalEvent.data.ruleRevision === version.revision
+                && !activeEvent
+              ) {
+                historicalEvent.data.state = "active";
+                activeEvent = historicalEvent;
+              } else if (!violated) {
+                historicalEvent.data.recoveredMeasuredAt = Timestamp.fromDate(measurement.measuredAt);
+                historicalEvent.data.recoveryReceivedAt = receivedAt;
+              }
+              historicalEvent = null;
+            }
+            if (violated && version) {
+              if (!activeEvent) {
+                activeEvent = newAlertEvent(rule, version, measurement, measurementIndex, "active");
+              } else {
+                activeEvent.data.lastExceededMeasuredAt = Timestamp.fromDate(measurement.measuredAt);
+                activeEvent.data.lastReceivedAt = receivedAt;
+                activeEvent.data.peakTemperatureC = peak(
+                  activeEvent.data,
+                  measurement.temperatureC,
+                  version.direction,
+                );
+                remember(activeEvent);
+              }
+            } else if (activeEvent) {
+              activeEvent.data = {
+                ...activeEvent.data,
+                state: "recovered",
+                recoveredMeasuredAt: Timestamp.fromDate(measurement.measuredAt),
+                recoveryReceivedAt: receivedAt,
+              };
+              remember(activeEvent);
+              activeEvent = null;
+            }
+          }
+
+          if (historicalEvent && !activeEvent) {
+            const currentMeasuredAt = stateData.measuredAt;
+            const currentTemperatureC = stateData.temperatureC;
+            const lastExceededAt = historicalEvent.data.lastExceededMeasuredAt;
+            const currentVersion = currentMeasuredAt instanceof Timestamp
+              ? ruleVersionAt(rule, currentMeasuredAt.toMillis())
+              : null;
+            if (
+              currentMeasuredAt instanceof Timestamp
+              && lastExceededAt instanceof Timestamp
+              && currentMeasuredAt.toMillis() > lastExceededAt.toMillis()
+              && typeof currentTemperatureC === "number"
+              && currentVersion
+              && historicalEvent.data.ruleRevision === currentVersion.revision
+              && !temperatureViolatesRule(currentTemperatureC, currentVersion)
+            ) {
+              historicalEvent.data.recoveredMeasuredAt = currentMeasuredAt;
+              historicalEvent.data.recoveryReceivedAt = stateData.receivedAt instanceof Timestamp
+                ? stateData.receivedAt
+                : receivedAt;
+            }
+          }
+
+          if (activeEvent) {
+            activeAlertIds[rule.id] = activeEvent.id;
+          } else {
+            delete activeAlertIds[rule.id];
+          }
+        }
 
         const storedMeasurements = packet.measurements.map((measurement) => ({
           measuredAt: Timestamp.fromDate(measurement.measuredAt),
@@ -201,6 +454,12 @@ export const ingestTelemetry = onRequest(
           deviceId: packet.deviceId,
           lastPacketId: packet.packetId,
           lastReceivedAt: receivedAt,
+          alertProcessedThroughMeasuredAt: Number.isFinite(processedThroughMs)
+            ? Timestamp.fromMillis(processedThroughMs)
+            : FieldValue.delete(),
+          alertActive: Object.keys(activeAlertIds).length > 0,
+          activeAlertIds,
+          activeAlertId: FieldValue.delete(),
         };
         if (shouldAdvanceCurrent) {
           Object.assign(stateUpdate, {
@@ -211,7 +470,12 @@ export const ingestTelemetry = onRequest(
             sampleCount: packet.measurements.length,
           });
         }
-        transaction.set(stateRef, stateUpdate, { merge: true });
+        transaction.set(stateRef, stateUpdate, { mergeFields: Object.keys(stateUpdate) });
+        eventWrites.forEach((pending, eventId) => {
+          const eventRef = firestore.doc(`monitoringAlertEvents/${eventId}`);
+          if (pending.isNew) transaction.create(eventRef, pending.data);
+          else transaction.set(eventRef, pending.data, { merge: true });
+        });
         return false;
       });
 

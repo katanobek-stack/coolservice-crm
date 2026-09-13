@@ -1,5 +1,7 @@
 export type MonitoringTargetType = "vehicle" | "chamber";
-export type MonitoringPeriod = "hour" | "day";
+export type MonitoringPeriod = "hour" | "halfDay" | "day";
+export type MonitoringAlertEventState = "active" | "recovered" | "historical" | "closed_by_settings";
+export type MonitoringRuleDirection = "above" | "below";
 
 export interface MonitoringDevice {
   id: string;
@@ -20,6 +22,8 @@ export interface MonitoringDeviceState {
   receivedAt: Date | null;
   lastReceivedAt: Date | null;
   sampleCount?: number;
+  alertActive: boolean;
+  activeAlertIds: Record<string, string>;
 }
 
 export interface TemperaturePoint {
@@ -31,4 +35,47 @@ export interface MonitoringHistoryResult {
   points: TemperaturePoint[];
   packetCount: number;
   limitReached: boolean;
+}
+
+export interface MonitoringAlertEvent {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  ruleId: string;
+  ruleName: string;
+  ruleRevision: number;
+  direction: MonitoringRuleDirection;
+  thresholdC: number;
+  clientId?: string;
+  targetType?: MonitoringTargetType;
+  targetId?: string;
+  temperatureC: number;
+  detectedMeasuredAt: Date;
+  detectedReceivedAt: Date;
+  lastExceededMeasuredAt: Date;
+  lastReceivedAt: Date;
+  peakTemperatureC: number;
+  state: MonitoringAlertEventState;
+  recoveredMeasuredAt: Date | null;
+  recoveryReceivedAt: Date | null;
+  closedAt: Date | null;
+  closedReason?: "rule_changed" | "rule_disabled" | "rule_deleted" | "device_disabled";
+  viewedBy: Record<string, Date>;
+}
+
+export interface MonitoringTemperatureRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  direction: MonitoringRuleDirection;
+  thresholdC: number;
+  revision: number;
+}
+
+export interface MonitoringTemperatureRuleInput {
+  id: string;
+  name: string;
+  enabled: boolean;
+  direction: MonitoringRuleDirection;
+  thresholdC: number;
 }

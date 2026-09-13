@@ -33,10 +33,14 @@ async function ensureDemoUser(uid, email, role) {
 }
 
 async function removePreviousDemoData() {
+  const previousAlerts = await firestore.collection("monitoringAlertEvents")
+    .where("deviceId", "in", DEVICE_IDS)
+    .get();
+  await Promise.all(previousAlerts.docs.map((item) => item.ref.delete()));
   for (const deviceId of DEVICE_IDS) {
     await firestore.recursiveDelete(firestore.doc(`monitoringTelemetry/${deviceId}`));
+    await firestore.recursiveDelete(firestore.doc(`monitoringDevices/${deviceId}`));
     await Promise.all([
-      firestore.doc(`monitoringDevices/${deviceId}`).delete(),
       firestore.doc(`monitoringDeviceState/${deviceId}`).delete(),
       firestore.doc(`monitoringDeviceCredentials/${deviceId}`).delete(),
     ]);
@@ -128,6 +132,23 @@ async function main() {
     active: true,
     ...createDeviceCredentialHash("test-monitor-online", DEVICE_KEY, Buffer.alloc(16, 9)),
   });
+  const ruleEffectiveFrom = Timestamp.fromMillis(now - 48 * 60 * 60_000);
+  const demoRules = [
+    { id: "above-minus-15", name: "Выше -15 °C", direction: "above", thresholdC: -15 },
+    { id: "above-minus-10", name: "Выше -10 °C", direction: "above", thresholdC: -10 },
+    { id: "below-minus-25", name: "Ниже -25 °C", direction: "below", thresholdC: -25 },
+  ];
+  await Promise.all(demoRules.map((rule) => firestore
+    .doc(`monitoringDevices/test-monitor-online/temperatureRules/${rule.id}`)
+    .set({
+      ...rule,
+      enabled: true,
+      revision: 1,
+      deleted: false,
+      versions: [{ ...rule, enabled: true, revision: 1, effectiveFrom: ruleEffectiveFrom }],
+      createdAt: ruleEffectiveFrom,
+      updatedAt: ruleEffectiveFrom,
+    })));
 
   await Promise.all([
     firestore.doc("monitoringDeviceState/test-monitor-stale").set({
@@ -185,6 +206,7 @@ async function main() {
   console.log("Manager: monitoring.manager@example.test / DemoMonitor123!");
   console.log("Mechanic: monitoring.mechanic@example.test / DemoMonitor123!");
   console.log("Delayed packet retained in history without replacing current state.");
+  console.log("The delayed high reading created unread alerts for both matching demo rules.");
 }
 
 main().catch((error) => {

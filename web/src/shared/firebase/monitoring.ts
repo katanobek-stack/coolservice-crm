@@ -1,5 +1,6 @@
 import {
   Timestamp,
+  FieldPath,
   collection,
   doc,
   limit,
@@ -8,25 +9,34 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import { getFirebaseDb } from "./app";
-import { sortAndDedupePoints } from "../monitoring/logic";
+import { getFirebaseFunctions } from "./app";
+import { monitoringPeriodMs, pointsInHistoryWindow } from "../monitoring/logic";
 import type {
+  MonitoringAlertEvent,
+  MonitoringAlertEventState,
   MonitoringDevice,
   MonitoringDeviceState,
   MonitoringHistoryResult,
   MonitoringPeriod,
+  MonitoringTemperatureRule,
+  MonitoringTemperatureRuleInput,
   TemperaturePoint,
 } from "../types/monitoring";
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
 export const HISTORY_PACKET_LIMITS: Record<MonitoringPeriod, number> = {
-  hour: 180,
-  day: 1_600,
+  hour: 120,
+  halfDay: 1_440,
+  day: 2_880,
 };
+export const ALERT_EVENT_LIMIT = 200;
 
 function asDate(value: unknown): Date | null {
   if (value instanceof Timestamp) return value.toDate();
@@ -69,6 +79,103 @@ function mapState(id: string, data: DocumentData): MonitoringDeviceState {
     receivedAt: asDate(data.receivedAt),
     lastReceivedAt: asDate(data.lastReceivedAt),
     sampleCount: typeof data.sampleCount === "number" ? data.sampleCount : undefined,
+    alertActive: data.alertActive === true,
+    activeAlertIds: typeof data.activeAlertIds === "object"
+      && data.activeAlertIds !== null
+      && !Array.isArray(data.activeAlertIds)
+      ? Object.fromEntries(Object.entries(data.activeAlertIds).filter(
+        ([ruleId, eventId]) => ruleId.length > 0 && typeof eventId === "string",
+      )) as Record<string, string>
+      : {},
+  };
+}
+
+function mapTemperatureRule(id: string, data: DocumentData): MonitoringTemperatureRule | null {
+  if (
+    data.deleted === true
+    || typeof data.name !== "string"
+    || typeof data.enabled !== "boolean"
+    || (data.direction !== "above" && data.direction !== "below")
+    || typeof data.thresholdC !== "number"
+    || !Number.isFinite(data.thresholdC)
+    || !Number.isInteger(data.revision)
+  ) return null;
+  return {
+    id,
+    name: data.name,
+    enabled: data.enabled,
+    direction: data.direction,
+    thresholdC: data.thresholdC,
+    revision: data.revision,
+  };
+}
+
+function mapAlertEvent(id: string, data: DocumentData): MonitoringAlertEvent | null {
+  const detectedMeasuredAt = asDate(data.detectedMeasuredAt);
+  const detectedReceivedAt = asDate(data.detectedReceivedAt);
+  const lastExceededMeasuredAt = asDate(data.lastExceededMeasuredAt);
+  const lastReceivedAt = asDate(data.lastReceivedAt);
+  const validStates: MonitoringAlertEventState[] = [
+    "active", "recovered", "historical", "closed_by_settings",
+  ];
+  const state = typeof data.state === "string"
+    && validStates.includes(data.state as MonitoringAlertEventState)
+    ? data.state as MonitoringAlertEventState
+    : null;
+  const validCloseReasons = ["rule_changed", "rule_disabled", "rule_deleted", "device_disabled"] as const;
+  const closedReason = typeof data.closedReason === "string"
+    && validCloseReasons.includes(data.closedReason as typeof validCloseReasons[number])
+    ? data.closedReason as typeof validCloseReasons[number]
+    : undefined;
+  if (
+    typeof data.deviceId !== "string"
+    || typeof data.ruleId !== "string"
+    || typeof data.ruleName !== "string"
+    || !Number.isInteger(data.ruleRevision)
+    || (data.direction !== "above" && data.direction !== "below")
+    || typeof data.temperatureC !== "number"
+    || typeof data.thresholdC !== "number"
+    || !detectedMeasuredAt
+    || !detectedReceivedAt
+    || !lastExceededMeasuredAt
+    || !lastReceivedAt
+    || !state
+  ) return null;
+  const viewedBy: Record<string, Date> = {};
+  if (typeof data.viewedBy === "object" && data.viewedBy !== null) {
+    Object.entries(data.viewedBy).forEach(([uid, value]) => {
+      const viewedAt = asDate(value);
+      if (viewedAt) viewedBy[uid] = viewedAt;
+    });
+  }
+  return {
+    id,
+    deviceId: data.deviceId,
+    deviceName: typeof data.deviceName === "string" ? data.deviceName : data.deviceId,
+    ruleId: data.ruleId,
+    ruleName: data.ruleName,
+    ruleRevision: data.ruleRevision,
+    direction: data.direction,
+    thresholdC: data.thresholdC,
+    clientId: typeof data.clientId === "string" ? data.clientId : undefined,
+    targetType: data.targetType === "vehicle" || data.targetType === "chamber"
+      ? data.targetType
+      : undefined,
+    targetId: typeof data.targetId === "string" ? data.targetId : undefined,
+    temperatureC: data.temperatureC,
+    detectedMeasuredAt,
+    detectedReceivedAt,
+    lastExceededMeasuredAt,
+    lastReceivedAt,
+    peakTemperatureC: typeof data.peakTemperatureC === "number"
+      ? data.peakTemperatureC
+      : data.temperatureC,
+    state,
+    recoveredMeasuredAt: asDate(data.recoveredMeasuredAt),
+    recoveryReceivedAt: asDate(data.recoveryReceivedAt),
+    closedAt: asDate(data.closedAt),
+    closedReason,
+    viewedBy,
   };
 }
 
@@ -111,8 +218,67 @@ export function saveOfflineThreshold(offlineThresholdMinutes: number): Promise<v
   }, { merge: true });
 }
 
-function historyWindowMs(period: MonitoringPeriod): number {
-  return period === "hour" ? 60 * 60_000 : 24 * 60 * 60_000;
+export function listenMonitoringTemperatureRules(
+  deviceId: string,
+  onData: (rules: MonitoringTemperatureRule[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    collection(getFirebaseDb(), "monitoringDevices", deviceId, "temperatureRules"),
+    (snapshot) => onData(snapshot.docs
+      .map((item) => mapTemperatureRule(item.id, item.data()))
+      .filter((rule): rule is MonitoringTemperatureRule => rule !== null)
+      .sort((left, right) => left.name.localeCompare(right.name, "ru"))),
+    onError,
+  );
+}
+
+export async function saveMonitoringTemperatureRule(
+  deviceId: string,
+  rule: MonitoringTemperatureRuleInput,
+): Promise<void> {
+  const saveRule = httpsCallable(getFirebaseFunctions(), "saveMonitoringTemperatureRule");
+  await saveRule({
+    action: "upsert",
+    deviceId,
+    ruleId: rule.id,
+    name: rule.name,
+    enabled: rule.enabled,
+    direction: rule.direction,
+    thresholdC: rule.thresholdC,
+  });
+}
+
+export async function deleteMonitoringTemperatureRule(
+  deviceId: string,
+  ruleId: string,
+): Promise<void> {
+  const saveRule = httpsCallable(getFirebaseFunctions(), "saveMonitoringTemperatureRule");
+  await saveRule({ action: "delete", deviceId, ruleId });
+}
+
+export function listenMonitoringAlerts(
+  onData: (events: MonitoringAlertEvent[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const alerts = query(
+    collection(getFirebaseDb(), "monitoringAlertEvents"),
+    orderBy("detectedMeasuredAt", "desc"),
+    limit(ALERT_EVENT_LIMIT),
+  );
+  return onSnapshot(alerts, (snapshot) => {
+    onData(snapshot.docs
+      .map((item) => mapAlertEvent(item.id, item.data()))
+      .filter((event): event is MonitoringAlertEvent => event !== null));
+  }, onError);
+}
+
+export function markMonitoringAlertViewed(eventId: string, uid: string): Promise<void> {
+  return updateDoc(
+    doc(getFirebaseDb(), "monitoringAlertEvents", eventId),
+    new FieldPath("viewedBy", uid),
+    serverTimestamp(),
+  );
 }
 
 export function listenDeviceHistory(
@@ -123,10 +289,10 @@ export function listenDeviceHistory(
   nowMs = Date.now(),
 ): Unsubscribe {
   const packetLimit = HISTORY_PACKET_LIMITS[period];
-  const startedAt = Timestamp.fromMillis(nowMs - historyWindowMs(period));
+  const startedAt = Timestamp.fromMillis(nowMs - monitoringPeriodMs(period));
   const packets = query(
     collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
-    where("lastMeasuredAt", ">=", startedAt),
+    where("lastMeasuredAt", ">", startedAt),
     orderBy("lastMeasuredAt", "desc"),
     limit(packetLimit + 1),
   );
@@ -144,8 +310,6 @@ export function listenDeviceHistory(
         const temperatureC = measurement.temperatureC;
         if (
           measuredAt
-          && measuredAt.getTime() >= startedAt.toMillis()
-          && measuredAt.getTime() <= nowMs + 10 * 60_000
           && typeof temperatureC === "number"
           && Number.isFinite(temperatureC)
         ) {
@@ -154,7 +318,7 @@ export function listenDeviceHistory(
       });
     });
     onData({
-      points: sortAndDedupePoints(points),
+      points: pointsInHistoryWindow(points, startedAt.toMillis(), nowMs),
       packetCount: selectedDocs.length,
       limitReached,
     });

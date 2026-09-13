@@ -223,6 +223,13 @@ service cloud.firestore {
     match /monitoringDevices/{deviceId} {
       allow read: if isAuth();
       allow create, update, delete: if isAuth() && isManagerOrAbove();
+
+      // Version history is written only by the authenticated callable backend.
+      // CRM users read current rules; even manager+ cannot forge versions.
+      match /temperatureRules/{ruleId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
     }
 
     match /monitoringDeviceState/{deviceId} {
@@ -237,6 +244,21 @@ service cloud.firestore {
         allow read: if isAuth();
         allow write: if false;
       }
+    }
+
+    // Alert lifecycle is backend-only. Every worker can see events, while the
+    // browser may change only its own individual viewed timestamp.
+    match /monitoringAlertEvents/{eventId} {
+      allow read: if isAuth();
+      allow update: if isAuth()
+        && resource.data.viewedBy is map
+        && request.resource.data.viewedBy is map
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["viewedBy"])
+        && request.resource.data.viewedBy.diff(resource.data.viewedBy).affectedKeys()
+          .hasOnly([request.auth.uid])
+        && request.resource.data.viewedBy.keys().hasAll([request.auth.uid])
+        && request.resource.data.viewedBy[request.auth.uid] is timestamp;
+      allow create, delete: if false;
     }
 
     // Credential hashes are backend-only. Even owner accounts use an audited

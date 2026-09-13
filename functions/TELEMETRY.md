@@ -34,9 +34,45 @@ for the loopback emulator test and is not an acceptable field transport.
 - `monitoringDeviceCredentials/{deviceId}`: revocable `active` flag plus the
   salted scrypt hash. Firestore rules deny all client access.
 - `monitoringDeviceState/{deviceId}`: latest reading and last packet receipt.
+- `monitoringDevices/{deviceId}/temperatureRules/{ruleId}`: one independent
+  versioned temperature rule. The current fields are `name`, `enabled`,
+  `direction` (`above` or `below`), `thresholdC`, `revision`, and `deleted`.
+  `versions` keeps the same settings with a server `effectiveFrom` timestamp so
+  delayed measurements use the version that was valid when they were measured.
 - `monitoringTelemetry/{deviceId}/packets/{packetId}`: packet history. It is
   nested deliberately so CRM screens query one device and a bounded time range
   instead of subscribing to all history.
+- `monitoringAlertEvents/{eventId}`: immutable assignment and threshold snapshot
+  for one temperature episode, plus its server-managed lifecycle and a
+  per-user `viewedBy` map. Viewing never closes an active episode.
+
+Legacy devices without rule documents have temperature alerting disabled. Rules
+run simultaneously and independently. `above` alarms only for a value strictly
+greater than `thresholdC`; `below` alarms only for a value strictly less than
+it, so equality is normal in both directions. `monitoringDeviceState` stores an
+`activeAlertIds` map keyed by rule ID. Every event keeps the device assignment,
+rule ID/name/revision/direction/threshold snapshot, triggering measurement and
+server receipt times, lifecycle fields, and the individual `viewedBy` map.
+
+Every measurement in a packet is evaluated in `measuredAt` order. Packet
+deduplication happens before alert writes, and delayed measurements never replace
+the current reading or roll back current active state. A delayed measurement is
+evaluated with the rule version whose `effectiveFrom` was valid at measurement
+time. Changing, disabling, or logically deleting a rule immediately closes only
+that rule's active event with `state: closed_by_settings` and respectively
+`rule_changed`, `rule_disabled`, or `rule_deleted`; disabling the device closes
+all of its active events with `device_disabled`. Event snapshots and history are
+not rewritten.
+
+Managers, admins, and owners change rules through the callable
+`saveMonitoringTemperatureRule` in `europe-west1`. Mechanics can read rules but
+cannot change them. Browser writes to the rule documents are denied, as is every
+browser read of `monitoringDeviceCredentials`.
+
+The CRM history query is lazy per opened device and uses `lastMeasuredAt`. Its
+bounded packet limits are 120 for one hour, 1,440 for 12 hours, and 2,880 for 24
+hours (one packet per 30 seconds). All measurements inside the selected packets
+are then sorted and filtered by their own `measuredAt` values.
 
 Generate a new random key and its credential document without writing either to
 disk:
@@ -55,7 +91,7 @@ Build before starting the Functions emulator because it loads `lib/index.js`:
 
 ```powershell
 npm --prefix functions run build
-firebase emulators:exec --only firestore,functions --project demo-coolservice-crm "npm --prefix functions run test:emulator"
+firebase emulators:exec --only auth,firestore,functions --project demo-coolservice-crm "npm --prefix functions run test:emulator"
 firebase emulators:exec --only firestore --project demo-coolservice-crm "npm --prefix web run test:rules"
 ```
 

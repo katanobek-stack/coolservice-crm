@@ -16,6 +16,7 @@ import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
 import { ScheduleTab } from "../features/schedule/ScheduleTab";
 import { MonitoringTab } from "../features/monitoring/MonitoringTab";
+import { MonitoringAlertCenter } from "../features/monitoring/MonitoringAlertCenter";
 import { requestNotificationPermission, showBrowserNotification } from "../shared/utils/fcm";
 import { FloatingMicButton } from "../features/voice/FloatingMicButton";
 import type { StaffMember, StaffRole } from "../shared/types/staff";
@@ -213,10 +214,9 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, intakeCount,
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 
-function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
+function Topbar({ tab, onSearch, onNewRepair }: {
   tab:        Tab;
   onSearch:   () => void;
-  activeMine: number;
   onNewRepair: () => void;
 }) {
   const info = TAB_TITLES[tab];
@@ -231,10 +231,6 @@ function Topbar({ tab, onSearch, activeMine, onNewRepair }: {
       <div className="topbar-right">
         <div className="topbar-icon" onClick={onSearch} title="Поиск">
           <i className="ti ti-search" />
-        </div>
-        <div className="topbar-icon" style={{ position: "relative" }}>
-          <i className="ti ti-bell" />
-          {activeMine > 0 && <div className="notif-dot" />}
         </div>
         <button type="button" className="btn-primary" onClick={onNewRepair}>
           <i className="ti ti-plus" /> Новая заявка
@@ -329,12 +325,18 @@ function Shell() {
   const [showSearch, setShowSearch]  = useState(false);
   const [pendingClientId, setPendingClientId]   = useState<string | null>(null);
   const [pendingVehicleId, setPendingVehicleId] = useState<string | null>(null);
+  const [monitoringFocusDeviceId, setMonitoringFocusDeviceId] = useState<string | null>(null);
 
   function openClientProfile(client: Client, vehicleId?: string) {
     const clientType = client.clientType ?? client.type ?? "phys";
     setTab(clientType === "legal" ? "legal" : "phys");
     setPendingClientId(client.id);
     setPendingVehicleId(vehicleId ?? null);
+  }
+
+  function openMonitoringDevice(deviceId: string) {
+    setMonitoringFocusDeviceId(deviceId);
+    setTab("monitoring");
   }
 
   const role    = myProfile?.role ?? "mechanic";
@@ -378,7 +380,7 @@ function Shell() {
       case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
       case "calendar": return <AppointmentsTab />;
       case "schedule": return <ScheduleTab />;
-      case "monitoring": return <MonitoringTab />;
+      case "monitoring": return <MonitoringTab focusDeviceId={monitoringFocusDeviceId} />;
       case "freezers": return <FreezersTab />;
       case "done":     return role !== "mechanic" ? <DoneTab onOpenClient={openClientProfile} /> : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
@@ -421,7 +423,6 @@ function Shell() {
           <Topbar
             tab={tab}
             onSearch={() => setShowSearch(true)}
-            activeMine={activeRepairs}
             onNewRepair={() => setTab("phys")}
           />
           <div className="crm-content">
@@ -431,6 +432,7 @@ function Shell() {
 
         {/* Mobile bottom nav */}
         <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} pendingAppts={pendingAppts} role={role} onSignOut={() => void signOutUser()} hidePnl={hidePnl} />
+        <MonitoringAlertCenter onOpenDevice={openMonitoringDevice} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
