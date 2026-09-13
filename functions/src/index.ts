@@ -4,6 +4,7 @@ import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
 export { parseVoiceCommand } from "./parseVoiceCommand";
+export { ingestTelemetry } from "./telemetry";
 
 admin.initializeApp();
 

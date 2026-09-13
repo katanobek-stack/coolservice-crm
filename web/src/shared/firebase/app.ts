@@ -1,9 +1,9 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getFunctions, type Functions } from "firebase/functions";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
-import { getFirebaseConfig, isFirebaseConfigured } from "../config/env";
+import { getFirebaseConfig, isFirebaseConfigured, useFirebaseEmulators } from "../config/env";
 
 let firebaseApp: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -27,6 +27,12 @@ export function initFirebase(): FirebaseApp {
   db = getFirestore(firebaseApp);
   functions = getFunctions(firebaseApp, "europe-west1");
   storage = getStorage(firebaseApp);
+
+  if (useFirebaseEmulators()) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  }
 
   return firebaseApp;
 }
