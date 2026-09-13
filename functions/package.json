@@ -13,7 +13,10 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "generate:device-key": "npm run build && node scripts/generate-device-key.js",
+    "seed:monitoring-demo": "node scripts/seed-monitoring-demo.js",
+    "test:emulator": "node --test tests/telemetry.emulator.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.6.0",

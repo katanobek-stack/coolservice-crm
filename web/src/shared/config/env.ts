@@ -16,6 +16,17 @@ function requireEnv(key: RequiredFirebaseEnvKey, value: string | undefined): str
 }
 
 export function getFirebaseConfig() {
+  if (useFirebaseEmulators()) {
+    return {
+      apiKey: "demo-api-key",
+      authDomain: "demo-coolservice-crm.firebaseapp.com",
+      projectId: "demo-coolservice-crm",
+      storageBucket: "demo-coolservice-crm.appspot.com",
+      messagingSenderId: "0",
+      appId: "demo-app-id",
+      measurementId: undefined,
+    };
+  }
   return {
     apiKey: requireEnv("VITE_FIREBASE_API_KEY", import.meta.env.VITE_FIREBASE_API_KEY),
     authDomain: requireEnv("VITE_FIREBASE_AUTH_DOMAIN", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
@@ -36,6 +47,7 @@ export function getFirebaseVapidKey(): string | undefined {
 }
 
 export function isFirebaseConfigured(): boolean {
+  if (useFirebaseEmulators()) return true;
   return Boolean(
     import.meta.env.VITE_FIREBASE_API_KEY &&
       import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
@@ -44,4 +56,8 @@ export function isFirebaseConfigured(): boolean {
       import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID &&
       import.meta.env.VITE_FIREBASE_APP_ID,
   );
+}
+
+export function useFirebaseEmulators(): boolean {
+  return import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
 }

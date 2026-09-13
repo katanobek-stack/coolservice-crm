@@ -379,6 +379,88 @@ describe("owner", () => {
   });
 });
 
+describe("equipment monitoring access", () => {
+  beforeEach(async () => {
+    await seedRole("mechanic-1", "mechanic");
+    await seedRole("manager-1", "manager");
+    await seed("monitoringDevices/device-001", {
+      name: "Камера клиента",
+      enabled: true,
+      clientId: "client-1",
+      targetType: "chamber",
+      targetId: "chamber-1",
+    });
+    await seed("monitoringDeviceState/device-001", {
+      temperatureC: -18.5,
+      measuredAt: "2026-09-13T00:00:00.000Z",
+      receivedAt: "2026-09-13T00:00:01.000Z",
+    });
+    await seed("monitoringTelemetry/device-001/packets/packet-001", {
+      measurements: [],
+    });
+    await seed("monitoringDeviceCredentials/device-001", {
+      active: true,
+      algorithm: "scrypt-v1",
+      keySalt: "hidden",
+      keyHash: "hidden",
+    });
+  });
+
+  test("authenticated workers can read registry, state and requested history", async () => {
+    const db = dbFor("mechanic-1");
+    await assertSucceeds(getDoc(doc(db, "monitoringDevices/device-001")));
+    await assertSucceeds(getDoc(doc(db, "monitoringDeviceState/device-001")));
+    await assertSucceeds(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
+  });
+
+  test("mechanics cannot administer devices or forge telemetry", async () => {
+    const db = dbFor("mechanic-1");
+    await assertFails(setDoc(doc(db, "monitoringDevices/device-002"), { enabled: true }));
+    await assertFails(updateDoc(doc(db, "monitoringDevices/device-001"), { enabled: false }));
+    await assertFails(setDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    await assertFails(setDoc(
+      doc(db, "monitoringTelemetry/device-001/packets/forged"),
+      { measurements: [] },
+    ));
+  });
+
+  test("manager+ can administer registry but cannot forge state, history or credentials", async () => {
+    const db = dbFor("manager-1");
+    const deviceRef = doc(db, "monitoringDevices/device-002");
+    await assertSucceeds(setDoc(deviceRef, { enabled: true }));
+    await assertSucceeds(updateDoc(deviceRef, { enabled: false }));
+    await assertSucceeds(deleteDoc(deviceRef));
+    await assertFails(updateDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    await assertFails(deleteDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
+    await assertFails(getDoc(doc(db, "monitoringDeviceCredentials/device-001")));
+    await assertFails(updateDoc(doc(db, "monitoringDeviceCredentials/device-001"), { active: false }));
+  });
+
+  test("workers read the threshold while only manager+ can change a valid value", async () => {
+    await seed("settings/monitoring", { offlineThresholdMinutes: 5 });
+    await assertSucceeds(getDoc(doc(dbFor("mechanic-1"), "settings/monitoring")));
+    await assertFails(updateDoc(
+      doc(dbFor("mechanic-1"), "settings/monitoring"),
+      { offlineThresholdMinutes: 10 },
+    ));
+    await assertSucceeds(updateDoc(
+      doc(dbFor("manager-1"), "settings/monitoring"),
+      { offlineThresholdMinutes: 10 },
+    ));
+    await assertFails(updateDoc(
+      doc(dbFor("manager-1"), "settings/monitoring"),
+      { offlineThresholdMinutes: 0 },
+    ));
+  });
+
+  test("unauthenticated clients cannot read monitoring data", async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, "monitoringDevices/device-001")));
+    await assertFails(getDoc(doc(db, "monitoringDeviceState/device-001")));
+    await assertFails(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
+  });
+});
+
 describe("default deny", () => {
   test("authenticated users cannot access unknown collections", async () => {
     await seedRole("admin-1", "admin");

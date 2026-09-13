@@ -167,6 +167,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Everyone who can open monitoring sees the same connection threshold;
+    // manager+ may change it from the monitoring screen.
+    match /settings/monitoring {
+      allow read: if isAuth();
+      allow create, update: if isAuth()
+        && isManagerOrAbove()
+        && request.resource.data.keys().hasOnly([
+          "offlineThresholdMinutes",
+          "updatedAt"
+        ])
+        && request.resource.data.offlineThresholdMinutes is int
+        && request.resource.data.offlineThresholdMinutes >= 1
+        && request.resource.data.offlineThresholdMinutes <= 60;
+      allow delete: if false;
+    }
+
     match /settings/{document=**} {
       allow read, write: if false;
     }
@@ -198,6 +214,35 @@ service cloud.firestore {
     // assigning it to a client happens through the manager-only Отчёты screen.
     match /intakeRepairs/{docId} {
       allow read, create, update, delete: if isAuth();
+    }
+
+    // Device registry and readings are separate from clients and their embedded
+    // repairs. Workers may view monitoring data; manager+ controls assignment.
+    // Devices never authenticate to Firestore: only the HTTP Cloud Function,
+    // running with Admin SDK privileges, writes state and packet history.
+    match /monitoringDevices/{deviceId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth() && isManagerOrAbove();
+    }
+
+    match /monitoringDeviceState/{deviceId} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    match /monitoringTelemetry/{deviceId} {
+      allow read, write: if false;
+
+      match /packets/{packetId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+    }
+
+    // Credential hashes are backend-only. Even owner accounts use an audited
+    // provisioning path rather than reading or editing these through the CRM.
+    match /monitoringDeviceCredentials/{deviceId} {
+      allow read, write: if false;
     }
   }
 }
