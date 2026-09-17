@@ -11,6 +11,8 @@ const FUNCTION_URL =
   `http://127.0.0.1:5001/${PROJECT_ID}/europe-west1/ingestTelemetry`;
 const RULE_FUNCTION_URL =
   `http://127.0.0.1:5001/${PROJECT_ID}/europe-west1/saveMonitoringTemperatureRule`;
+const STATUS_FUNCTION_URL =
+  `http://127.0.0.1:5001/${PROJECT_ID}/europe-west1/ingestControllerStatus`;
 
 let app;
 let firestore;
@@ -39,6 +41,31 @@ async function postTelemetry(body, key = DEVICE_KEY) {
       authorization: `Bearer ${key}`,
       "content-type": "application/json",
     },
+    body: JSON.stringify(body),
+  });
+}
+
+function controllerStatus(overrides = {}) {
+  return {
+    controllerId: DEVICE_ID,
+    statusId: "boot-a:status-000001",
+    reportedAt: new Date(Date.now() - 10_000).toISOString(),
+    networkRegistered: true,
+    registrationState: "home",
+    rssi: 21,
+    gprsConnected: true,
+    mqttConnected: true,
+    queueDepth: 0,
+    lastFailureCode: "none",
+    uptimeSeconds: 3600,
+    ...overrides,
+  };
+}
+
+async function postControllerStatus(body, key = DEVICE_KEY) {
+  return fetch(STATUS_FUNCTION_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
 }
@@ -173,6 +200,48 @@ after(async () => {
 });
 
 describe("ingestTelemetry emulator integration", () => {
+  test("stores controller diagnostics outside temperature data and deduplicates statusId", async () => {
+    const body = controllerStatus();
+    const first = await postControllerStatus(body);
+    assert.equal(first.status, 202);
+    assert.deepEqual(await first.json(), {
+      accepted: true, duplicate: false, currentUpdated: true, statusId: body.statusId,
+      receivedAt: (await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get()).data().receivedAt.toDate().toISOString(),
+    });
+    const [current, event, telemetry] = await Promise.all([
+      firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get(),
+      firestore.doc(`monitoringControllerStatus/${DEVICE_ID}/statusEvents/${body.statusId}`).get(),
+      firestore.collection("monitoringTelemetry").get(),
+    ]);
+    assert.equal(current.data().mqttConnected, true);
+    assert.equal(event.data().lastFailureCode, "none");
+    assert.ok(event.data().expireAt instanceof Timestamp);
+    assert.equal(telemetry.empty, true, "diagnostics must not create temperature packets");
+
+    const repeated = await postControllerStatus({ ...body, mqttConnected: false });
+    assert.equal(repeated.status, 200);
+    assert.deepEqual(await repeated.json(), {
+      accepted: false, duplicate: true, currentUpdated: false, statusId: body.statusId,
+      receivedAt: (await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get()).data().receivedAt.toDate().toISOString(),
+    });
+    assert.equal((await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get()).data().mqttConnected, true);
+  });
+
+  test("rejects invalid controller diagnostics and does not let delayed status replace current", async () => {
+    assert.equal((await postControllerStatus(controllerStatus({ rssi: 32 }))).status, 400);
+    assert.equal((await postControllerStatus(controllerStatus(), "wrong-device-key-0123456789-abcdefghijklmnopqrstuvwxyz")).status, 401);
+    assert.equal((await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get()).exists, false);
+
+    const recent = controllerStatus({ statusId: "boot-a:recent", reportedAt: new Date(Date.now() - 10_000).toISOString() });
+    const delayed = controllerStatus({ statusId: "boot-a:delayed", reportedAt: new Date(Date.now() - 60_000).toISOString(), mqttConnected: false });
+    assert.equal((await postControllerStatus(recent)).status, 202);
+    const delayedResponse = await postControllerStatus(delayed);
+    assert.equal(delayedResponse.status, 202);
+    assert.equal((await delayedResponse.json()).currentUpdated, false);
+    assert.equal((await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`).get()).data().statusId, recent.statusId);
+    assert.equal((await firestore.doc(`monitoringControllerStatus/${DEVICE_ID}/statusEvents/${delayed.statusId}`).get()).exists, true);
+  });
+
   test("allows manager rule changes and rejects mechanic or unauthenticated callers", async () => {
     const input = {
       action: "upsert", deviceId: DEVICE_ID, ruleId: "role-rule",

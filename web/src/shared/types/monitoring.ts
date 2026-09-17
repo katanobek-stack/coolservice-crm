@@ -2,6 +2,19 @@ export type MonitoringTargetType = "vehicle" | "chamber";
 export type MonitoringPeriod = "hour" | "halfDay" | "day";
 export type MonitoringAlertEventState = "active" | "recovered" | "historical" | "closed_by_settings";
 export type MonitoringRuleDirection = "above" | "below";
+export type MonitoringRegistrationState = "home" | "roaming" | "searching" | "denied" | "unknown";
+export type MonitoringFailureCode =
+  | "none"
+  | "modem_not_ready"
+  | "network_not_registered"
+  | "ntp_sync_failed"
+  | "gprs_connect_failed"
+  | "tcp_connect_failed"
+  | "mqtt_connect_failed"
+  | "publish_send_failed"
+  | "puback_timeout"
+  | "modem_restarted"
+  | "esp_restarted";
 
 export interface MonitoringDevice {
   id: string;
@@ -24,6 +37,21 @@ export interface MonitoringDeviceState {
   sampleCount?: number;
   alertActive: boolean;
   activeAlertIds: Record<string, string>;
+}
+
+export interface MonitoringControllerStatus {
+  controllerId: string;
+  statusId: string;
+  reportedAt: Date | null;
+  receivedAt: Date | null;
+  networkRegistered: boolean;
+  registrationState: MonitoringRegistrationState;
+  rssi: number | null;
+  gprsConnected: boolean;
+  mqttConnected: boolean;
+  queueDepth: number;
+  lastFailureCode: MonitoringFailureCode;
+  uptimeSeconds: number;
 }
 
 export interface TemperaturePoint {
