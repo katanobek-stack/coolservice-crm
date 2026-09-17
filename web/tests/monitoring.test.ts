@@ -3,12 +3,13 @@ import { describe, test } from "node:test";
 import {
   monitoringPeriodMs,
   monitoringStatus,
+  controllerConnectionStatus,
   pointsInHistoryWindow,
   sortAndDedupePoints,
   violatesTemperatureRule,
 } from "../src/shared/monitoring/logic";
 import { HISTORY_PACKET_LIMITS } from "../src/shared/firebase/monitoring";
-import type { MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
+import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
 const NOW = Date.parse("2026-09-13T02:00:00.000Z");
 
@@ -21,6 +22,15 @@ function state(overrides: Partial<MonitoringDeviceState>): MonitoringDeviceState
     alertActive: false,
     activeAlertIds: {},
     ...overrides,
+  };
+}
+
+function controllerStatus(overrides: Partial<MonitoringControllerStatus> = {}): MonitoringControllerStatus {
+  return {
+    controllerId: "device-001", statusId: "status-001", reportedAt: new Date(NOW - 60_000),
+    receivedAt: new Date(NOW - 59_000), networkRegistered: true, registrationState: "home",
+    rssi: 20, gprsConnected: true, mqttConnected: true, queueDepth: 0,
+    lastFailureCode: "none", uptimeSeconds: 120, ...overrides,
   };
 }
 
@@ -53,6 +63,17 @@ describe("monitoring statuses", () => {
       reading: "stale",
       connection: "offline",
     });
+  });
+
+  test("uses controller reportedAt for connection while temperature uses measuredAt", () => {
+    assert.equal(controllerConnectionStatus(undefined, NOW, 5), "unknown");
+    assert.equal(controllerConnectionStatus(controllerStatus(), NOW, 5), "online");
+    assert.equal(controllerConnectionStatus(controllerStatus({
+      reportedAt: new Date(NOW - 6 * 60_000), receivedAt: new Date(NOW),
+    }), NOW, 5), "offline");
+    assert.equal(monitoringStatus(state({
+      measuredAt: new Date(NOW - 6 * 60_000), lastReceivedAt: new Date(NOW),
+    }), NOW, 5).reading, "stale");
   });
 });
 

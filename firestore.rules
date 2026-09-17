@@ -237,6 +237,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Controller diagnostics have their own current document and event history.
+    // Browser clients can read them but never create, alter or delete either.
+    match /monitoringControllerStatus/{controllerId} {
+      allow read: if isAuth();
+      allow write: if false;
+
+      match /statusEvents/{statusId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+    }
+
     match /monitoringTelemetry/{deviceId} {
       allow read, write: if false;
 

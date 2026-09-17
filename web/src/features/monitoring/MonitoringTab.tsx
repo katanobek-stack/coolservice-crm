@@ -7,6 +7,7 @@ import {
   deleteMonitoringTemperatureRule,
   listenDeviceHistory,
   listenMonitoringDevices,
+  listenMonitoringControllerStatuses,
   listenMonitoringSettings,
   listenMonitoringStates,
   listenMonitoringTemperatureRules,
@@ -15,6 +16,7 @@ import {
 } from "../../shared/firebase/monitoring";
 import {
   monitoringStatus,
+  controllerConnectionStatus,
   monitoringPeriodMs,
   type ConnectionStatus,
   type ReadingStatus,
@@ -22,6 +24,7 @@ import {
 import type {
   MonitoringDevice,
   MonitoringDeviceState,
+  MonitoringControllerStatus,
   MonitoringHistoryResult,
   MonitoringPeriod,
   MonitoringTemperatureRule,
@@ -75,10 +78,52 @@ function ReadingBadge({ status }: { status: ReadingStatus }) {
 function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   const labels: Record<ConnectionStatus, string> = {
     online: "На связи",
-    offline: "Нет связи",
-    unknown: "Связь не установлена",
+    offline: "Связь потеряна",
+    unknown: "Статус связи не получен",
   };
   return <span className={`monitor-badge monitor-badge--connection-${status}`}>{labels[status]}</span>;
+}
+
+function registrationLabel(status: MonitoringControllerStatus): string {
+  const labels: Record<MonitoringControllerStatus["registrationState"], string> = {
+    home: "Домашняя сеть", roaming: "Роуминг", searching: "Поиск сети",
+    denied: "Регистрация отклонена", unknown: "Неизвестно",
+  };
+  return `${status.networkRegistered ? "Зарегистрирован" : "Не зарегистрирован"} · ${labels[status.registrationState]}`;
+}
+
+function failureLabel(code: MonitoringControllerStatus["lastFailureCode"]): string {
+  const labels: Record<MonitoringControllerStatus["lastFailureCode"], string> = {
+    none: "Нет", modem_not_ready: "Модем не готов", network_not_registered: "Нет регистрации в сети",
+    ntp_sync_failed: "Не удалось синхронизировать время", gprs_connect_failed: "Не удалось подключить GPRS",
+    tcp_connect_failed: "Не удалось подключить TCP", mqtt_connect_failed: "Не удалось подключить MQTT",
+    publish_send_failed: "Не удалось отправить публикацию", puback_timeout: "Тайм-аут подтверждения MQTT",
+    modem_restarted: "Модем перезапущен", esp_restarted: "ESP32 перезапущен",
+  };
+  return labels[code];
+}
+
+function DiagnosticsPanel({ status, connection, nowMs }: {
+  status: MonitoringControllerStatus | undefined;
+  connection: ConnectionStatus;
+  nowMs: number;
+}) {
+  if (!status) return <section className="crm-section monitor-diagnostics"><div className="section-header"><div className="section-title">Связь и диагностика</div><ConnectionBadge status={connection} /></div><div className="monitor-rules-empty">Контроллер ещё не передал статус связи и диагностики.</div></section>;
+  return (
+    <section className="crm-section monitor-diagnostics">
+      <div className="section-header"><div><div className="section-title">Связь и диагностика</div><div className="monitor-history-subtitle">Статус контроллера, отдельно от температуры</div></div><ConnectionBadge status={connection} /></div>
+      <div className="monitor-diagnostics-grid">
+        <div><span>GSM-сигнал</span><strong>{status.rssi === null ? "Нет данных" : `${status.rssi} / 31`}</strong></div>
+        <div><span>Регистрация сети</span><strong>{registrationLabel(status)}</strong></div>
+        <div><span>GPRS</span><strong>{status.gprsConnected ? "Подключён" : "Нет подключения"}</strong></div>
+        <div><span>MQTT</span><strong>{status.mqttConnected ? "Подключён" : "Нет подключения"}</strong></div>
+        <div><span>Очередь точек</span><strong>{status.queueDepth}</strong></div>
+        <div><span>Последняя ошибка</span><strong>{failureLabel(status.lastFailureCode)}</strong></div>
+        <div><span>Последний статус</span><strong>{relativeTime(status.reportedAt, nowMs)}</strong><small>{formatDateTime(status.reportedAt)}</small></div>
+        <div><span>Получен сервером</span><strong>{formatDateTime(status.receivedAt)}</strong><small>ID: {status.statusId}</small></div>
+      </div>
+    </section>
+  );
 }
 
 function ActiveAlertBadge({ count }: { count: number }) {
@@ -393,8 +438,10 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const { myProfile } = useAuth();
   const [devices, setDevices] = useState<MonitoringDevice[]>([]);
   const [states, setStates] = useState<Map<string, MonitoringDeviceState>>(new Map());
+  const [controllerStatuses, setControllerStatuses] = useState<Map<string, MonitoringControllerStatus>>(new Map());
   const [devicesLoaded, setDevicesLoaded] = useState(false);
   const [statesLoaded, setStatesLoaded] = useState(false);
+  const [controllerStatusesLoaded, setControllerStatusesLoaded] = useState(false);
   const [overviewError, setOverviewError] = useState("");
   const [threshold, setThreshold] = useState(DEFAULT_OFFLINE_THRESHOLD_MINUTES);
   const [thresholdSaving, setThresholdSaving] = useState(false);
@@ -433,12 +480,20 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
       setStatesLoaded(true);
       setOverviewError(error.message || "Не удалось загрузить состояния устройств");
     });
+    const unsubscribeControllerStatuses = listenMonitoringControllerStatuses((nextStatuses) => {
+      setControllerStatuses(nextStatuses);
+      setControllerStatusesLoaded(true);
+    }, (error) => {
+      setControllerStatusesLoaded(true);
+      setOverviewError(error.message || "Не удалось загрузить статусы контроллеров");
+    });
     const unsubscribeSettings = listenMonitoringSettings(setThreshold, (error) => {
       setOverviewError(error.message || "Не удалось загрузить настройки мониторинга");
     });
     return () => {
       unsubscribeDevices();
       unsubscribeStates();
+      unsubscribeControllerStatuses();
       unsubscribeSettings();
     };
   }, []);
@@ -485,7 +540,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const selectedDevice = devices.find((device) => device.id === selectedId);
   const role = myProfile?.role ?? "mechanic";
   const canManageSettings = role === "owner" || role === "admin" || role === "manager";
-  const loading = !devicesLoaded || !statesLoaded;
+  const loading = !devicesLoaded || !statesLoaded || !controllerStatusesLoaded;
 
   async function changeThreshold(value: number) {
     setThresholdSaving(true);
@@ -501,7 +556,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
   if (selectedDevice) {
     const state = states.get(selectedDevice.id);
+    const controllerStatus = controllerStatuses.get(selectedDevice.id);
     const status = monitoringStatus(state, nowMs, threshold);
+    const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
     const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
     return (
       <div className="monitor-page">
@@ -519,7 +576,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
           <div className="monitor-detail-badges">
             {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
             <ReadingBadge status={status.reading} />
-            <ConnectionBadge status={status.connection} />
+            <ConnectionBadge status={connection} />
           </div>
         </section>
 
@@ -535,11 +592,13 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
             <small>{formatDateTime(state?.measuredAt)}</small>
           </div>
           <div className="monitor-detail-kpi">
-            <span>Последняя связь</span>
-            <strong>{relativeTime(state?.lastReceivedAt ?? state?.receivedAt, nowMs)}</strong>
-            <small>{formatDateTime(state?.lastReceivedAt ?? state?.receivedAt)}</small>
+            <span>Последний статус связи</span>
+            <strong>{relativeTime(controllerStatus?.reportedAt, nowMs)}</strong>
+            <small>{formatDateTime(controllerStatus?.reportedAt)}</small>
           </div>
         </div>
+
+        <DiagnosticsPanel status={controllerStatus} connection={connection} nowMs={nowMs} />
 
         <TemperatureRulesPanel
           deviceId={selectedDevice.id}
@@ -639,7 +698,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
         <div className="monitor-device-grid">
           {devices.map((device) => {
             const state = states.get(device.id);
+            const controllerStatus = controllerStatuses.get(device.id);
             const status = monitoringStatus(state, nowMs, threshold);
+            const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
             const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
             return (
               <button
@@ -664,11 +725,11 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
                   {!device.enabled && <span className="monitor-badge monitor-badge--disabled">Отключено</span>}
                   {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
                   <ReadingBadge status={status.reading} />
-                  <ConnectionBadge status={status.connection} />
+                  <ConnectionBadge status={connection} />
                 </div>
                 <div className="monitor-card-times">
                   <div><span>Измерено</span><strong>{relativeTime(state?.measuredAt, nowMs)}</strong></div>
-                  <div><span>Связь</span><strong>{relativeTime(state?.lastReceivedAt ?? state?.receivedAt, nowMs)}</strong></div>
+                  <div><span>Статус связи</span><strong>{relativeTime(controllerStatus?.reportedAt, nowMs)}</strong></div>
                 </div>
               </button>
             );

@@ -396,6 +396,22 @@ describe("equipment monitoring access", () => {
       measuredAt: "2026-09-13T00:00:00.000Z",
       receivedAt: "2026-09-13T00:00:01.000Z",
     });
+    await seed("monitoringControllerStatus/device-001", {
+      statusId: "status-001",
+      reportedAt: "2026-09-13T00:00:00.000Z",
+      receivedAt: "2026-09-13T00:00:01.000Z",
+      networkRegistered: true,
+      registrationState: "home",
+      rssi: 22,
+      gprsConnected: true,
+      mqttConnected: true,
+      queueDepth: 0,
+      lastFailureCode: "none",
+      uptimeSeconds: 123,
+    });
+    await seed("monitoringControllerStatus/device-001/statusEvents/status-001", {
+      statusId: "status-001", lastFailureCode: "none",
+    });
     await seed("monitoringTelemetry/device-001/packets/packet-001", {
       measurements: [],
     });
@@ -420,6 +436,8 @@ describe("equipment monitoring access", () => {
     const db = dbFor("mechanic-1");
     await assertSucceeds(getDoc(doc(db, "monitoringDevices/device-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringDeviceState/device-001")));
+    await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001")));
+    await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/status-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
   });
 
@@ -428,6 +446,8 @@ describe("equipment monitoring access", () => {
     await assertFails(setDoc(doc(db, "monitoringDevices/device-002"), { enabled: true }));
     await assertFails(updateDoc(doc(db, "monitoringDevices/device-001"), { enabled: false }));
     await assertFails(setDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    await assertFails(setDoc(doc(db, "monitoringControllerStatus/device-001"), { mqttConnected: true }));
+    await assertFails(setDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/forged"), { statusId: "forged" }));
     await assertFails(setDoc(
       doc(db, "monitoringTelemetry/device-001/packets/forged"),
       { measurements: [] },
@@ -441,6 +461,7 @@ describe("equipment monitoring access", () => {
     await assertSucceeds(updateDoc(deviceRef, { enabled: false }));
     await assertSucceeds(deleteDoc(deviceRef));
     await assertFails(updateDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    await assertFails(updateDoc(doc(db, "monitoringControllerStatus/device-001"), { mqttConnected: false }));
     await assertFails(deleteDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
     await assertFails(getDoc(doc(db, "monitoringDeviceCredentials/device-001")));
     await assertFails(updateDoc(doc(db, "monitoringDeviceCredentials/device-001"), { active: false }));
@@ -497,6 +518,8 @@ describe("equipment monitoring access", () => {
     const db = testEnv.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(db, "monitoringDevices/device-001")));
     await assertFails(getDoc(doc(db, "monitoringDeviceState/device-001")));
+    await assertFails(getDoc(doc(db, "monitoringControllerStatus/device-001")));
+    await assertFails(getDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/status-001")));
     await assertFails(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
     await assertFails(getDoc(doc(db, "monitoringDevices/device-001/temperatureRules/high")));
     await assertFails(getDoc(doc(db, "monitoringAlertEvents/alert-001")));

@@ -22,6 +22,7 @@ import type {
   MonitoringAlertEvent,
   MonitoringAlertEventState,
   MonitoringDevice,
+  MonitoringControllerStatus,
   MonitoringDeviceState,
   MonitoringHistoryResult,
   MonitoringPeriod,
@@ -87,6 +88,40 @@ function mapState(id: string, data: DocumentData): MonitoringDeviceState {
         ([ruleId, eventId]) => ruleId.length > 0 && typeof eventId === "string",
       )) as Record<string, string>
       : {},
+  };
+}
+
+function mapControllerStatus(id: string, data: DocumentData): MonitoringControllerStatus | null {
+  const registrationStates = ["home", "roaming", "searching", "denied", "unknown"] as const;
+  const failureCodes = [
+    "none", "modem_not_ready", "network_not_registered", "ntp_sync_failed",
+    "gprs_connect_failed", "tcp_connect_failed", "mqtt_connect_failed",
+    "publish_send_failed", "puback_timeout", "modem_restarted", "esp_restarted",
+  ] as const;
+  if (
+    typeof data.statusId !== "string"
+    || typeof data.networkRegistered !== "boolean"
+    || typeof data.gprsConnected !== "boolean"
+    || typeof data.mqttConnected !== "boolean"
+    || !registrationStates.includes(data.registrationState)
+    || !failureCodes.includes(data.lastFailureCode)
+    || (data.rssi !== null && (!Number.isInteger(data.rssi) || data.rssi < 0 || data.rssi > 31))
+    || !Number.isSafeInteger(data.queueDepth) || data.queueDepth < 0
+    || !Number.isSafeInteger(data.uptimeSeconds) || data.uptimeSeconds < 0
+  ) return null;
+  return {
+    controllerId: id,
+    statusId: data.statusId,
+    reportedAt: asDate(data.reportedAt),
+    receivedAt: asDate(data.receivedAt),
+    networkRegistered: data.networkRegistered,
+    registrationState: data.registrationState,
+    rssi: data.rssi,
+    gprsConnected: data.gprsConnected,
+    mqttConnected: data.mqttConnected,
+    queueDepth: data.queueDepth,
+    lastFailureCode: data.lastFailureCode,
+    uptimeSeconds: data.uptimeSeconds,
   };
 }
 
@@ -196,6 +231,18 @@ export function listenMonitoringStates(
 ): Unsubscribe {
   return onSnapshot(collection(getFirebaseDb(), "monitoringDeviceState"), (snapshot) => {
     onData(new Map(snapshot.docs.map((item) => [item.id, mapState(item.id, item.data())])));
+  }, onError);
+}
+
+export function listenMonitoringControllerStatuses(
+  onData: (statuses: Map<string, MonitoringControllerStatus>) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(collection(getFirebaseDb(), "monitoringControllerStatus"), (snapshot) => {
+    onData(new Map(snapshot.docs.flatMap((item) => {
+      const status = mapControllerStatus(item.id, item.data());
+      return status ? [[item.id, status] as const] : [];
+    })));
   }, onError);
 }
 

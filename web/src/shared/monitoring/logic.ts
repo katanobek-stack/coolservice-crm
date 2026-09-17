@@ -1,5 +1,6 @@
 import type {
   MonitoringDeviceState,
+  MonitoringControllerStatus,
   MonitoringPeriod,
   MonitoringTemperatureRule,
   TemperaturePoint,
@@ -11,6 +12,16 @@ export type ConnectionStatus = "unknown" | "offline" | "online";
 export interface MonitoringStatus {
   reading: ReadingStatus;
   connection: ConnectionStatus;
+}
+
+export function controllerConnectionStatus(
+  status: MonitoringControllerStatus | undefined,
+  nowMs: number,
+  offlineThresholdMinutes: number,
+): ConnectionStatus {
+  const reportedMs = status?.reportedAt?.getTime();
+  if (reportedMs === undefined) return "unknown";
+  return nowMs - reportedMs > offlineThresholdMinutes * 60_000 ? "offline" : "online";
 }
 
 export function monitoringStatus(
