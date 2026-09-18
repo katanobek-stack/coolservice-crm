@@ -24,9 +24,21 @@ sudo cp -a /opt/crm-mqtt-bridge/bridge.py /opt/crm-mqtt-bridge/bridge.py.pre-sta
 sudo cp -a /var/lib/crm-mqtt-bridge /var/lib/crm-mqtt-bridge.pre-status-$STAMP
 ```
 
-Загрузите **только** этот repo-файл как
-`/opt/crm-mqtt-bridge/bridge.py`. Не загружайте `current-bridge.py`: это
-локальная исходная копия для сравнения, а не deploy-файл.
+С локальной машины загрузите **только** этот repo-файл во временный путь VPS:
+
+```bash
+scp vps/crm-mqtt-bridge/bridge.py <vps-user>@<vps-host>:/tmp/bridge.py
+```
+
+Затем на VPS замените файл с сохранением владельца существующего файла:
+
+```bash
+sudo install -o crmbridge -g crmbridge -m 0644 /tmp/bridge.py /opt/crm-mqtt-bridge/bridge.py
+sudo rm -f /tmp/bridge.py
+```
+
+Не загружайте `current-bridge.py`: это локальная исходная копия для сравнения,
+а не deploy-файл.
 
 В существующем `/etc/crm-mqtt-bridge.env` добавьте одну строку с опубликованным
 HTTPS URL функции, сохранив все текущие имена и значения:
