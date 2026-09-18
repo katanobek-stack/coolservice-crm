@@ -346,12 +346,13 @@ export function listenDeviceHistory(
         if (typeof measurement !== "object" || measurement === null) return;
         const measuredAt = asDate(measurement.measuredAt);
         const temperatureC = measurement.temperatureC;
+        const timeQuality = measurement.timeQuality === "estimated" ? "estimated" : "exact";
         if (
           measuredAt
           && typeof temperatureC === "number"
           && Number.isFinite(temperatureC)
         ) {
-          points.push({ measuredAt, temperatureC });
+          points.push({ measuredAt, temperatureC, timeQuality });
         }
       });
     });

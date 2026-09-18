@@ -26,13 +26,21 @@ Telemetry приходит по `coolmonitor/devices/{controllerId}/telemetry`:
   "packetId": "stable-unique-packet-id",
   "sensorId": "temperature-1",
   "measuredAt": "2026-09-18T00:00:00Z",
-  "value": -18.5
+  "value": -18.5,
+  "timeQuality": "exact"
 }
 ```
 
 Bridge проверяет topic и `controllerId`, затем преобразует это в неизменяемый
 контракт `ingestTelemetry`: `deviceId`, `packetId` и массив
-`measurements[{ measuredAt, temperatureC }]`.
+`measurements[{ measuredAt, temperatureC, timeQuality }]`.
+
+`timeQuality` допускает только `exact` и `estimated`. Поле необязательно для
+старых MQTT- и HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry`
+трактуется как `exact`. `estimated` означает, что контроллер восстановил время
+после отсутствия UTC; температура остаётся реальной, оценочным является только
+время измерения. CRM показывает такие точки оранжевыми с пунктиром и не
+соединяет их синей линией с точными участками.
 
 Status приходит независимо по `coolmonitor/devices/{controllerId}/status`:
 

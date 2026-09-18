@@ -281,6 +281,30 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal(client.exists, false, "telemetry must not mutate client documents");
   });
 
+  test("stores exact by default and preserves an estimated measurement time quality", async () => {
+    const body = packet({
+      packetId: "boot-a:time-quality",
+      measurements: [
+        { measuredAt: new Date(Date.now() - 20_000).toISOString(), temperatureC: -18.5 },
+        { measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18.25, timeQuality: "estimated" },
+      ],
+    });
+    assert.equal((await postTelemetry(body)).status, 202);
+    const [history, state] = await Promise.all([
+      firestore.doc(`monitoringTelemetry/${DEVICE_ID}/packets/${body.packetId}`).get(),
+      firestore.doc(`monitoringDeviceState/${DEVICE_ID}`).get(),
+    ]);
+    assert.deepEqual(history.data().measurements.map((item) => item.timeQuality), ["exact", "estimated"]);
+    assert.equal(state.data().timeQuality, "estimated");
+
+    const invalid = await postTelemetry(packet({
+      packetId: "boot-a:invalid-time-quality",
+      measurements: [{ measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18, timeQuality: "unknown" }],
+    }));
+    assert.equal(invalid.status, 400);
+    assert.equal((await firestore.collectionGroup("packets").get()).size, 1);
+  });
+
   test("rejects an invalid device key without writing telemetry", async () => {
     const response = await postTelemetry(
       packet(),

@@ -17,6 +17,7 @@ import {
   monitoringStatus,
   controllerConnectionStatus,
   downsampleTemperaturePoints,
+  temperatureChartSegments,
   monitoringPeriodMs,
   type ConnectionStatus,
   type ReadingStatus,
@@ -147,6 +148,7 @@ function TemperatureChart({ points, period, rules }: {
     [points],
   );
   const rendered = useMemo(() => downsampleTemperaturePoints(sorted), [sorted]);
+  const segments = useMemo(() => temperatureChartSegments(rendered), [rendered]);
   if (sorted.length === 0) {
     return (
       <div className="monitor-empty monitor-empty--chart">
@@ -185,13 +187,10 @@ function TemperatureChart({ points, period, rules }: {
   const yTicks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
   const xTicks = Array.from({ length: 5 }, (_, index) => startMs + ((nowMs - startMs) * index) / 4);
   const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
+  const estimatedCount = sorted.filter((point) => point.timeQuality === "estimated").length;
   const selectedPoint = selectedPointMs === null
     ? null
     : rendered.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
-  const path = rendered.map((point, pointIndex) => (
-    `${pointIndex === 0 ? "M" : "L"} ${x(point.measuredAt).toFixed(2)} ${y(point.temperatureC).toFixed(2)}`
-  )).join(" ");
-
   return (
     <>
       <div className="monitor-chart-stats">
@@ -199,6 +198,7 @@ function TemperatureChart({ points, period, rules }: {
         <div><span>Средняя</span><strong>{average.toFixed(1)} °C</strong></div>
         <div><span>Максимум</span><strong>{rawMax.toFixed(1)} °C</strong></div>
         <div><span>Получено за период</span><strong>{sorted.length}</strong></div>
+        <div><span>Оценочное время</span><strong>{estimatedCount}</strong></div>
       </div>
       {rendered.length < sorted.length && (
         <div className="monitor-history-subtitle">На графике показано {rendered.length} из {sorted.length} точек</div>
@@ -245,7 +245,13 @@ function TemperatureChart({ points, period, rules }: {
               </text>
             </g>
           ))}
-          <path d={path} className="monitor-chart-line" />
+          {segments.map((segment) => (
+            <path
+              key={`${segment.from.measuredAt.getTime()}-${segment.to.measuredAt.getTime()}`}
+              d={`M ${x(segment.from.measuredAt).toFixed(2)} ${y(segment.from.temperatureC).toFixed(2)} L ${x(segment.to.measuredAt).toFixed(2)} ${y(segment.to.temperatureC).toFixed(2)}`}
+              className={`monitor-chart-line monitor-chart-line--${segment.timeQuality}`}
+            />
+          ))}
           {rendered.map((point) => {
             const pointMs = point.measuredAt.getTime();
             return (
@@ -254,16 +260,16 @@ function TemperatureChart({ points, period, rules }: {
                 cx={x(point.measuredAt)}
                 cy={y(point.temperatureC)}
                 r={selectedPointMs === pointMs ? 5 : 3.2}
-                className="monitor-chart-point"
+                className={`monitor-chart-point monitor-chart-point--${point.timeQuality}`}
                 role="button"
                 tabIndex={0}
-                aria-label={`${formatDateTime(point.measuredAt)}, ${point.temperatureC.toFixed(2)} °C`}
+                aria-label={`${formatDateTime(point.measuredAt)}, ${point.temperatureC.toFixed(2)} °C${point.timeQuality === "estimated" ? ", время оценочное" : ""}`}
                 onClick={() => setSelectedPointMs(pointMs)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") setSelectedPointMs(pointMs);
                 }}
               >
-                <title>{formatDateTime(point.measuredAt)} · {point.temperatureC.toFixed(2)} °C</title>
+                <title>{formatDateTime(point.measuredAt)} · {point.temperatureC.toFixed(2)} °C{point.timeQuality === "estimated" ? " · Время оценочное — восстановлено после отсутствия UTC" : ""}</title>
               </circle>
             );
           })}
@@ -273,10 +279,12 @@ function TemperatureChart({ points, period, rules }: {
         <div className="monitor-point-detail" role="status">
           <strong>{selectedPoint.temperatureC.toFixed(2)} °C</strong>
           <span>{formatDateTime(selectedPoint.measuredAt)}</span>
+          {selectedPoint.timeQuality === "estimated" && <span>Время оценочное — восстановлено после отсутствия UTC</span>}
         </div>
       )}
       <div className="monitor-chart-legend">
-        <span><i className="monitor-legend-line" /> Точки — реальные измерения по времени датчика</span>
+        <span><i className="monitor-legend-line" /> Точное время UTC</span>
+        <span><i className="monitor-legend-line monitor-legend-line--estimated" /> Время оценочное — восстановлено после отсутствия UTC</span>
         <span>Линия лишь соединяет соседние измерения и не означает наличие данных между ними</span>
         {enabledRules.length > 0 && <span><i className="monitor-legend-limit" /> Пороги включённых правил</span>}
       </div>

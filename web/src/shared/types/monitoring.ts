@@ -57,6 +57,8 @@ export interface MonitoringControllerStatus {
 export interface TemperaturePoint {
   measuredAt: Date;
   temperatureC: number;
+  /** Missing is accepted only for legacy in-memory callers and means exact. */
+  timeQuality?: "exact" | "estimated";
 }
 
 export interface MonitoringHistoryResult {

@@ -46,7 +46,19 @@ export function monitoringStatus(
 
 export function sortAndDedupePoints(points: TemperaturePoint[]): TemperaturePoint[] {
   const byTime = new Map<number, TemperaturePoint>();
-  points.forEach((point) => byTime.set(point.measuredAt.getTime(), point));
+  points.forEach((point) => {
+    const normalized = point.timeQuality === "estimated" ? point : { ...point, timeQuality: "exact" as const };
+    const timestamp = normalized.measuredAt.getTime();
+    const existing = byTime.get(timestamp);
+    // A recovered UTC reading is stronger evidence than an estimated duplicate.
+    if (
+      !existing
+      || existing.timeQuality === normalized.timeQuality
+      || existing.timeQuality === "estimated" && normalized.timeQuality === "exact"
+    ) {
+      byTime.set(timestamp, normalized);
+    }
+  });
   return [...byTime.values()].sort(
     (left, right) => left.measuredAt.getTime() - right.measuredAt.getTime(),
   );
@@ -96,6 +108,26 @@ export function downsampleTemperaturePoints(
     if (maximum.measuredAt.getTime() !== minimum.measuredAt.getTime()) retained.push(maximum);
   });
   return sortAndDedupePoints(retained);
+}
+
+export interface TemperatureChartSegment {
+  timeQuality: "exact" | "estimated";
+  from: TemperaturePoint;
+  to: TemperaturePoint;
+}
+
+/** A line never crosses a change between exact and estimated device time. */
+export function temperatureChartSegments(points: TemperaturePoint[]): TemperatureChartSegment[] {
+  const sorted = sortAndDedupePoints(points);
+  const segments: TemperatureChartSegment[] = [];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const from = sorted[index - 1];
+    const to = sorted[index];
+    if (from.timeQuality === to.timeQuality) {
+      segments.push({ timeQuality: from.timeQuality ?? "exact", from, to });
+    }
+  }
+  return segments;
 }
 
 export function monitoringPeriodMs(period: MonitoringPeriod): number {

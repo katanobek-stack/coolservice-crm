@@ -7,6 +7,7 @@ import {
   downsampleTemperaturePoints,
   pointsInHistoryWindow,
   sortAndDedupePoints,
+  temperatureChartSegments,
   violatesTemperatureRule,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
@@ -99,6 +100,32 @@ describe("monitoring history", () => {
       sortAndDedupePoints(points).map((point) => point.temperatureC),
       [-18, -18.1, -18.2, -18.3],
     );
+  });
+
+  test("keeps time quality through dedupe and only joins matching chart segments", () => {
+    const sameTime = new Date(NOW - 50_000);
+    const points: TemperaturePoint[] = [
+      { measuredAt: new Date(NOW - 70_000), temperatureC: -18, timeQuality: "exact" },
+      { measuredAt: new Date(NOW - 60_000), temperatureC: -17.9, timeQuality: "estimated" },
+      { measuredAt: sameTime, temperatureC: -17.8, timeQuality: "estimated" },
+      { measuredAt: sameTime, temperatureC: -17.7, timeQuality: "exact" },
+      { measuredAt: new Date(NOW - 40_000), temperatureC: -17.6, timeQuality: "exact" },
+    ];
+    const deduped = sortAndDedupePoints(points);
+    assert.deepEqual(deduped.map((point) => point.timeQuality), ["exact", "estimated", "exact", "exact"]);
+    assert.equal(deduped[2].temperatureC, -17.7, "exact wins an equal measuredAt");
+    assert.deepEqual(temperatureChartSegments(deduped).map((segment) => segment.timeQuality), ["exact"]);
+  });
+
+  test("downsampling retains estimated points and their quality", () => {
+    const source: TemperaturePoint[] = Array.from({ length: 1_200 }, (_, index) => ({
+      measuredAt: new Date(NOW - 3_600_000 + index * 3_000),
+      temperatureC: -20 + (index % 8),
+      timeQuality: index === 600 ? "estimated" : "exact",
+    }));
+    source[600].temperatureC = -45;
+    const rendered = downsampleTemperaturePoints(source);
+    assert.ok(rendered.some((point) => point.timeQuality === "estimated" && point.temperatureC === -45));
   });
 
   test("supports 1, 12 and 24 hour windows", () => {
