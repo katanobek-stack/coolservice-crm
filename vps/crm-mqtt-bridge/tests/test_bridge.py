@@ -79,27 +79,30 @@ class BridgeTests(unittest.TestCase):
             connection.commit()
             connection.close()
             bridge = load_bridge(data_dir)
-            row = bridge.DB.execute("SELECT message_type, message_id, attempts FROM pending").fetchone()
-            self.assertEqual(row, ("telemetry", "legacy-packet", 2))
+            row = bridge.DB.execute(
+                "SELECT message_type, message_id, attempts, delivery_state, claimed_at FROM pending"
+            ).fetchone()
+            self.assertEqual(row, ("telemetry", "legacy-packet", 2, "pending", None))
             bridge.enqueue("status", "legacy-packet", "{}")
             self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 2)
 
-    def test_telemetry_delivery_result_handles_new_and_legacy_responses(self):
+    def test_restart_returns_inflight_delivery_to_pending(self):
         with tempfile.TemporaryDirectory() as directory:
-            bridge = load_bridge(Path(directory))
+            data_dir = Path(directory)
+            bridge = load_bridge(data_dir)
+            bridge.enqueue("telemetry", "boot-a:inflight", "{}")
+            claimed = bridge.claim_next_delivery()
+            self.assertEqual(claimed[1], "boot-a:inflight")
             self.assertEqual(
-                bridge.telemetry_delivery_result(
-                    b'{"packetId":"boot-a:1","outcome":"stored","measurementsReceived":1,"measurementsCreated":1}'
-                ),
-                ("stored", 1),
+                bridge.DB.execute("SELECT delivery_state FROM pending WHERE message_id = ?", ("boot-a:inflight",)).fetchone(),
+                ("inflight",),
             )
+            bridge.DB.close()
+            bridge = load_bridge(data_dir)
             self.assertEqual(
-                bridge.telemetry_delivery_result(
-                    b'{"packetId":"boot-a:1","outcome":"duplicate","measurementsCreated":0}'
-                ),
-                ("duplicate", 0),
+                bridge.DB.execute("SELECT delivery_state, claimed_at FROM pending WHERE message_id = ?", ("boot-a:inflight",)).fetchone(),
+                ("pending", None),
             )
-            self.assertEqual(bridge.telemetry_delivery_result(b"accepted"), ("unknown", None))
 
 
 if __name__ == "__main__":
