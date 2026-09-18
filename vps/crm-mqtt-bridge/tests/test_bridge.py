@@ -42,6 +42,19 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(packet_id, "boot-a:1")
             self.assertEqual(json.loads(body)["measurements"][0]["temperatureC"], -18.5)
 
+    def test_telemetry_passes_optional_time_quality_without_changing_legacy_messages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            payload = {
+                "controllerId": "device-001", "packetId": "boot-a:estimated", "sensorId": "temperature-1",
+                "measuredAt": "2026-09-17T01:23:45.000Z", "value": -18.5, "timeQuality": "estimated",
+            }
+            _, body = bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+            self.assertEqual(json.loads(body)["measurements"][0]["timeQuality"], "estimated")
+            payload["timeQuality"] = "unknown"
+            with self.assertRaises(ValueError):
+                bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+
     def test_status_is_validated_and_status_id_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             bridge = load_bridge(Path(directory))

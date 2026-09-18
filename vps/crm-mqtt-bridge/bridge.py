@@ -140,6 +140,7 @@ def telemetry_body(payload: Any, topic: str) -> tuple[str, str]:
     sensor_id = payload.get("sensorId")
     measured_at = payload.get("measuredAt")
     value = payload.get("value")
+    time_quality = payload.get("timeQuality")
     expected_topic = f"coolmonitor/devices/{CRM_DEVICE_ID}/telemetry"
     if topic != expected_topic:
         raise ValueError("unexpected telemetry MQTT topic")
@@ -149,12 +150,17 @@ def telemetry_body(payload: Any, topic: str) -> tuple[str, str]:
         raise ValueError("missing packetId, sensorId, or measuredAt")
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("value is not numeric")
+    if time_quality is not None and time_quality not in {"exact", "estimated"}:
+        raise ValueError("timeQuality must be exact or estimated")
     if value < -55 or value > 125:
         raise ValueError("temperature is outside DS18B20 range")
+    measurement = {"measuredAt": measured_at, "temperatureC": value}
+    if time_quality is not None:
+        measurement["timeQuality"] = time_quality
     body = {
         "deviceId": CRM_DEVICE_ID,
         "packetId": packet_id,
-        "measurements": [{"measuredAt": measured_at, "temperatureC": value}],
+        "measurements": [measurement],
     }
     return packet_id, json.dumps(body, separators=(",", ":"))
 

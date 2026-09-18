@@ -308,7 +308,7 @@
 
 .monitor-chart-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -329,7 +329,9 @@
 .monitor-chart-grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 4 5; }
 .monitor-chart-label { fill: #64748b; font: 11px 'JetBrains Mono', monospace; }
 .monitor-chart-line { fill: none; stroke: #2563eb; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.monitor-chart-line--estimated { stroke: #ea580c; stroke-dasharray: 8 6; }
 .monitor-chart-point { fill: #fff; stroke: #2563eb; stroke-width: 2.5; }
+.monitor-chart-point--estimated { stroke: #ea580c; fill: #fff7ed; }
 .monitor-chart-point { cursor: pointer; }
 .monitor-chart-point:focus { outline: none; stroke: #0f172a; stroke-width: 4; }
 .monitor-chart-limit { stroke: #dc2626; stroke-width: 2; stroke-dasharray: 8 5; }
@@ -362,6 +364,7 @@
 
 .monitor-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .monitor-legend-line { width: 18px; height: 3px; border-radius: 2px; background: #2563eb; }
+.monitor-legend-line--estimated { background: repeating-linear-gradient(to right, #ea580c 0 7px, transparent 7px 11px); }
 .monitor-legend-limit { width: 18px; border-top: 2px dashed #dc2626; }
 .monitor-limit-warning {
   margin-bottom: 12px;

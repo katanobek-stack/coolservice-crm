@@ -26,6 +26,7 @@ const MAX_MEASUREMENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 interface ValidMeasurement {
   measuredAt: Date;
   temperatureC: number;
+  timeQuality: "exact" | "estimated";
 }
 
 interface ValidPacket {
@@ -105,7 +106,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
 
   let previousTime = Number.NEGATIVE_INFINITY;
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
-    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC"])) {
+    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality"])) {
       throw new RequestValidationError(`measurements[${index}] has unknown fields`);
     }
     if (
@@ -120,8 +121,12 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     if (measuredAt.getTime() <= previousTime) {
       throw new RequestValidationError("measurements must be ordered by unique measuredAt values");
     }
+    const timeQuality = measurement.timeQuality ?? "exact";
+    if (timeQuality !== "exact" && timeQuality !== "estimated") {
+      throw new RequestValidationError(`measurements[${index}].timeQuality is invalid`);
+    }
     previousTime = measuredAt.getTime();
-    return { measuredAt, temperatureC: measurement.temperatureC };
+    return { measuredAt, temperatureC: measurement.temperatureC, timeQuality };
   });
 
   return { deviceId, packetId, measurements: parsed };
@@ -444,6 +449,7 @@ export const ingestTelemetry = onRequest(
         const storedMeasurements = packet.measurements.map((measurement) => ({
           measuredAt: Timestamp.fromDate(measurement.measuredAt),
           temperatureC: measurement.temperatureC,
+          timeQuality: measurement.timeQuality,
         }));
         transaction.create(packetRef, {
           deviceId: packet.deviceId,
@@ -472,6 +478,7 @@ export const ingestTelemetry = onRequest(
           Object.assign(stateUpdate, {
             packetId: packet.packetId,
             temperatureC: latest.temperatureC,
+            timeQuality: latest.timeQuality,
             measuredAt: Timestamp.fromDate(latest.measuredAt),
             receivedAt,
             sampleCount: packet.measurements.length,
