@@ -249,6 +249,22 @@ def target_url(message_type: str) -> str:
     return CRM_URL if message_type == "telemetry" else CRM_STATUS_URL
 
 
+def telemetry_delivery_result(body: bytes) -> tuple[str, int | None]:
+    """Read the public successful telemetry result without exposing the response body."""
+    try:
+        result = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "unknown", None
+    if not isinstance(result, dict) or result.get("outcome") not in {"stored", "duplicate"}:
+        return "unknown", None
+    created = result.get("measurementsCreated")
+    if type(created) is not int or created < 0:
+        return "unknown", None
+    if result["outcome"] == "duplicate" and created != 0:
+        return "unknown", None
+    return result["outcome"], created
+
+
 def count_delivery(outcome: str) -> None:
     with STATS_LOCK:
         delivery_stats[outcome] += 1
@@ -284,13 +300,18 @@ def deliver_claimed(message_type: str, message_id: str, body: str, attempts: int
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
             status = response.status
+            response_body = response.read()
         if status not in (200, 202):
             raise RuntimeError(f"unexpected HTTP {status}")
         with DB_LOCK:
             DB.execute("DELETE FROM pending WHERE message_type = ? AND message_id = ?", (message_type, message_id))
             DB.commit()
         count_delivery("accepted")
-        log_delivery("accepted", message_type, message_id, status)
+        if message_type == "telemetry":
+            telemetry_outcome, created = telemetry_delivery_result(response_body)
+            log_delivery("accepted", message_type, message_id, status, telemetry_outcome, created)
+        else:
+            log_delivery("accepted", message_type, message_id, status)
     except urllib.error.HTTPError as error:
         if 400 <= error.code < 500 and error.code not in (408, 429):
             reject(message_type, message_id, body, f"CRM HTTP {error.code}")
@@ -302,11 +323,32 @@ def deliver_claimed(message_type: str, message_id: str, body: str, attempts: int
         retry(message_type, message_id, attempts, str(error))
 
 
-def log_delivery(outcome: str, message_type: str, message_id: str, status: int | None, level: int = logging.INFO) -> None:
+def log_delivery(
+    outcome: str,
+    message_type: str,
+    message_id: str,
+    status: int | None,
+    telemetry_outcome: str | None = None,
+    created: int | None = None,
+    level: int = logging.INFO,
+) -> None:
     if message_type == "status":
         LOG.log(level, "CRM %s controllerId=%s statusId=%s HTTP=%s", outcome, CRM_DEVICE_ID, message_id, status)
     else:
-        LOG.log(level, "CRM %s packetId=%s HTTP=%s", outcome, message_id, status)
+        if telemetry_outcome in {"stored", "duplicate"} and created is not None:
+            LOG.log(
+                level,
+                "CRM %s packetId=%s HTTP=%s outcome=%s created=%s",
+                outcome,
+                message_id,
+                status,
+                telemetry_outcome,
+                created,
+            )
+        elif telemetry_outcome == "unknown":
+            LOG.log(level, "CRM %s packetId=%s HTTP=%s outcome=unknown", outcome, message_id, status)
+        else:
+            LOG.log(level, "CRM %s packetId=%s HTTP=%s", outcome, message_id, status)
 
 
 def reject(message_type: str, message_id: str, body: str, reason: str) -> None:

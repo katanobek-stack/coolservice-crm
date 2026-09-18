@@ -104,6 +104,35 @@ class BridgeTests(unittest.TestCase):
                 ("pending", None),
             )
 
+    def test_telemetry_success_response_reports_stored_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            self.assertEqual(
+                bridge.telemetry_delivery_result(
+                    b'{"packetId":"boot-a:1","outcome":"stored","measurementsReceived":2,"measurementsCreated":2}'
+                ),
+                ("stored", 2),
+            )
+
+    def test_telemetry_success_response_reports_duplicate_without_creation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            self.assertEqual(
+                bridge.telemetry_delivery_result(
+                    b'{"packetId":"boot-a:1","outcome":"duplicate","measurementsReceived":1,"measurementsCreated":0}'
+                ),
+                ("duplicate", 0),
+            )
+
+    def test_telemetry_success_response_handles_invalid_or_non_json_body(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            self.assertEqual(bridge.telemetry_delivery_result(b"accepted"), ("unknown", None))
+            self.assertEqual(
+                bridge.telemetry_delivery_result(b'{"outcome":"duplicate","measurementsCreated":1}'),
+                ("unknown", None),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
