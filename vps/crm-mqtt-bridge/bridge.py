@@ -39,6 +39,15 @@ CRM_DEVICE_KEY = os.environ["CRM_DEVICE_KEY"]
 CRM_STATUS_URL = os.environ["CRM_STATUS_URL"]
 STATUS_TOPIC = "coolmonitor/devices/+/status"
 
+# HTTPS is the slow part of the pipeline, not MQTT or SQLite. Thirty-two
+# independent workers keep recovery traffic from blocking fresh telemetry.
+# It can be lowered on the VPS through CRM_DELIVERY_WORKERS without a code edit.
+try:
+    DELIVERY_WORKERS = max(1, min(64, int(os.environ.get("CRM_DELIVERY_WORKERS", "32"))))
+except ValueError:
+    DELIVERY_WORKERS = 32
+STATS_INTERVAL_SECONDS = 30
+
 REGISTRATION_STATES = {"home", "roaming", "searching", "denied", "unknown"}
 FAILURE_CODES = {
     "none", "modem_not_ready", "network_not_registered", "ntp_sync_failed",
@@ -54,6 +63,7 @@ def database() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH, check_same_thread=False)
     db.execute("PRAGMA journal_mode=WAL")
     migrate_queue_schema(db)
+    prepare_delivery_claims(db)
     return db
 
 
@@ -108,6 +118,8 @@ def create_queue_tables(db: sqlite3.Connection) -> None:
           attempts INTEGER NOT NULL DEFAULT 0,
           next_attempt_at INTEGER NOT NULL DEFAULT 0,
           last_error TEXT,
+          delivery_state TEXT NOT NULL DEFAULT 'pending' CHECK(delivery_state IN ('pending', 'inflight')),
+          claimed_at INTEGER,
           PRIMARY KEY(message_type, message_id)
         )
         """
@@ -127,8 +139,27 @@ def create_queue_tables(db: sqlite3.Connection) -> None:
     db.commit()
 
 
+def prepare_delivery_claims(db: sqlite3.Connection) -> None:
+    """Add durable worker-claim fields without dropping existing telemetry."""
+    columns = table_columns(db, "pending")
+    if "delivery_state" not in columns:
+        db.execute("ALTER TABLE pending ADD COLUMN delivery_state TEXT NOT NULL DEFAULT 'pending'")
+    if "claimed_at" not in columns:
+        db.execute("ALTER TABLE pending ADD COLUMN claimed_at INTEGER")
+    # A process may stop while HTTPS is in flight. Its row was never deleted,
+    # so it is safe and necessary to make it available after service restart.
+    db.execute("UPDATE pending SET delivery_state = 'pending', claimed_at = NULL WHERE delivery_state = 'inflight'")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS pending_delivery_ready "
+        "ON pending(delivery_state, next_attempt_at, received_at)"
+    )
+    db.commit()
+
+
 DB = database()
 DB_LOCK = threading.Lock()
+STATS_LOCK = threading.Lock()
+delivery_stats = {"accepted": 0, "rejected": 0, "deferred": 0}
 
 
 def telemetry_body(payload: Any, topic: str) -> tuple[str, str]:
@@ -218,29 +249,34 @@ def target_url(message_type: str) -> str:
     return CRM_URL if message_type == "telemetry" else CRM_STATUS_URL
 
 
-def telemetry_delivery_result(body: bytes) -> tuple[str, int | None]:
-    """Read the optional public ingestTelemetry result without exposing payloads."""
-    try:
-        result = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return "unknown", None
-    if not isinstance(result, dict) or result.get("outcome") not in {"stored", "duplicate"}:
-        return "unknown", None
-    created = result.get("measurementsCreated")
-    if type(created) is not int or created < 0:
-        return "unknown", None
-    return result["outcome"], created
+def count_delivery(outcome: str) -> None:
+    with STATS_LOCK:
+        delivery_stats[outcome] += 1
 
 
-def deliver_one() -> None:
+def claim_next_delivery() -> tuple[str, str, str, int] | None:
+    """Atomically reserve exactly one ready row for one HTTP worker."""
     with DB_LOCK:
         row = DB.execute(
-            "SELECT message_type, message_id, body, attempts FROM pending WHERE next_attempt_at <= ? "
+            "SELECT message_type, message_id, body, attempts FROM pending "
+            "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
             "ORDER BY received_at LIMIT 1", (int(time.time()),)
         ).fetchone()
-    if row is None:
-        return
-    message_type, message_id, body, attempts = row
+        if row is None:
+            return None
+        message_type, message_id, body, attempts = row
+        updated = DB.execute(
+            "UPDATE pending SET delivery_state = 'inflight', claimed_at = ? "
+            "WHERE message_type = ? AND message_id = ? AND delivery_state = 'pending'",
+            (int(time.time()), message_type, message_id),
+        )
+        DB.commit()
+        if updated.rowcount != 1:
+            return None
+    return message_type, message_id, body, attempts
+
+
+def deliver_claimed(message_type: str, message_id: str, body: str, attempts: int) -> None:
     request = urllib.request.Request(
         target_url(message_type), data=body.encode("utf-8"), method="POST",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {CRM_DEVICE_KEY}"},
@@ -248,51 +284,29 @@ def deliver_one() -> None:
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
             status = response.status
-            response_body = response.read()
         if status not in (200, 202):
             raise RuntimeError(f"unexpected HTTP {status}")
         with DB_LOCK:
             DB.execute("DELETE FROM pending WHERE message_type = ? AND message_id = ?", (message_type, message_id))
             DB.commit()
-        if message_type == "telemetry":
-            telemetry_outcome, created = telemetry_delivery_result(response_body)
-            log_delivery("accepted", message_type, message_id, status, telemetry_outcome, created)
-        else:
-            log_delivery("accepted", message_type, message_id, status)
+        count_delivery("accepted")
+        log_delivery("accepted", message_type, message_id, status)
     except urllib.error.HTTPError as error:
         if 400 <= error.code < 500 and error.code not in (408, 429):
             reject(message_type, message_id, body, f"CRM HTTP {error.code}")
-            log_delivery("rejected", message_type, message_id, error.code, level=logging.ERROR)
+            count_delivery("rejected")
+            log_delivery("rejected", message_type, message_id, error.code, logging.ERROR)
             return
         retry(message_type, message_id, attempts, f"CRM HTTP {error.code}")
     except Exception as error:
         retry(message_type, message_id, attempts, str(error))
 
 
-def log_delivery(
-    outcome: str,
-    message_type: str,
-    message_id: str,
-    status: int | None,
-    telemetry_outcome: str | None = None,
-    created: int | None = None,
-    level: int = logging.INFO,
-) -> None:
+def log_delivery(outcome: str, message_type: str, message_id: str, status: int | None, level: int = logging.INFO) -> None:
     if message_type == "status":
         LOG.log(level, "CRM %s controllerId=%s statusId=%s HTTP=%s", outcome, CRM_DEVICE_ID, message_id, status)
     else:
-        if telemetry_outcome in {"stored", "duplicate"} and created is not None:
-            LOG.log(
-                level,
-                "CRM %s packetId=%s HTTP=%s outcome=%s created=%s",
-                outcome,
-                message_id,
-                status,
-                telemetry_outcome,
-                created,
-            )
-        else:
-            LOG.log(level, "CRM %s packetId=%s HTTP=%s outcome=unknown", outcome, message_id, status)
+        LOG.log(level, "CRM %s packetId=%s HTTP=%s", outcome, message_id, status)
 
 
 def reject(message_type: str, message_id: str, body: str, reason: str) -> None:
@@ -309,14 +323,61 @@ def retry(message_type: str, message_id: str, attempts: int, reason: str) -> Non
     delay = min(300, max(5, 2 ** min(attempts + 1, 8)))
     with DB_LOCK:
         DB.execute(
-            "UPDATE pending SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE message_type = ? AND message_id = ?",
+            "UPDATE pending SET attempts = ?, next_attempt_at = ?, last_error = ?, "
+            "delivery_state = 'pending', claimed_at = NULL WHERE message_type = ? AND message_id = ?",
             (attempts + 1, int(time.time()) + delay, reason[:300], message_type, message_id),
         )
         DB.commit()
+    count_delivery("deferred")
     if message_type == "status":
         LOG.warning("CRM delivery deferred controllerId=%s statusId=%s in %ss", CRM_DEVICE_ID, message_id, delay)
     else:
         LOG.warning("CRM delivery deferred packetId=%s in %ss", message_id, delay)
+
+
+def delivery_worker(worker_number: int) -> None:
+    while True:
+        claimed = claim_next_delivery()
+        if claimed is None:
+            time.sleep(0.05)
+            continue
+        try:
+            deliver_claimed(*claimed)
+        except Exception:
+            # Do not strand a claimed row if a programming or encoding error
+            # occurs before the normal HTTP exception handling path.
+            message_type, message_id, _body, attempts = claimed
+            LOG.exception("delivery worker=%d crashed while handling messageId=%s", worker_number, message_id)
+            retry(message_type, message_id, attempts, "unexpected worker exception")
+
+
+def queue_stats() -> tuple[int, int, int | None]:
+    with DB_LOCK:
+        pending, inflight, oldest = DB.execute(
+            "SELECT "
+            "SUM(CASE WHEN delivery_state = 'pending' THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN delivery_state = 'inflight' THEN 1 ELSE 0 END), "
+            "MIN(received_at) FROM pending"
+        ).fetchone()
+    return int(pending or 0), int(inflight or 0), oldest
+
+
+def stats_reporter() -> None:
+    while True:
+        time.sleep(STATS_INTERVAL_SECONDS)
+        pending, inflight, oldest = queue_stats()
+        with STATS_LOCK:
+            accepted = delivery_stats["accepted"]
+            rejected = delivery_stats["rejected"]
+            deferred = delivery_stats["deferred"]
+            delivery_stats.update(accepted=0, rejected=0, deferred=0)
+        oldest_waiting = max(0, int(time.time()) - oldest) if oldest else 0
+        LOG.info(
+            "STATS workers=%d pending=%d inFlight=%d acceptedLast30s=%d "
+            "rejectedLast30s=%d deferredLast30s=%d rate=%.2f/s oldestWaiting=%ss",
+            DELIVERY_WORKERS, pending, inflight, accepted, rejected, deferred,
+            accepted / STATS_INTERVAL_SECONDS, oldest_waiting,
+        )
 
 
 def on_connect(client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any = None) -> None:
@@ -357,9 +418,14 @@ def main() -> None:
     client.reconnect_delay_set(min_delay=2, max_delay=60)
     client.connect_async(MQTT_HOST, MQTT_PORT, keepalive=60)
     client.loop_start()
+    for worker_number in range(1, DELIVERY_WORKERS + 1):
+        threading.Thread(
+            target=delivery_worker, args=(worker_number,), name=f"crm-delivery-{worker_number}", daemon=True
+        ).start()
+    threading.Thread(target=stats_reporter, name="crm-delivery-stats", daemon=True).start()
+    LOG.info("CRM delivery workers started count=%d", DELIVERY_WORKERS)
     while True:
-        deliver_one()
-        time.sleep(1)
+        time.sleep(60)
 
 
 if __name__ == "__main__":
