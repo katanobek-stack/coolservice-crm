@@ -1,5 +1,21 @@
 # История изменений телеметрии
 
+## 2026-09-19 — outcome telemetry в журнале live bridge
+
+**Причина.** После установки совместимого с live bridge новые telemetry
+принимались с HTTP 202, но журнал не показывал, была ли создана новая точка
+либо `packetId` обработан как дубликат.
+
+**Изменено локально.** После успешного HTTP 200/202 bridge безопасно читает
+только JSON-результат `ingestTelemetry`: `stored` пишет число созданных
+измерений, `duplicate` — `created=0`. Старый, не-JSON или некорректный
+successful body пишется как `outcome=unknown` и не останавливает delivery
+worker. Очередь, 32 workers, `delivery_state`/inflight, STATS, status topic и
+`timeQuality` не изменены.
+
+**Публикация.** Не выполнялась: VPS, systemd, Mosquitto и env-файлы не
+изменялись. Обновление `bridge.py` на VPS остаётся отдельной ручной операцией.
+
 ## 2026-09-19 — совместимый bridge-артефакт для `timeQuality`
 
 **Причина.** Предыдущий repo-артефакт `vps/crm-mqtt-bridge/bridge.py` содержал
