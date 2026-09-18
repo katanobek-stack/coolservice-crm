@@ -32,11 +32,6 @@ import type {
 } from "../types/monitoring";
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
-export const HISTORY_PACKET_LIMITS: Record<MonitoringPeriod, number> = {
-  hour: 120,
-  halfDay: 1_440,
-  day: 2_880,
-};
 export const ALERT_EVENT_LIMIT = 200;
 
 function asDate(value: unknown): Date | null {
@@ -335,20 +330,16 @@ export function listenDeviceHistory(
   onError: (error: Error) => void,
   nowMs = Date.now(),
 ): Unsubscribe {
-  const packetLimit = HISTORY_PACKET_LIMITS[period];
   const startedAt = Timestamp.fromMillis(nowMs - monitoringPeriodMs(period));
   const packets = query(
     collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
     where("lastMeasuredAt", ">", startedAt),
     orderBy("lastMeasuredAt", "desc"),
-    limit(packetLimit + 1),
   );
 
   return onSnapshot(packets, (snapshot) => {
-    const limitReached = snapshot.size > packetLimit;
-    const selectedDocs = snapshot.docs.slice(0, packetLimit);
     const points: TemperaturePoint[] = [];
-    selectedDocs.forEach((packet) => {
+    snapshot.docs.forEach((packet) => {
       const measurements = packet.data().measurements;
       if (!Array.isArray(measurements)) return;
       measurements.forEach((measurement) => {
@@ -366,8 +357,8 @@ export function listenDeviceHistory(
     });
     onData({
       points: pointsInHistoryWindow(points, startedAt.toMillis(), nowMs),
-      packetCount: selectedDocs.length,
-      limitReached,
+      packetCount: snapshot.size,
+      limitReached: false,
     });
   }, onError);
 }

@@ -3,7 +3,6 @@ import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
   DEFAULT_OFFLINE_THRESHOLD_MINUTES,
-  HISTORY_PACKET_LIMITS,
   deleteMonitoringTemperatureRule,
   listenDeviceHistory,
   listenMonitoringDevices,
@@ -17,6 +16,7 @@ import {
 import {
   monitoringStatus,
   controllerConnectionStatus,
+  downsampleTemperaturePoints,
   monitoringPeriodMs,
   type ConnectionStatus,
   type ReadingStatus,
@@ -146,6 +146,7 @@ function TemperatureChart({ points, period, rules }: {
     () => [...points].sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime()),
     [points],
   );
+  const rendered = useMemo(() => downsampleTemperaturePoints(sorted), [sorted]);
   if (sorted.length === 0) {
     return (
       <div className="monitor-empty monitor-empty--chart">
@@ -186,8 +187,8 @@ function TemperatureChart({ points, period, rules }: {
   const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
   const selectedPoint = selectedPointMs === null
     ? null
-    : sorted.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
-  const path = sorted.map((point, pointIndex) => (
+    : rendered.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
+  const path = rendered.map((point, pointIndex) => (
     `${pointIndex === 0 ? "M" : "L"} ${x(point.measuredAt).toFixed(2)} ${y(point.temperatureC).toFixed(2)}`
   )).join(" ");
 
@@ -197,8 +198,11 @@ function TemperatureChart({ points, period, rules }: {
         <div><span>Минимум</span><strong>{rawMin.toFixed(1)} °C</strong></div>
         <div><span>Средняя</span><strong>{average.toFixed(1)} °C</strong></div>
         <div><span>Максимум</span><strong>{rawMax.toFixed(1)} °C</strong></div>
-        <div><span>Измерений</span><strong>{points.length}</strong></div>
+        <div><span>Получено за период</span><strong>{sorted.length}</strong></div>
       </div>
+      {rendered.length < sorted.length && (
+        <div className="monitor-history-subtitle">На графике показано {rendered.length} из {sorted.length} точек</div>
+      )}
       <div className="monitor-chart-scroll" aria-label="График температуры">
         <svg className="monitor-chart" viewBox={`0 0 ${width} ${height}`} role="img">
           <title>Температура за {periodLabel(period)}</title>
@@ -242,7 +246,7 @@ function TemperatureChart({ points, period, rules }: {
             </g>
           ))}
           <path d={path} className="monitor-chart-line" />
-          {sorted.map((point) => {
+          {rendered.map((point) => {
             const pointMs = point.measuredAt.getTime();
             return (
               <circle
@@ -639,11 +643,6 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               </div>
             ) : (
               <>
-                {history.limitReached && (
-                  <div className="monitor-limit-warning">
-                    Достигнут лимит {HISTORY_PACKET_LIMITS[period]} пакетов. Показаны самые новые данные периода.
-                  </div>
-                )}
                 <TemperatureChart
                   points={history.points}
                   period={period}

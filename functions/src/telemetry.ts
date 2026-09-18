@@ -39,6 +39,11 @@ interface PendingAlertEvent {
   data: Record<string, unknown>;
 }
 
+interface IngestOutcome {
+  outcome: "stored" | "duplicate";
+  measurementsCreated: number;
+}
+
 class RequestValidationError extends Error {}
 class DeviceAuthenticationError extends Error {}
 
@@ -176,7 +181,7 @@ export const ingestTelemetry = onRequest(
       const receivedAt = Timestamp.now();
       const latest = packet.measurements[packet.measurements.length - 1];
 
-      const duplicate = await firestore.runTransaction(async (transaction) => {
+      const ingestOutcome = await firestore.runTransaction<IngestOutcome>(async (transaction) => {
         const [currentDevice, currentCredential, existingPacket, currentState, currentRules] = await Promise.all([
           transaction.get(deviceRef),
           transaction.get(credentialRef),
@@ -195,7 +200,9 @@ export const ingestTelemetry = onRequest(
         ) {
           throw new DeviceAuthenticationError("device is missing, disabled or has invalid credentials");
         }
-        if (existingPacket.exists) return true;
+        if (existingPacket.exists) {
+          return { outcome: "duplicate", measurementsCreated: 0 };
+        }
 
         const deviceData = currentDevice.data() ?? {};
         const stateData = currentState.data() ?? {};
@@ -476,14 +483,14 @@ export const ingestTelemetry = onRequest(
           if (pending.isNew) transaction.create(eventRef, pending.data);
           else transaction.set(eventRef, pending.data, { merge: true });
         });
-        return false;
+        return { outcome: "stored", measurementsCreated: storedMeasurements.length };
       });
 
-      response.status(duplicate ? 200 : 202).json({
-        accepted: !duplicate,
-        duplicate,
+      response.status(ingestOutcome.outcome === "duplicate" ? 200 : 202).json({
         packetId: packet.packetId,
-        receivedAt: receivedAt.toDate().toISOString(),
+        outcome: ingestOutcome.outcome,
+        measurementsReceived: packet.measurements.length,
+        measurementsCreated: ingestOutcome.measurementsCreated,
       });
     } catch (error) {
       if (error instanceof DeviceAuthenticationError) {

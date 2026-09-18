@@ -261,10 +261,12 @@ describe("ingestTelemetry emulator integration", () => {
     const result = await response.json();
 
     assert.equal(response.status, 202);
-    assert.deepEqual(
-      { accepted: result.accepted, duplicate: result.duplicate, packetId: result.packetId },
-      { accepted: true, duplicate: false, packetId: body.packetId },
-    );
+    assert.deepEqual(result, {
+      packetId: body.packetId,
+      outcome: "stored",
+      measurementsReceived: 2,
+      measurementsCreated: 2,
+    });
 
     const [history, state, client] = await Promise.all([
       firestore.doc(`monitoringTelemetry/${DEVICE_ID}/packets/${body.packetId}`).get(),
@@ -314,6 +316,12 @@ describe("ingestTelemetry emulator integration", () => {
     const original = packet();
     const firstResponse = await postTelemetry(original);
     assert.equal(firstResponse.status, 202);
+    assert.deepEqual(await firstResponse.json(), {
+      packetId: original.packetId,
+      outcome: "stored",
+      measurementsReceived: 2,
+      measurementsCreated: 2,
+    });
 
     const repeated = {
       ...original,
@@ -322,10 +330,12 @@ describe("ingestTelemetry emulator integration", () => {
     const secondResponse = await postTelemetry(repeated);
     const secondResult = await secondResponse.json();
     assert.equal(secondResponse.status, 200);
-    assert.deepEqual(
-      { accepted: secondResult.accepted, duplicate: secondResult.duplicate },
-      { accepted: false, duplicate: true },
-    );
+    assert.deepEqual(secondResult, {
+      packetId: original.packetId,
+      outcome: "duplicate",
+      measurementsReceived: 2,
+      measurementsCreated: 0,
+    });
 
     const history = await firestore
       .doc(`monitoringTelemetry/${DEVICE_ID}/packets/${original.packetId}`)

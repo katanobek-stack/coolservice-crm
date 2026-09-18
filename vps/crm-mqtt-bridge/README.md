@@ -1,81 +1,83 @@
-# Безопасное обновление crm-mqtt-bridge на VPS
+# Обновление реального crm-mqtt-bridge на VPS
 
-Этот каталог — готовая самостоятельная версия bridge, потому что исходник
-действующего bridge находится только на VPS и не был доступен для точного
-патча. Она одновременно принимает прежний topic telemetry и новый status:
+`bridge.py` основан на работающем bridge. Он сохраняет его telemetry contract,
+current systemd service и environment names, добавляя только status topic и
+`CRM_STATUS_URL`.
 
-- `coolmonitor/devices/+/telemetry` → `CRM_TELEMETRY_URL`;
-- `coolmonitor/devices/+/status` → `CRM_STATUS_URL`.
+- telemetry: `coolmonitor/devices/+/telemetry` → `CRM_URL`;
+- status: `coolmonitor/devices/+/status` → `CRM_STATUS_URL`.
 
-Оба topic принимаются c QoS 1. MQTT callback только проверяет и сохраняет
-сообщение в SQLite; HTTPS выполняется отдельным worker-потоком. Ключи устройств
-читаются только из VPS-файла, не попадают в SQLite, MQTT payload или journal.
-HTTP 200/202 завершает доставку; 400/401 помечает её окончательно ошибочной;
-остальные ошибки повторяются с backoff до 10 минут.
+MQTT остаётся обычным TCP на текущем `MQTT_PORT` (1883), без TLS. HTTP выполняет
+основной delivery loop, а callback только валидирует и сохраняет запись в
+SQLite. Ключ берётся только из существующего `CRM_DEVICE_KEY` и не попадает в
+логи. Очередь мигрирует атомарно: старые `pending(packet_id, …)` и `rejected`
+копируются как `telemetry` в таблицы с ключом `(message_type, message_id)`.
 
-## Подготовка перед окном обновления
+## Обновление
 
-1. Убедитесь, что `ingestControllerStatus` уже опубликована и доступна по HTTPS.
-   До этого status будут корректно сохраняться в SQLite и повторяться, но не
-   смогут быть приняты CRM.
-2. Сверьте на VPS реальное имя текущего service и пути. Команды ниже используют
-   `crm-mqtt-bridge.service`, `/opt/crm-mqtt-bridge` и
-   `/etc/crm-mqtt-bridge` как явные примеры, а не как скрытое предположение.
-3. Сохраните текущие значения `CRM_TELEMETRY_URL`, MQTT host/TLS/login и
-   существующий список ключей. Не выводите содержимое key-файла в терминал,
-   journal или историю shell.
-
-## Обновление на VPS
-
-Выполняйте от привилегированного администратора, в согласованное окно:
+На VPS выполните в согласованное окно. `STAMP` понадобится также для rollback:
 
 ```bash
-sudo systemctl stop crm-mqtt-bridge
-sudo install -d -o crm-mqtt-bridge -g crm-mqtt-bridge -m 0750 /opt/crm-mqtt-bridge /var/lib/crm-mqtt-bridge /etc/crm-mqtt-bridge
-sudo cp -a /opt/crm-mqtt-bridge /opt/crm-mqtt-bridge.backup-$(date +%Y%m%d-%H%M%S)
+sudo systemctl stop crm-mqtt-bridge.service
+STAMP=$(date +%Y%m%d-%H%M%S)
+sudo cp -a /opt/crm-mqtt-bridge/bridge.py /opt/crm-mqtt-bridge/bridge.py.pre-status-$STAMP
+sudo cp -a /var/lib/crm-mqtt-bridge /var/lib/crm-mqtt-bridge.pre-status-$STAMP
 ```
 
-Загрузите **без ключей** из этого каталога `crm_mqtt_bridge.py`,
-`requirements.txt` и service unit в `/opt/crm-mqtt-bridge`. Затем создайте
-venv и установите только указанную зависимость:
+С локальной машины загрузите **только** этот repo-файл во временный путь VPS:
 
 ```bash
-sudo python3 -m venv /opt/crm-mqtt-bridge/venv
-sudo /opt/crm-mqtt-bridge/venv/bin/pip install -r /opt/crm-mqtt-bridge/requirements.txt
-sudo chown -R crm-mqtt-bridge:crm-mqtt-bridge /opt/crm-mqtt-bridge /var/lib/crm-mqtt-bridge
-sudo chmod 0750 /opt/crm-mqtt-bridge /var/lib/crm-mqtt-bridge
+scp vps/crm-mqtt-bridge/bridge.py <vps-user>@<vps-host>:/tmp/bridge.py
 ```
 
-Создайте `/etc/crm-mqtt-bridge/bridge.env` с правами `0640 root:crm-mqtt-bridge`
-на основе `crm-mqtt-bridge.env.example`. Сохраните существующий
-`CRM_TELEMETRY_URL`; добавьте `CRM_STATUS_URL` с фактическим URL новой функции.
-Ключи оставьте в отдельном `/etc/crm-mqtt-bridge/device-keys.json` c правами
-`0640 root:crm-mqtt-bridge`, JSON-формат — `{ "device-001": "…" }`.
-
-Проверка синтаксиса и импорт до restart (ключи при этом не печатаются):
+Затем на VPS замените файл с сохранением владельца существующего файла:
 
 ```bash
-sudo /opt/crm-mqtt-bridge/venv/bin/python -m py_compile /opt/crm-mqtt-bridge/crm_mqtt_bridge.py
-sudo -u crm-mqtt-bridge /opt/crm-mqtt-bridge/venv/bin/python -c 'from crm_mqtt_bridge import Config, load_device_keys; c = Config.from_env(); load_device_keys(c.device_keys_file); print("configuration readable")'
+sudo install -o crmbridge -g crmbridge -m 0644 /tmp/bridge.py /opt/crm-mqtt-bridge/bridge.py
+sudo rm -f /tmp/bridge.py
 ```
 
-Установите unit и перезапустите:
+Не загружайте `current-bridge.py`: это локальная исходная копия для сравнения,
+а не deploy-файл.
+
+В существующем `/etc/crm-mqtt-bridge.env` добавьте одну строку с опубликованным
+HTTPS URL функции, сохранив все текущие имена и значения:
+
+```text
+CRM_STATUS_URL=https://europe-west1-coolservice-crm.cloudfunctions.net/ingestControllerStatus
+```
+
+Проверьте синтаксис и перезапустите существующий service:
 
 ```bash
-sudo install -m 0644 /opt/crm-mqtt-bridge/crm-mqtt-bridge.service /etc/systemd/system/crm-mqtt-bridge.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now crm-mqtt-bridge
-sudo systemctl status crm-mqtt-bridge --no-pager
-sudo journalctl -u crm-mqtt-bridge -n 100 --no-pager
+sudo -u crmbridge /usr/bin/python3 -m py_compile /opt/crm-mqtt-bridge/bridge.py
+sudo systemctl start crm-mqtt-bridge.service
+sudo systemctl status crm-mqtt-bridge.service --no-pager
+sudo journalctl -u crm-mqtt-bridge.service -n 100 --no-pager
 ```
 
-В journal проверяйте только строки `mqtt connected`, `mqtt queued` и
-`delivery accepted/retry/rejected` с `controllerId`, `messageId`, `httpCode`.
-Ключей, Authorization, MQTT-паролей и payload в журнале быть не должно.
+В journal ожидаются подписки на оба topic. Для telemetry успешная запись имеет
+вид `CRM accepted packetId=… HTTP=202 outcome=stored created=1`; повтор будет
+`HTTP=200 outcome=duplicate created=0`. Старый успешный не-JSON ответ безопасно
+показывается как `outcome=unknown`. Для status журналируются только
+`controllerId`, `statusId` и HTTP status; ключ, MQTT password и payload не
+выводятся. Сначала убедитесь, что telemetry продолжает получать HTTP 200/202,
+затем включайте публикацию status на контроллере.
 
-## Откат
+## Rollback
 
-Если telemetry перестала подтверждаться или service не запускается, остановите
-service, верните содержимое последнего `/opt/crm-mqtt-bridge.backup-*`, затем
-выполните `systemctl daemon-reload` и `systemctl start crm-mqtt-bridge`.
-SQLite очередь не удаляйте: она содержит ожидающие delivery, но не ключи.
+Если service не запускается или telemetry не доставляется, остановите его,
+верните **и файл, и SQLite directory** из одного pre-status backup — старый
+bridge не понимает мигрированную схему:
+
+```bash
+sudo systemctl stop crm-mqtt-bridge.service
+sudo cp -a /opt/crm-mqtt-bridge/bridge.py.pre-status-$STAMP /opt/crm-mqtt-bridge/bridge.py
+sudo mv /var/lib/crm-mqtt-bridge /var/lib/crm-mqtt-bridge.status-migrated-$STAMP
+sudo cp -a /var/lib/crm-mqtt-bridge.pre-status-$STAMP /var/lib/crm-mqtt-bridge
+sudo systemctl start crm-mqtt-bridge.service
+sudo journalctl -u crm-mqtt-bridge.service -n 100 --no-pager
+```
+
+Не удаляйте `status-migrated` directory до расследования: он содержит очередь,
+включая сообщения, принятые после миграции.
