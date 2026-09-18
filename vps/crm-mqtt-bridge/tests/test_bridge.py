@@ -71,6 +71,23 @@ class BridgeTests(unittest.TestCase):
             bridge.enqueue("status", "legacy-packet", "{}")
             self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 2)
 
+    def test_telemetry_delivery_result_handles_new_and_legacy_responses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            self.assertEqual(
+                bridge.telemetry_delivery_result(
+                    b'{"packetId":"boot-a:1","outcome":"stored","measurementsReceived":1,"measurementsCreated":1}'
+                ),
+                ("stored", 1),
+            )
+            self.assertEqual(
+                bridge.telemetry_delivery_result(
+                    b'{"packetId":"boot-a:1","outcome":"duplicate","measurementsCreated":0}'
+                ),
+                ("duplicate", 0),
+            )
+            self.assertEqual(bridge.telemetry_delivery_result(b"accepted"), ("unknown", None))
+
 
 if __name__ == "__main__":
     unittest.main()

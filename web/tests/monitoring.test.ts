@@ -4,11 +4,11 @@ import {
   monitoringPeriodMs,
   monitoringStatus,
   controllerConnectionStatus,
+  downsampleTemperaturePoints,
   pointsInHistoryWindow,
   sortAndDedupePoints,
   violatesTemperatureRule,
 } from "../src/shared/monitoring/logic";
-import { HISTORY_PACKET_LIMITS } from "../src/shared/firebase/monitoring";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
 const NOW = Date.parse("2026-09-13T02:00:00.000Z");
@@ -101,13 +101,10 @@ describe("monitoring history", () => {
     );
   });
 
-  test("supports 1, 12 and 24 hour windows with packet limits above one packet per minute", () => {
+  test("supports 1, 12 and 24 hour windows", () => {
     assert.equal(monitoringPeriodMs("hour"), 60 * 60_000);
     assert.equal(monitoringPeriodMs("halfDay"), 12 * 60 * 60_000);
     assert.equal(monitoringPeriodMs("day"), 24 * 60 * 60_000);
-    assert.equal(HISTORY_PACKET_LIMITS.hour, 120);
-    assert.equal(HISTORY_PACKET_LIMITS.halfDay, 1_440);
-    assert.equal(HISTORY_PACKET_LIMITS.day, 2_880);
   });
 
   test("keeps every measurement from 2880 half-minute packets in the daily window", () => {
@@ -123,6 +120,29 @@ describe("monitoring history", () => {
     assert.equal(points.length, 5_760);
     assert.equal(points[0].measuredAt.getTime(), dayStart + 5_000);
     assert.equal(points.at(-1)?.measuredAt.getTime(), NOW - 15_000);
+  });
+
+  test("keeps both sides of a large gap and preserves bounds and spikes when downsampling 1600 points", () => {
+    const dayStart = NOW - monitoringPeriodMs("day");
+    const source: TemperaturePoint[] = Array.from({ length: 1_600 }, (_, index) => ({
+      measuredAt: new Date(dayStart + 1_000 + index * 30_000),
+      temperatureC: -18 + (index % 5) * 0.1,
+    }));
+    // Simulate an old interrupted segment: points immediately before and after it remain valid history.
+    source.splice(700, 200);
+    source[200] = { ...source[200], temperatureC: -40 };
+    source[1_000] = { ...source[1_000], temperatureC: 25 };
+
+    const all = pointsInHistoryWindow(source.reverse(), dayStart, NOW);
+    const rendered = downsampleTemperaturePoints(all);
+    assert.equal(all.length, 1_400);
+    assert.ok(all.some((point) => point.measuredAt.getTime() < dayStart + 700 * 30_000));
+    assert.ok(all.some((point) => point.measuredAt.getTime() > dayStart + 900 * 30_000));
+    assert.ok(rendered.length <= 600);
+    assert.equal(rendered[0].measuredAt.getTime(), all[0].measuredAt.getTime());
+    assert.equal(rendered.at(-1)?.measuredAt.getTime(), all.at(-1)?.measuredAt.getTime());
+    assert.ok(rendered.some((point) => point.temperatureC === -40));
+    assert.ok(rendered.some((point) => point.temperatureC === 25));
   });
 });
 

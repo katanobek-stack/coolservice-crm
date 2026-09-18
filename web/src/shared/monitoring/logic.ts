@@ -8,6 +8,7 @@ import type {
 
 export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
+export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 
 export interface MonitoringStatus {
   reading: ReadingStatus;
@@ -60,6 +61,41 @@ export function pointsInHistoryWindow(
     const measuredAtMs = point.measuredAt.getTime();
     return measuredAtMs > startedAtMs && measuredAtMs <= nowMs + 10 * 60_000;
   }));
+}
+
+/** Limits SVG work without changing the full history used for statistics. */
+export function downsampleTemperaturePoints(
+  points: TemperaturePoint[],
+  maxPoints = MAX_RENDERED_TEMPERATURE_POINTS,
+): TemperaturePoint[] {
+  const sorted = sortAndDedupePoints(points);
+  if (sorted.length <= maxPoints || maxPoints < 3) return sorted;
+
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const bucketCount = Math.max(1, Math.floor((maxPoints - 2) / 2));
+  const spanMs = Math.max(1, last.measuredAt.getTime() - first.measuredAt.getTime());
+  const buckets: TemperaturePoint[][] = Array.from({ length: bucketCount }, () => []);
+
+  sorted.slice(1, -1).forEach((point) => {
+    const fraction = (point.measuredAt.getTime() - first.measuredAt.getTime()) / spanMs;
+    const index = Math.min(bucketCount - 1, Math.max(0, Math.floor(fraction * bucketCount)));
+    buckets[index].push(point);
+  });
+
+  const retained = [first, last];
+  buckets.forEach((bucket) => {
+    if (bucket.length === 0) return;
+    let minimum = bucket[0];
+    let maximum = bucket[0];
+    bucket.forEach((point) => {
+      if (point.temperatureC < minimum.temperatureC) minimum = point;
+      if (point.temperatureC > maximum.temperatureC) maximum = point;
+    });
+    retained.push(minimum);
+    if (maximum.measuredAt.getTime() !== minimum.measuredAt.getTime()) retained.push(maximum);
+  });
+  return sortAndDedupePoints(retained);
 }
 
 export function monitoringPeriodMs(period: MonitoringPeriod): number {

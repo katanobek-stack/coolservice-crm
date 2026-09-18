@@ -44,7 +44,10 @@ sudo systemctl status crm-mqtt-bridge.service --no-pager
 sudo journalctl -u crm-mqtt-bridge.service -n 100 --no-pager
 ```
 
-В journal ожидаются подписки на оба topic. Для status журналирует только
+В journal ожидаются подписки на оба topic. Для telemetry успешная запись имеет
+вид `CRM accepted packetId=… HTTP=202 outcome=stored created=1`; повтор будет
+`HTTP=200 outcome=duplicate created=0`. Старый успешный не-JSON ответ безопасно
+показывается как `outcome=unknown`. Для status журналируются только
 `controllerId`, `statusId` и HTTP status; ключ, MQTT password и payload не
 выводятся. Сначала убедитесь, что telemetry продолжает получать HTTP 200/202,
 затем включайте публикацию status на контроллере.
