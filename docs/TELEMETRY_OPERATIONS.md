@@ -27,26 +27,35 @@ Telemetry приходит по `coolmonitor/devices/{controllerId}/telemetry`:
   "sensorId": "temperature-1",
   "measuredAt": "2026-09-18T00:00:00Z",
   "value": -18.5,
-  "timeQuality": "exact"
+  "timeQuality": "exact",
+  "deliveryQuality": "realtime"
 }
 ```
 
 Bridge проверяет topic и `controllerId`, затем преобразует это в неизменяемый
 контракт `ingestTelemetry`: `deviceId`, `packetId` и массив
-`measurements[{ measuredAt?, temperatureC, sensorId?, timeQuality }]`.
+`measurements[{ measuredAt?, temperatureC, sensorId?, timeQuality, deliveryQuality }]`.
 
 `timeQuality` допускает `exact`, `estimated` и `unplaced`. Поле необязательно для
 старых MQTT- и HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry`
 трактуется как `exact`. `estimated` означает, что контроллер восстановил время
 после отсутствия UTC; температура остаётся реальной, оценочным является только
-время измерения. CRM показывает такие точки оранжевыми с пунктиром и не
-соединяет их синей линией с точными участками.
+время измерения.
+
+`deliveryQuality` независимо описывает качество доставки в момент измерения и
+допускает `realtime` и `delayed`. Поле необязательно для старых MQTT- и
+HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry` трактуется как
+`realtime`. `delayed` означает: «Точка измерена при отсутствии подтверждённой
+MQTT-связи и доставлена позже». В CRM цвет показывает delivery quality
+(`realtime` — синий, `delayed` — оранжевый), а пунктир показывает
+`timeQuality: estimated`; поэтому оценочная отложенная точка остаётся оранжевой
+и пунктирной. Линия не соединяет участки при изменении любого из двух качеств.
 
 Для `exact` и `estimated` `measuredAt` обязателен. `unplaced` означает реальную
 сохранённую ESP32 точку от предыдущего включения без достоверного времени:
 `measuredAt` в ней **должен отсутствовать**, а `sensorId` обязателен. Bridge
 передаёт её как обычный идемпотентный packet, но `ingestTelemetry` сохраняет
-только температуру, `sensorId`, `timeQuality`, `packetId` и серверный
+только температуру, `sensorId`, оба качества, `packetId` и серверный
 `receivedAt`. Такая точка не обновляет последнюю температуру, не участвует в
 авариях, min/avg/max и графике; в карточке есть отдельный компактный список
 «Без достоверного времени».
@@ -90,8 +99,8 @@ Status приходит независимо по `coolmonitor/devices/{controll
 - Credentials: `monitoringDeviceCredentials/{deviceId}`; браузер их не читает.
 - История температуры: `monitoringTelemetry/{deviceId}/packets/{packetId}`.
   Один документ содержит массив принятых измерений, время получения и границы
-  измерений. Документы с `unplaced` дополнительно отмечаются `hasUnplaced` и
-  `unplacedCount`; у точки нет `measuredAt`.
+  измерений, включая оба качества. Документы с `unplaced` дополнительно
+  отмечаются `hasUnplaced` и `unplacedCount`; у точки нет `measuredAt`.
 - Последняя температура: `monitoringDeviceState/{deviceId}`.
 - Последний status: `monitoringControllerStatus/{controllerId}`; события status
   отдельно в `monitoringControllerStatus/{controllerId}/statusEvents/{statusId}`.

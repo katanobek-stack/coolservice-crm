@@ -139,6 +139,15 @@ function periodLabel(period: MonitoringPeriod): string {
   return "24 часа";
 }
 
+const DELAYED_DELIVERY_MESSAGE = "Точка измерена при отсутствии подтверждённой MQTT-связи и доставлена позже";
+
+function qualityDetails(point: TemperaturePoint): string[] {
+  const details: string[] = [];
+  if (point.timeQuality === "estimated") details.push("Время оценочное — восстановлено после отсутствия UTC");
+  if (point.deliveryQuality === "delayed") details.push(DELAYED_DELIVERY_MESSAGE);
+  return details;
+}
+
 function TemperatureChart({ points, period, rules }: {
   points: TemperaturePoint[];
   period: MonitoringPeriod;
@@ -190,6 +199,7 @@ function TemperatureChart({ points, period, rules }: {
   const xTicks = Array.from({ length: 5 }, (_, index) => startMs + ((nowMs - startMs) * index) / 4);
   const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
   const estimatedCount = sorted.filter((point) => point.timeQuality === "estimated").length;
+  const delayedCount = sorted.filter((point) => point.deliveryQuality === "delayed").length;
   const selectedPoint = selectedPointMs === null
     ? null
     : rendered.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
@@ -201,6 +211,7 @@ function TemperatureChart({ points, period, rules }: {
         <div><span>Максимум</span><strong>{rawMax.toFixed(1)} °C</strong></div>
         <div><span>Получено за период</span><strong>{sorted.length}</strong></div>
         <div><span>Оценочное время</span><strong>{estimatedCount}</strong></div>
+        <div><span>Доставлено позже</span><strong>{delayedCount}</strong></div>
       </div>
       {rendered.length < sorted.length && (
         <div className="monitor-history-subtitle">На графике показано {rendered.length} из {sorted.length} точек</div>
@@ -251,27 +262,28 @@ function TemperatureChart({ points, period, rules }: {
             <path
               key={`${segment.from.measuredAt.getTime()}-${segment.to.measuredAt.getTime()}`}
               d={`M ${x(segment.from.measuredAt).toFixed(2)} ${y(segment.from.temperatureC).toFixed(2)} L ${x(segment.to.measuredAt).toFixed(2)} ${y(segment.to.temperatureC).toFixed(2)}`}
-              className={`monitor-chart-line monitor-chart-line--${segment.timeQuality}`}
+              className={`monitor-chart-line monitor-chart-line--${segment.timeQuality} monitor-chart-line--${segment.deliveryQuality}`}
             />
           ))}
           {rendered.map((point) => {
             const pointMs = point.measuredAt.getTime();
+            const details = qualityDetails(point);
             return (
               <circle
                 key={pointMs}
                 cx={x(point.measuredAt)}
                 cy={y(point.temperatureC)}
                 r={selectedPointMs === pointMs ? 5 : 3.2}
-                className={`monitor-chart-point monitor-chart-point--${point.timeQuality}`}
+                className={`monitor-chart-point monitor-chart-point--${point.timeQuality} monitor-chart-point--${point.deliveryQuality}`}
                 role="button"
                 tabIndex={0}
-                aria-label={`${formatDateTime(point.measuredAt)}, ${point.temperatureC.toFixed(2)} °C${point.timeQuality === "estimated" ? ", время оценочное" : ""}`}
+                aria-label={[formatDateTime(point.measuredAt), `${point.temperatureC.toFixed(2)} °C`, ...details].join(", ")}
                 onClick={() => setSelectedPointMs(pointMs)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") setSelectedPointMs(pointMs);
                 }}
               >
-                <title>{formatDateTime(point.measuredAt)} · {point.temperatureC.toFixed(2)} °C{point.timeQuality === "estimated" ? " · Время оценочное — восстановлено после отсутствия UTC" : ""}</title>
+                <title>{[formatDateTime(point.measuredAt), `${point.temperatureC.toFixed(2)} °C`, ...details].join(" · ")}</title>
               </circle>
             );
           })}
@@ -281,12 +293,13 @@ function TemperatureChart({ points, period, rules }: {
         <div className="monitor-point-detail" role="status">
           <strong>{selectedPoint.temperatureC.toFixed(2)} °C</strong>
           <span>{formatDateTime(selectedPoint.measuredAt)}</span>
-          {selectedPoint.timeQuality === "estimated" && <span>Время оценочное — восстановлено после отсутствия UTC</span>}
+          {qualityDetails(selectedPoint).map((detail) => <span key={detail}>{detail}</span>)}
         </div>
       )}
       <div className="monitor-chart-legend">
-        <span><i className="monitor-legend-line" /> Точное время UTC</span>
-        <span><i className="monitor-legend-line monitor-legend-line--estimated" /> Время оценочное — восстановлено после отсутствия UTC</span>
+        <span><i className="monitor-legend-line" /> Точка доставлена при подтверждённой MQTT-связи</span>
+        <span><i className="monitor-legend-line monitor-legend-line--delayed" /> {DELAYED_DELIVERY_MESSAGE}</span>
+        <span><i className="monitor-legend-line monitor-legend-line--estimated" /> Пунктир: время оценочное — восстановлено после отсутствия UTC</span>
         <span>Линия лишь соединяет соседние измерения и не означает наличие данных между ними</span>
         {enabledRules.length > 0 && <span><i className="monitor-legend-limit" /> Пороги включённых правил</span>}
       </div>

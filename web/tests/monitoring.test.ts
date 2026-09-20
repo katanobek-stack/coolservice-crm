@@ -125,15 +125,35 @@ describe("monitoring history", () => {
     assert.deepEqual(temperatureChartSegments(deduped).map((segment) => segment.timeQuality), ["exact"]);
   });
 
-  test("downsampling retains estimated points and their quality", () => {
+  test("keeps delayed delivery independent from time quality and does not join across either change", () => {
+    const sameTime = new Date(NOW - 60_000);
+    const points: TemperaturePoint[] = [
+      { measuredAt: new Date(NOW - 80_000), temperatureC: -18, timeQuality: "exact", deliveryQuality: "realtime" },
+      { measuredAt: sameTime, temperatureC: -17.9, timeQuality: "exact", deliveryQuality: "realtime" },
+      { measuredAt: sameTime, temperatureC: -17.8, timeQuality: "exact", deliveryQuality: "delayed" },
+      { measuredAt: new Date(NOW - 50_000), temperatureC: -17.7, timeQuality: "exact", deliveryQuality: "delayed" },
+      { measuredAt: new Date(NOW - 40_000), temperatureC: -17.6, timeQuality: "estimated", deliveryQuality: "delayed" },
+      { measuredAt: new Date(NOW - 30_000), temperatureC: -17.5, timeQuality: "estimated", deliveryQuality: "realtime" },
+    ];
+    const deduped = sortAndDedupePoints(points);
+    assert.equal(deduped[1].deliveryQuality, "delayed", "delayed wins an equal measuredAt");
+    assert.deepEqual(
+      temperatureChartSegments(deduped).map((segment) => `${segment.timeQuality}:${segment.deliveryQuality}`),
+      ["exact:delayed"],
+    );
+  });
+
+  test("downsampling retains time and delivery quality combinations", () => {
     const source: TemperaturePoint[] = Array.from({ length: 1_200 }, (_, index) => ({
       measuredAt: new Date(NOW - 3_600_000 + index * 3_000),
       temperatureC: -20 + (index % 8),
       timeQuality: index === 600 ? "estimated" : "exact",
+      deliveryQuality: index === 800 ? "delayed" : "realtime",
     }));
     source[600].temperatureC = -45;
     const rendered = downsampleTemperaturePoints(source);
     assert.ok(rendered.some((point) => point.timeQuality === "estimated" && point.temperatureC === -45));
+    assert.ok(rendered.some((point) => point.deliveryQuality === "delayed"));
   });
 
   test("supports 1, 12 and 24 hour windows", () => {
