@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "build:test:unit": "esbuild tests/repair.financial.test.ts tests/finance.test.ts tests/photos.test.ts tests/plate.test.ts tests/monitoring.test.ts --bundle --packages=external --platform=node --format=esm --outdir=.test-dist --out-extension:.js=.mjs",
     "test:unit": "npm run build:test:unit && node --test .test-dist/repair.financial.test.mjs .test-dist/finance.test.mjs .test-dist/photos.test.mjs .test-dist/plate.test.mjs .test-dist/monitoring.test.mjs",
+    "test:indexes": "node --test tests/firestore.indexes.test.mjs",
     "test:rules": "node --test tests/firestore.rules.test.mjs",
     "build:test:appointments": "esbuild tests/firestore.appointments.test.ts --bundle --packages=external --platform=node --format=esm --outfile=.test-dist/firestore.appointments.test.mjs",
     "test:appointments": "npm run build:test:appointments && node --test .test-dist/firestore.appointments.test.mjs",
@@ -17,7 +18,7 @@
     "test:concurrency": "npm run build:test:concurrency && node --test .test-dist/firestore.concurrency.test.mjs",
     "build:test:intake": "esbuild tests/firestore.intake.test.ts --bundle --packages=external --platform=node --format=esm --outfile=.test-dist/firestore.intake.test.mjs",
     "test:intake": "npm run build:test:intake && node --test .test-dist/firestore.intake.test.mjs",
-    "test": "npm run test:unit && npm run test:rules && npm run test:appointments && npm run test:concurrency && npm run test:intake",
+    "test": "npm run test:unit && npm run test:indexes && npm run test:rules && npm run test:appointments && npm run test:concurrency && npm run test:intake",
     "test:emulator": "cd .. && firebase emulators:exec --only firestore --project demo-coolservice-crm \"cd web && npm test\""
   },
   "dependencies": {

@@ -19,6 +19,13 @@
 обновить только `vps/crm-mqtt-bridge/bridge.py`; прошивка не меняется в этом
 этапе.
 
+**Индекс Firestore.** Отдельный запрос CRM для `unplaced` использует
+`hasUnplaced == true` и `receivedAt desc`; для него добавлен составной индекс
+`packets(hasUnplaced ASC, receivedAt DESC)` с областью `COLLECTION` в
+`firestore.indexes.json`. Он подключён в `firebase.json`; до будущей публикации
+индекс не существует в production. Добавлены проверка JSON-конфигурации и
+emulator test запроса.
+
 **Намеренно не менялось.** Production Firestore-данные и Rules, VPS,
 systemd, Mosquitto, ключи, env-файлы, firmware и billing.
 
