@@ -11,6 +11,15 @@ import {
   type TemperatureRule,
   type TemperatureRuleVersion,
 } from "./telemetryAlerts";
+import {
+  isTimedReadModelMeasurement,
+  nextRollupData,
+  normalizedSensorId,
+  pointDocumentData,
+  rollupDocumentId,
+  stableMeasurementId,
+  type ReadModelMeasurement,
+} from "./telemetryReadModel";
 
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{2,63}$/;
 const PACKET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
@@ -248,6 +257,36 @@ export const ingestTelemetry = onRequest(
         if (existingPacket.exists) {
           return { outcome: "duplicate", measurementsCreated: 0 };
         }
+
+        // Packets remain the immutable delivery audit. These deterministic
+        // documents are a separate read model for bounded history queries and
+        // overview rollups; they are created only after packet de-duplication.
+        const readModelMeasurements: ReadModelMeasurement[] = packet.measurements.map((measurement, measurementIndex) => ({
+          packetId: packet.packetId,
+          measurementIndex,
+          sensorId: measurement.sensorId,
+          temperatureC: measurement.temperatureC,
+          timeQuality: measurement.timeQuality,
+          deliveryQuality: measurement.deliveryQuality,
+          ...(hasMeasuredTime(measurement) ? { measuredAt: measurement.measuredAt } : {}),
+        }));
+        const rollupRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        for (const measurement of readModelMeasurements) {
+          if (!isTimedReadModelMeasurement(measurement)) continue;
+          const sensorId = normalizedSensorId(measurement.sensorId);
+          const ref = firestore.doc(
+            `monitoringTelemetry/${packet.deviceId}/rollups/${rollupDocumentId(sensorId, measurement.measuredAt.getTime())}`,
+          );
+          rollupRefs.set(ref.path, ref);
+        }
+        const rollupSnapshots = rollupRefs.size
+          ? await transaction.getAll(...rollupRefs.values())
+          : [];
+        const rollupDataByPath = new Map<string, Record<string, unknown> | undefined>();
+        rollupSnapshots.forEach((snapshot) => rollupDataByPath.set(
+          snapshot.ref.path,
+          snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
+        ));
 
         const deviceData = currentDevice.data() ?? {};
         const stateData = currentState.data() ?? {};
@@ -509,6 +548,29 @@ export const ingestTelemetry = onRequest(
           unplacedCount,
           receivedAt,
         });
+        for (const measurement of readModelMeasurements) {
+          const measurementId = stableMeasurementId(packet.packetId, measurement.measurementIndex);
+          const collection = isTimedReadModelMeasurement(measurement) ? "points" : "unplacedPoints";
+          transaction.create(
+            firestore.doc(`monitoringTelemetry/${packet.deviceId}/${collection}/${measurementId}`),
+            pointDocumentData(packet.deviceId, measurement, receivedAt),
+          );
+        }
+        for (const measurement of readModelMeasurements) {
+          if (!isTimedReadModelMeasurement(measurement)) continue;
+          const sensorId = normalizedSensorId(measurement.sensorId);
+          const ref = firestore.doc(
+            `monitoringTelemetry/${packet.deviceId}/rollups/${rollupDocumentId(sensorId, measurement.measuredAt.getTime())}`,
+          );
+          const next = nextRollupData(
+            rollupDataByPath.get(ref.path),
+            packet.deviceId,
+            measurement,
+            receivedAt,
+          );
+          rollupDataByPath.set(ref.path, next);
+          transaction.set(ref, next);
+        }
         const currentMeasuredAt = currentState.data()?.measuredAt;
         const shouldAdvanceCurrent = latest !== undefined && (
           !(currentMeasuredAt instanceof Timestamp)

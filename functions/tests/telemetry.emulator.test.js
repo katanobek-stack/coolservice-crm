@@ -3,6 +3,7 @@ const { after, before, beforeEach, describe, test } = require("node:test");
 const { deleteApp, initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { createDeviceCredentialHash } = require("../lib/telemetryKey");
+const { rollupDocumentId, stableMeasurementId } = require("../lib/telemetryReadModel");
 
 const PROJECT_ID = "demo-coolservice-crm";
 const DEVICE_ID = "device-001";
@@ -281,6 +282,48 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal(client.exists, false, "telemetry must not mutate client documents");
   });
 
+  test("creates deterministic points and rollups once; a duplicate packet leaves every aggregate unchanged", async () => {
+    const bucketStart = Math.floor((Date.now() - 60_000) / (5 * 60_000)) * (5 * 60_000);
+    const firstMeasuredAt = new Date(bucketStart + 30_000);
+    const secondMeasuredAt = new Date(bucketStart + 90_000);
+    const body = packet({
+      packetId: "rollup:deterministic-1",
+      measurements: [
+        { measuredAt: firstMeasuredAt.toISOString(), temperatureC: -18, sensorId: "temperature-1" },
+        {
+          measuredAt: secondMeasuredAt.toISOString(), temperatureC: -16, sensorId: "temperature-1",
+          timeQuality: "estimated", deliveryQuality: "delayed",
+        },
+      ],
+    });
+    assert.equal((await postTelemetry(body)).status, 202);
+    const rollupRef = firestore.doc(
+      `monitoringTelemetry/${DEVICE_ID}/rollups/${rollupDocumentId("temperature-1", firstMeasuredAt.getTime())}`,
+    );
+    const [firstPoint, secondPoint, firstRollup] = await Promise.all([
+      firestore.doc(`monitoringTelemetry/${DEVICE_ID}/points/${stableMeasurementId(body.packetId, 0)}`).get(),
+      firestore.doc(`monitoringTelemetry/${DEVICE_ID}/points/${stableMeasurementId(body.packetId, 1)}`).get(),
+      rollupRef.get(),
+    ]);
+    assert.equal(firstPoint.exists, true);
+    assert.equal(secondPoint.exists, true);
+    assert.equal(firstPoint.data().timeQuality, "exact");
+    assert.equal(secondPoint.data().deliveryQuality, "delayed");
+    const bucket = firstRollup.data().buckets5m[String(bucketStart)];
+    assert.deepEqual(bucket.aggregates.exact_realtime, {
+      count: 1, sumTemperatureC: -18, minTemperatureC: -18, maxTemperatureC: -18,
+    });
+    assert.deepEqual(bucket.aggregates.estimated_delayed, {
+      count: 1, sumTemperatureC: -16, minTemperatureC: -16, maxTemperatureC: -16,
+    });
+    const snapshotBeforeDuplicate = JSON.parse(JSON.stringify(firstRollup.data()));
+
+    const duplicate = await postTelemetry(body);
+    assert.equal(duplicate.status, 200);
+    assert.equal((await firestore.collection(`monitoringTelemetry/${DEVICE_ID}/points`).get()).size, 2);
+    assert.deepEqual(JSON.parse(JSON.stringify((await rollupRef.get()).data())), snapshotBeforeDuplicate);
+  });
+
   test("defaults legacy delivery to realtime and preserves delayed delivery independently from time quality", async () => {
     const body = packet({
       packetId: "boot-a:time-quality",
@@ -343,6 +386,12 @@ describe("ingestTelemetry emulator integration", () => {
     assert.ok(history.data().receivedAt instanceof Timestamp);
     assert.equal(state.data().temperatureC, undefined);
     assert.equal(state.data().measuredAt, undefined);
+
+    const unplacedPoint = await firestore.doc(
+      `monitoringTelemetry/${DEVICE_ID}/unplacedPoints/${stableMeasurementId(body.packetId, 0)}`,
+    ).get();
+    assert.equal(unplacedPoint.exists, true);
+    assert.equal(unplacedPoint.data().measuredAt, undefined);
 
     const duplicate = await postTelemetry(body);
     assert.equal(duplicate.status, 200);
