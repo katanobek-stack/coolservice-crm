@@ -14,16 +14,24 @@
 аварии, график или min/avg/max. CRM отдельно ограниченно читает и показывает
 счётчик и список таких точек. Старые записи без `timeQuality` остаются `exact`.
 
-**Публикация.** Не выполнялась. До использования на устройстве требуется
-отдельно опубликовать только `functions:ingestTelemetry`, затем вручную
-обновить только `vps/crm-mqtt-bridge/bridge.py`; прошивка не меняется в этом
-этапе.
+**Публикация CRM.** Опубликованы только `functions:ingestTelemetry` и
+Firestore index. На момент публикации CRM обновление VPS намеренно не
+выполнялось: перед первой telemetry с `timeQuality: "unplaced"` нужно вручную установить
+`vps/crm-mqtt-bridge/bridge.py` по безопасной процедуре из его README.
+Артефакт сверен с рабочей live-версией: сохранены 32 delivery workers,
+SQLite `delivery_state`/inflight recovery, telemetry и status topics, STATS и
+outcome logging; добавлена лишь передача `timeQuality`, включая `unplaced`.
+Прошивка не меняется в этом этапе.
+
+**VPS, 20.09.** Обновление `bridge.py` успешно выполнено вручную. Service
+`crm-mqtt-bridge.service` active; bridge подписан на MQTT telemetry и status,
+запустил 32 delivery workers, а durable SQLite-очередь имеет глубину 0.
 
 **Индекс Firestore.** Отдельный запрос CRM для `unplaced` использует
 `hasUnplaced == true` и `receivedAt desc`; для него добавлен составной индекс
 `packets(hasUnplaced ASC, receivedAt DESC)` с областью `COLLECTION` в
-`firestore.indexes.json`. Он подключён в `firebase.json`; до будущей публикации
-индекс не существует в production. Добавлены проверка JSON-конфигурации и
+`firestore.indexes.json`. Он подключён в `firebase.json` и опубликован в
+production со статусом `Enabled`. Добавлены проверка JSON-конфигурации и
 emulator test запроса.
 
 **Намеренно не менялось.** Production Firestore-данные и Rules, VPS,
