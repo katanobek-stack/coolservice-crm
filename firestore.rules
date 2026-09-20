@@ -256,6 +256,23 @@ service cloud.firestore {
         allow read: if isAuth();
         allow write: if false;
       }
+
+      // Read-only history projections. They are written exclusively by
+      // ingestTelemetry and are deliberately separate from packet audit data.
+      match /points/{pointId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+
+      match /unplacedPoints/{pointId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+
+      match /rollups/{rollupId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
     }
 
     // Alert lifecycle is backend-only. Every worker can see events, while the

@@ -1,5 +1,24 @@
 # История изменений телеметрии
 
+## 2026-09-20 — PR A: read-модель history и rollup подготовлены локально
+
+**Причина.** Raw packet-массивы не масштабируются для navigator и периодов 3/7/30
+дней. Нужны точные точки для окна до 24 часов и серверные 5-минутные min–max
+агрегаты для обзора без ложной линии по average.
+
+**Изменено локально.** `ingestTelemetry` после packet-дедупликации создаёт
+детерминированные points/unplacedPoints и обновляет часовой rollup с отдельными
+quality series и 5-минутными корзинами. Подготовлены Rules, indexes и ручной
+возобновляемый backfill-инструмент с dry-run, checkpoint и throttling, а также
+read-only сверка `device-001` legacy/new model за UTC-день.
+
+**Проверки и публикация.** Локально прошли functions build и unit-тест
+read-модели, web typecheck/unit tests/build, index JSON test и `git diff --check`.
+Firebase Emulator не запустился: в окружении нет Java (`Could not spawn java -version`), поэтому emulator integration/rules test остаются непроверенными
+локально и должны пройти в CI с Java. Deploy, production backfill,
+production-данные, web navigator, VPS и firmware не изменялись. Rollup и point
+retention только документированы через `expireAt`; Firestore TTL не включён.
+
 ## 2026-09-20 — качество доставки точки (`deliveryQuality`)
 
 **Причина.** Контроллер может продолжать измерять температуру при отсутствии

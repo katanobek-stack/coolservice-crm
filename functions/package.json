@@ -16,6 +16,9 @@
     "logs": "firebase functions:log",
     "generate:device-key": "npm run build && node scripts/generate-device-key.js",
     "seed:monitoring-demo": "node scripts/seed-monitoring-demo.js",
+    "backfill:monitoring-read-model": "npm run build && node scripts/backfill-monitoring-read-model.js",
+    "verify:monitoring-read-model": "npm run build && node scripts/verify-monitoring-read-model.js",
+    "test:read-model": "npm run build && node --test tests/telemetryReadModel.test.js",
     "test:emulator": "node --test tests/telemetry.emulator.test.js"
   },
   "dependencies": {

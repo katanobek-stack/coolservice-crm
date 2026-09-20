@@ -7,6 +7,30 @@
         { "fieldPath": "hasUnplaced", "order": "ASCENDING" },
         { "fieldPath": "receivedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sensorId", "order": "ASCENDING" },
+        { "fieldPath": "measuredAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "unplacedPoints",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sensorId", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rollups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sensorId", "order": "ASCENDING" },
+        { "fieldPath": "hourStart", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
