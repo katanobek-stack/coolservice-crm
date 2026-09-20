@@ -10,6 +10,13 @@ export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 
+/** Only samples with a usable device timestamp may enter chart/statistic points. */
+export function isChartTimeQuality(
+  timeQuality: unknown,
+): timeQuality is "exact" | "estimated" | undefined {
+  return timeQuality !== "unplaced";
+}
+
 export interface MonitoringStatus {
   reading: ReadingStatus;
   connection: ConnectionStatus;

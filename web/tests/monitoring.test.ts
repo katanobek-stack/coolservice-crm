@@ -5,6 +5,7 @@ import {
   monitoringStatus,
   controllerConnectionStatus,
   downsampleTemperaturePoints,
+  isChartTimeQuality,
   pointsInHistoryWindow,
   sortAndDedupePoints,
   temperatureChartSegments,
@@ -79,6 +80,13 @@ describe("monitoring statuses", () => {
 });
 
 describe("monitoring history", () => {
+  test("keeps unplaced samples out of the chart and temperature statistics pipeline", () => {
+    assert.equal(isChartTimeQuality("exact"), true);
+    assert.equal(isChartTimeQuality("estimated"), true);
+    assert.equal(isChartTimeQuality(undefined), true, "legacy samples remain exact");
+    assert.equal(isChartTimeQuality("unplaced"), false);
+  });
+
   test("sorts delayed samples by measurement time and deduplicates timestamps", () => {
     const points: TemperaturePoint[] = [
       { measuredAt: new Date(NOW - 10_000), temperatureC: -18 },

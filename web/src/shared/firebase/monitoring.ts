@@ -17,7 +17,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 import { getFirebaseDb } from "./app";
 import { getFirebaseFunctions } from "./app";
-import { monitoringPeriodMs, pointsInHistoryWindow } from "../monitoring/logic";
+import { isChartTimeQuality, monitoringPeriodMs, pointsInHistoryWindow } from "../monitoring/logic";
 import type {
   MonitoringAlertEvent,
   MonitoringAlertEventState,
@@ -29,6 +29,7 @@ import type {
   MonitoringTemperatureRule,
   MonitoringTemperatureRuleInput,
   TemperaturePoint,
+  UnplacedTemperaturePoint,
 } from "../types/monitoring";
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
@@ -344,6 +345,7 @@ export function listenDeviceHistory(
       if (!Array.isArray(measurements)) return;
       measurements.forEach((measurement) => {
         if (typeof measurement !== "object" || measurement === null) return;
+        if (!isChartTimeQuality(measurement.timeQuality)) return;
         const measuredAt = asDate(measurement.measuredAt);
         const temperatureC = measurement.temperatureC;
         const timeQuality = measurement.timeQuality === "estimated" ? "estimated" : "exact";
@@ -361,5 +363,42 @@ export function listenDeviceHistory(
       packetCount: snapshot.size,
       limitReached: false,
     });
+  }, onError);
+}
+
+/**
+ * Unplaced samples deliberately have no measuredAt, so they are read separately
+ * from the time-window query and can never enter the chart/statistics pipeline.
+ */
+export function listenDeviceUnplacedHistory(
+  deviceId: string,
+  onData: (points: UnplacedTemperaturePoint[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const packets = query(
+    collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
+    where("hasUnplaced", "==", true),
+    orderBy("receivedAt", "desc"),
+    limit(50),
+  );
+  return onSnapshot(packets, (snapshot) => {
+    const points: UnplacedTemperaturePoint[] = [];
+    snapshot.docs.forEach((packet) => {
+      const receivedAt = asDate(packet.data().receivedAt);
+      const measurements = packet.data().measurements;
+      if (!Array.isArray(measurements)) return;
+      measurements.forEach((measurement) => {
+        if (typeof measurement !== "object" || measurement === null) return;
+        if (measurement.timeQuality !== "unplaced") return;
+        if (typeof measurement.temperatureC !== "number" || !Number.isFinite(measurement.temperatureC)) return;
+        points.push({
+          packetId: packet.id,
+          sensorId: typeof measurement.sensorId === "string" ? measurement.sensorId : null,
+          temperatureC: measurement.temperatureC,
+          receivedAt,
+        });
+      });
+    });
+    onData(points);
   }, onError);
 }

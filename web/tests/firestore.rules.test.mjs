@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
 import {
   assertFails,
@@ -10,10 +11,15 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   getDoc,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 
 const PROJECT_ID = "coolservice-crm-rules-test";
@@ -415,6 +421,16 @@ describe("equipment monitoring access", () => {
     await seed("monitoringTelemetry/device-001/packets/packet-001", {
       measurements: [],
     });
+    await seed("monitoringTelemetry/device-001/packets/unplaced-old", {
+      hasUnplaced: true,
+      receivedAt: "2026-09-13T00:00:01.000Z",
+      measurements: [],
+    });
+    await seed("monitoringTelemetry/device-001/packets/unplaced-new", {
+      hasUnplaced: true,
+      receivedAt: "2026-09-13T00:00:02.000Z",
+      measurements: [],
+    });
     await seed("monitoringDeviceCredentials/device-001", {
       active: true,
       algorithm: "scrypt-v1",
@@ -439,6 +455,18 @@ describe("equipment monitoring access", () => {
     await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/status-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
+  });
+
+  test("workers can query unplaced packets by received time", async () => {
+    const db = dbFor("mechanic-1");
+    const packets = query(
+      collection(db, "monitoringTelemetry", "device-001", "packets"),
+      where("hasUnplaced", "==", true),
+      orderBy("receivedAt", "desc"),
+      limit(50),
+    );
+    const result = await assertSucceeds(getDocs(packets));
+    assert.deepEqual(result.docs.map((item) => item.id), ["unplaced-new", "unplaced-old"]);
   });
 
   test("mechanics cannot administer devices or forge telemetry", async () => {

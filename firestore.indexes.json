@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "packets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hasUnplaced", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

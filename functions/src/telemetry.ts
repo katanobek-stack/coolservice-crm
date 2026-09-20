@@ -14,6 +14,7 @@ import {
 
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{2,63}$/;
 const PACKET_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
+const SENSOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const UTC_ISO_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/;
 const MIN_DEVICE_KEY_LENGTH = 32;
 const MAX_DEVICE_KEY_LENGTH = 256;
@@ -23,11 +24,20 @@ const MAX_TEMPERATURE_C = 125;
 const MAX_FUTURE_CLOCK_SKEW_MS = 10 * 60 * 1000;
 const MAX_MEASUREMENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-interface ValidMeasurement {
+interface TimedMeasurement {
   measuredAt: Date;
   temperatureC: number;
   timeQuality: "exact" | "estimated";
+  sensorId?: string;
 }
+
+interface UnplacedMeasurement {
+  temperatureC: number;
+  timeQuality: "unplaced";
+  sensorId: string;
+}
+
+type ValidMeasurement = TimedMeasurement | UnplacedMeasurement;
 
 interface ValidPacket {
   deviceId: string;
@@ -84,6 +94,10 @@ function parseMeasuredAt(value: unknown, nowMs: number): Date {
   return measuredAt;
 }
 
+function hasMeasuredTime(measurement: ValidMeasurement): measurement is TimedMeasurement {
+  return measurement.timeQuality !== "unplaced";
+}
+
 function parsePacket(body: unknown, nowMs: number): ValidPacket {
   if (!isRecord(body) || !hasOnlyKeys(body, ["deviceId", "packetId", "measurements"])) {
     throw new RequestValidationError("body must contain only deviceId, packetId and measurements");
@@ -106,7 +120,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
 
   let previousTime = Number.NEGATIVE_INFINITY;
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
-    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality"])) {
+    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "sensorId"])) {
       throw new RequestValidationError(`measurements[${index}] has unknown fields`);
     }
     if (
@@ -117,16 +131,29 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     ) {
       throw new RequestValidationError(`measurements[${index}].temperatureC is outside DS18B20 range`);
     }
+    const timeQuality = measurement.timeQuality ?? "exact";
+    if (timeQuality !== "exact" && timeQuality !== "estimated" && timeQuality !== "unplaced") {
+      throw new RequestValidationError(`measurements[${index}].timeQuality is invalid`);
+    }
+    const sensorId = measurement.sensorId;
+    if (sensorId !== undefined && (typeof sensorId !== "string" || !SENSOR_ID_PATTERN.test(sensorId))) {
+      throw new RequestValidationError(`measurements[${index}].sensorId is invalid`);
+    }
+    if (timeQuality === "unplaced") {
+      if (Object.prototype.hasOwnProperty.call(measurement, "measuredAt")) {
+        throw new RequestValidationError(`measurements[${index}].measuredAt must be omitted for unplaced time`);
+      }
+      if (typeof sensorId !== "string") {
+        throw new RequestValidationError(`measurements[${index}].sensorId is required for unplaced time`);
+      }
+      return { temperatureC: measurement.temperatureC, timeQuality, sensorId };
+    }
     const measuredAt = parseMeasuredAt(measurement.measuredAt, nowMs);
     if (measuredAt.getTime() <= previousTime) {
       throw new RequestValidationError("measurements must be ordered by unique measuredAt values");
     }
-    const timeQuality = measurement.timeQuality ?? "exact";
-    if (timeQuality !== "exact" && timeQuality !== "estimated") {
-      throw new RequestValidationError(`measurements[${index}].timeQuality is invalid`);
-    }
     previousTime = measuredAt.getTime();
-    return { measuredAt, temperatureC: measurement.temperatureC, timeQuality };
+    return { measuredAt, temperatureC: measurement.temperatureC, timeQuality, ...(sensorId ? { sensorId } : {}) };
   });
 
   return { deviceId, packetId, measurements: parsed };
@@ -184,7 +211,8 @@ export const ingestTelemetry = onRequest(
 
     try {
       const receivedAt = Timestamp.now();
-      const latest = packet.measurements[packet.measurements.length - 1];
+      const timedMeasurements = packet.measurements.filter(hasMeasuredTime);
+      const latest = timedMeasurements[timedMeasurements.length - 1];
 
       const ingestOutcome = await firestore.runTransaction<IngestOutcome>(async (transaction) => {
         const [currentDevice, currentCredential, existingPacket, currentState, currentRules] = await Promise.all([
@@ -257,7 +285,7 @@ export const ingestTelemetry = onRequest(
           : fallbackCursor instanceof Timestamp ? fallbackCursor.toMillis() : Number.NEGATIVE_INFINITY;
         const processedThroughMs = Math.max(
           initialCursorMs,
-          ...packet.measurements.map((measurement) => measurement.measuredAt.getTime()),
+          ...timedMeasurements.map((measurement) => measurement.measuredAt.getTime()),
         );
         const peak = (
           event: Record<string, unknown>,
@@ -276,7 +304,7 @@ export const ingestTelemetry = onRequest(
         function newAlertEvent(
           rule: TemperatureRule,
           version: TemperatureRuleVersion,
-          measurement: ValidMeasurement,
+          measurement: TimedMeasurement,
           measurementIndex: number,
           state: "active" | "historical",
         ): { id: string; data: Record<string, unknown>; isNew: true } {
@@ -317,6 +345,7 @@ export const ingestTelemetry = onRequest(
           };
 
           for (const [measurementIndex, measurement] of packet.measurements.entries()) {
+            if (!hasMeasuredTime(measurement)) continue;
             const measurementMs = measurement.measuredAt.getTime();
             const version = ruleVersionAt(rule, measurementMs);
             const violated = version
@@ -447,22 +476,31 @@ export const ingestTelemetry = onRequest(
         }
 
         const storedMeasurements = packet.measurements.map((measurement) => ({
-          measuredAt: Timestamp.fromDate(measurement.measuredAt),
           temperatureC: measurement.temperatureC,
           timeQuality: measurement.timeQuality,
+          ...(measurement.sensorId ? { sensorId: measurement.sensorId } : {}),
+          ...(hasMeasuredTime(measurement) ? { measuredAt: Timestamp.fromDate(measurement.measuredAt) } : {}),
         }));
+        const timedStoredMeasurements = storedMeasurements.filter((measurement) => measurement.measuredAt instanceof Timestamp);
+        const unplacedCount = storedMeasurements.length - timedStoredMeasurements.length;
         transaction.create(packetRef, {
           deviceId: packet.deviceId,
           packetId: packet.packetId,
           measurements: storedMeasurements,
           sampleCount: storedMeasurements.length,
-          firstMeasuredAt: storedMeasurements[0].measuredAt,
-          lastMeasuredAt: storedMeasurements[storedMeasurements.length - 1].measuredAt,
+          ...(timedStoredMeasurements.length ? {
+            firstMeasuredAt: timedStoredMeasurements[0].measuredAt,
+            lastMeasuredAt: timedStoredMeasurements[timedStoredMeasurements.length - 1].measuredAt,
+          } : {}),
+          hasUnplaced: unplacedCount > 0,
+          unplacedCount,
           receivedAt,
         });
         const currentMeasuredAt = currentState.data()?.measuredAt;
-        const shouldAdvanceCurrent = !(currentMeasuredAt instanceof Timestamp)
-          || latest.measuredAt.getTime() > currentMeasuredAt.toMillis();
+        const shouldAdvanceCurrent = latest !== undefined && (
+          !(currentMeasuredAt instanceof Timestamp)
+          || latest.measuredAt.getTime() > currentMeasuredAt.toMillis()
+        );
         const stateUpdate: Record<string, unknown> = {
           deviceId: packet.deviceId,
           lastPacketId: packet.packetId,
@@ -474,7 +512,7 @@ export const ingestTelemetry = onRequest(
           activeAlertIds,
           activeAlertId: FieldValue.delete(),
         };
-        if (shouldAdvanceCurrent) {
+        if (shouldAdvanceCurrent && latest) {
           Object.assign(stateUpdate, {
             packetId: packet.packetId,
             temperatureC: latest.temperatureC,

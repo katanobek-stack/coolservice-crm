@@ -61,6 +61,13 @@ export interface TemperaturePoint {
   timeQuality?: "exact" | "estimated";
 }
 
+export interface UnplacedTemperaturePoint {
+  packetId: string;
+  sensorId: string | null;
+  temperatureC: number;
+  receivedAt: Date | null;
+}
+
 export interface MonitoringHistoryResult {
   points: TemperaturePoint[];
   packetCount: number;

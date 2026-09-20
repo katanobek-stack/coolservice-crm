@@ -569,12 +569,29 @@
 .monitor-diagnostics-grid span, .monitor-diagnostics-grid small { color: var(--text3); font-size: 12px; }
 .monitor-diagnostics-grid strong { color: var(--text); font-size: 14px; overflow-wrap: anywhere; }
 
+.monitor-unplaced {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg2);
+  padding: 12px;
+}
+.monitor-unplaced-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--text); }
+.monitor-unplaced-head span { min-width: 26px; padding: 2px 8px; border-radius: 999px; background: #fef3f2; color: #b42318; font-weight: 700; text-align: center; }
+.monitor-unplaced > p, .monitor-unplaced-empty { margin: 5px 0 0; color: var(--text3); font-size: 12px; }
+.monitor-unplaced-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.monitor-unplaced-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding-top: 7px; border-top: 1px solid var(--border); color: var(--text3); font-size: 12px; }
+.monitor-unplaced-list strong { color: var(--text); font-size: 13px; }
+.monitor-unplaced-list span, .monitor-unplaced-list time { overflow-wrap: anywhere; }
+
 @media (max-width: 767px) {
   .monitor-alert-center { top: 12px; right: 12px; }
   .monitor-alert-button { width: 42px; height: 42px; background: #fff; box-shadow: 0 4px 14px rgba(16, 24, 40, 0.12); }
   .monitor-alert-panel { position: fixed; top: 62px; right: 12px; max-height: calc(100vh - 148px); }
   .monitor-alert-event-main { font-size: 13px; }
   .monitor-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .monitor-unplaced-list li { grid-template-columns: auto 1fr; }
+  .monitor-unplaced-list time { grid-column: 1 / -1; }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
