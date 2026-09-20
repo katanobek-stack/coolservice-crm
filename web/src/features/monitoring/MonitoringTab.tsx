@@ -5,6 +5,7 @@ import {
   DEFAULT_OFFLINE_THRESHOLD_MINUTES,
   deleteMonitoringTemperatureRule,
   listenDeviceHistory,
+  listenDeviceUnplacedHistory,
   listenMonitoringDevices,
   listenMonitoringControllerStatuses,
   listenMonitoringSettings,
@@ -30,6 +31,7 @@ import type {
   MonitoringPeriod,
   MonitoringTemperatureRule,
   TemperaturePoint,
+  UnplacedTemperaturePoint,
 } from "../../shared/types/monitoring";
 import "./monitoring.css";
 
@@ -292,6 +294,31 @@ function TemperatureChart({ points, period, rules }: {
   );
 }
 
+function UnplacedMeasurements({ points }: { points: UnplacedTemperaturePoint[] }) {
+  return (
+    <section className="monitor-unplaced" aria-label="Точки без достоверного времени">
+      <div className="monitor-unplaced-head">
+        <strong>Без достоверного времени</strong>
+        <span>{points.length}</span>
+      </div>
+      <p>Сохранены устройством, но не включены в график и статистику температуры.</p>
+      {points.length === 0 ? (
+        <div className="monitor-unplaced-empty">Таких точек нет.</div>
+      ) : (
+        <ul className="monitor-unplaced-list">
+          {points.map((point, index) => (
+            <li key={`${point.packetId}-${index}`}>
+              <strong>{point.temperatureC.toFixed(1)} °C</strong>
+              <span>{point.packetId}</span>
+              <time>Получено: {formatDateTime(point.receivedAt)}</time>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function objectLabel(device: MonitoringDevice, clients: ReturnType<typeof useData>["clients"]): string {
   if (!device.clientId || !device.targetType || !device.targetId) return "Объект не привязан";
   const client = clients.find((item) => item.id === device.clientId);
@@ -460,6 +487,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [period, setPeriod] = useState<MonitoringPeriod>("hour");
   const [history, setHistory] = useState<MonitoringHistoryResult>(EMPTY_HISTORY);
+  const [unplacedPoints, setUnplacedPoints] = useState<UnplacedTemperaturePoint[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [rules, setRules] = useState<MonitoringTemperatureRule[]>([]);
@@ -513,6 +541,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   useEffect(() => {
     if (!selectedId) {
       setHistory(EMPTY_HISTORY);
+      setUnplacedPoints([]);
       setHistoryLoading(false);
       setHistoryError("");
       return;
@@ -529,6 +558,13 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     });
     return unsubscribe;
   }, [selectedId, period]);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    return listenDeviceUnplacedHistory(selectedId, setUnplacedPoints, (error) => {
+      setHistoryError(error.message || "Не удалось загрузить точки без достоверного времени");
+    });
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -656,6 +692,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
                   period={period}
                   rules={rules}
                 />
+                <UnplacedMeasurements points={unplacedPoints} />
               </>
             )}
           </div>

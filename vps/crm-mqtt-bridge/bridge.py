@@ -177,15 +177,22 @@ def telemetry_body(payload: Any, topic: str) -> tuple[str, str]:
         raise ValueError("unexpected telemetry MQTT topic")
     if controller_id != CRM_DEVICE_ID:
         raise ValueError("unexpected telemetry controllerId")
-    if not all(isinstance(item, str) and item for item in (packet_id, sensor_id, measured_at)):
-        raise ValueError("missing packetId, sensorId, or measuredAt")
+    if not all(isinstance(item, str) and item for item in (packet_id, sensor_id)):
+        raise ValueError("missing packetId or sensorId")
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("value is not numeric")
-    if time_quality is not None and time_quality not in {"exact", "estimated"}:
-        raise ValueError("timeQuality must be exact or estimated")
+    if time_quality is not None and time_quality not in {"exact", "estimated", "unplaced"}:
+        raise ValueError("timeQuality must be exact, estimated, or unplaced")
     if value < -55 or value > 125:
         raise ValueError("temperature is outside DS18B20 range")
-    measurement = {"measuredAt": measured_at, "temperatureC": value}
+    if time_quality == "unplaced":
+        if "measuredAt" in payload:
+            raise ValueError("unplaced telemetry must omit measuredAt")
+        measurement = {"temperatureC": value, "sensorId": sensor_id, "timeQuality": "unplaced"}
+    else:
+        if not isinstance(measured_at, str) or not measured_at:
+            raise ValueError("missing measuredAt")
+        measurement = {"measuredAt": measured_at, "temperatureC": value, "sensorId": sensor_id}
     if time_quality is not None:
         measurement["timeQuality"] = time_quality
     body = {

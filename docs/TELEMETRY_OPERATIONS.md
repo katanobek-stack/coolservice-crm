@@ -33,14 +33,35 @@ Telemetry приходит по `coolmonitor/devices/{controllerId}/telemetry`:
 
 Bridge проверяет topic и `controllerId`, затем преобразует это в неизменяемый
 контракт `ingestTelemetry`: `deviceId`, `packetId` и массив
-`measurements[{ measuredAt, temperatureC, timeQuality }]`.
+`measurements[{ measuredAt?, temperatureC, sensorId?, timeQuality }]`.
 
-`timeQuality` допускает только `exact` и `estimated`. Поле необязательно для
+`timeQuality` допускает `exact`, `estimated` и `unplaced`. Поле необязательно для
 старых MQTT- и HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry`
 трактуется как `exact`. `estimated` означает, что контроллер восстановил время
 после отсутствия UTC; температура остаётся реальной, оценочным является только
 время измерения. CRM показывает такие точки оранжевыми с пунктиром и не
 соединяет их синей линией с точными участками.
+
+Для `exact` и `estimated` `measuredAt` обязателен. `unplaced` означает реальную
+сохранённую ESP32 точку от предыдущего включения без достоверного времени:
+`measuredAt` в ней **должен отсутствовать**, а `sensorId` обязателен. Bridge
+передаёт её как обычный идемпотентный packet, но `ingestTelemetry` сохраняет
+только температуру, `sensorId`, `timeQuality`, `packetId` и серверный
+`receivedAt`. Такая точка не обновляет последнюю температуру, не участвует в
+авариях, min/avg/max и графике; в карточке есть отдельный компактный список
+«Без достоверного времени».
+
+Пример MQTT payload для `unplaced`:
+
+```json
+{
+  "controllerId": "device-001",
+  "packetId": "previous-boot-queue-17",
+  "sensorId": "temperature-1",
+  "value": -18.5,
+  "timeQuality": "unplaced"
+}
+```
 
 Status приходит независимо по `coolmonitor/devices/{controllerId}/status`:
 
@@ -69,7 +90,8 @@ Status приходит независимо по `coolmonitor/devices/{controll
 - Credentials: `monitoringDeviceCredentials/{deviceId}`; браузер их не читает.
 - История температуры: `monitoringTelemetry/{deviceId}/packets/{packetId}`.
   Один документ содержит массив принятых измерений, время получения и границы
-  измерений.
+  измерений. Документы с `unplaced` дополнительно отмечаются `hasUnplaced` и
+  `unplacedCount`; у точки нет `measuredAt`.
 - Последняя температура: `monitoringDeviceState/{deviceId}`.
 - Последний status: `monitoringControllerStatus/{controllerId}`; события status
   отдельно в `monitoringControllerStatus/{controllerId}/statusEvents/{statusId}`.

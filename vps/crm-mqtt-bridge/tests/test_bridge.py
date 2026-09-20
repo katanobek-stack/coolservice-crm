@@ -55,6 +55,22 @@ class BridgeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
 
+    def test_unplaced_telemetry_omits_measured_at_and_preserves_sensor_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            payload = {
+                "controllerId": "device-001", "packetId": "previous-boot:1", "sensorId": "temperature-1",
+                "value": -18.5, "timeQuality": "unplaced",
+            }
+            _, body = bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+            measurement = json.loads(body)["measurements"][0]
+            self.assertEqual(measurement, {
+                "temperatureC": -18.5, "sensorId": "temperature-1", "timeQuality": "unplaced",
+            })
+            payload["measuredAt"] = "2026-09-17T01:23:45.000Z"
+            with self.assertRaises(ValueError):
+                bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+
     def test_status_is_validated_and_status_id_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             bridge = load_bridge(Path(directory))
