@@ -281,12 +281,15 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal(client.exists, false, "telemetry must not mutate client documents");
   });
 
-  test("stores exact by default and preserves an estimated measurement time quality", async () => {
+  test("defaults legacy delivery to realtime and preserves delayed delivery independently from time quality", async () => {
     const body = packet({
       packetId: "boot-a:time-quality",
       measurements: [
         { measuredAt: new Date(Date.now() - 20_000).toISOString(), temperatureC: -18.5 },
-        { measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18.25, timeQuality: "estimated" },
+        {
+          measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18.25,
+          timeQuality: "estimated", deliveryQuality: "delayed",
+        },
       ],
     });
     assert.equal((await postTelemetry(body)).status, 202);
@@ -295,6 +298,7 @@ describe("ingestTelemetry emulator integration", () => {
       firestore.doc(`monitoringDeviceState/${DEVICE_ID}`).get(),
     ]);
     assert.deepEqual(history.data().measurements.map((item) => item.timeQuality), ["exact", "estimated"]);
+    assert.deepEqual(history.data().measurements.map((item) => item.deliveryQuality), ["realtime", "delayed"]);
     assert.equal(state.data().timeQuality, "estimated");
 
     const invalid = await postTelemetry(packet({
@@ -302,6 +306,14 @@ describe("ingestTelemetry emulator integration", () => {
       measurements: [{ measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18, timeQuality: "unknown" }],
     }));
     assert.equal(invalid.status, 400);
+    const invalidDelivery = await postTelemetry(packet({
+      packetId: "boot-a:invalid-delivery-quality",
+      measurements: [{
+        measuredAt: new Date(Date.now() - 10_000).toISOString(), temperatureC: -18,
+        deliveryQuality: "unknown",
+      }],
+    }));
+    assert.equal(invalidDelivery.status, 400);
     assert.equal((await firestore.collectionGroup("packets").get()).size, 1);
   });
 
@@ -325,6 +337,7 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal(history.data().hasUnplaced, true);
     assert.equal(history.data().unplacedCount, 1);
     assert.equal(history.data().measurements[0].timeQuality, "unplaced");
+    assert.equal(history.data().measurements[0].deliveryQuality, "realtime");
     assert.equal(history.data().measurements[0].sensorId, "temperature-1");
     assert.equal(history.data().measurements[0].measuredAt, undefined);
     assert.ok(history.data().receivedAt instanceof Timestamp);

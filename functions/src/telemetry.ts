@@ -28,12 +28,14 @@ interface TimedMeasurement {
   measuredAt: Date;
   temperatureC: number;
   timeQuality: "exact" | "estimated";
+  deliveryQuality: "realtime" | "delayed";
   sensorId?: string;
 }
 
 interface UnplacedMeasurement {
   temperatureC: number;
   timeQuality: "unplaced";
+  deliveryQuality: "realtime" | "delayed";
   sensorId: string;
 }
 
@@ -120,7 +122,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
 
   let previousTime = Number.NEGATIVE_INFINITY;
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
-    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "sensorId"])) {
+    if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "deliveryQuality", "sensorId"])) {
       throw new RequestValidationError(`measurements[${index}] has unknown fields`);
     }
     if (
@@ -135,6 +137,10 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     if (timeQuality !== "exact" && timeQuality !== "estimated" && timeQuality !== "unplaced") {
       throw new RequestValidationError(`measurements[${index}].timeQuality is invalid`);
     }
+    const deliveryQuality = measurement.deliveryQuality ?? "realtime";
+    if (deliveryQuality !== "realtime" && deliveryQuality !== "delayed") {
+      throw new RequestValidationError(`measurements[${index}].deliveryQuality is invalid`);
+    }
     const sensorId = measurement.sensorId;
     if (sensorId !== undefined && (typeof sensorId !== "string" || !SENSOR_ID_PATTERN.test(sensorId))) {
       throw new RequestValidationError(`measurements[${index}].sensorId is invalid`);
@@ -146,14 +152,20 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
       if (typeof sensorId !== "string") {
         throw new RequestValidationError(`measurements[${index}].sensorId is required for unplaced time`);
       }
-      return { temperatureC: measurement.temperatureC, timeQuality, sensorId };
+      return { temperatureC: measurement.temperatureC, timeQuality, deliveryQuality, sensorId };
     }
     const measuredAt = parseMeasuredAt(measurement.measuredAt, nowMs);
     if (measuredAt.getTime() <= previousTime) {
       throw new RequestValidationError("measurements must be ordered by unique measuredAt values");
     }
     previousTime = measuredAt.getTime();
-    return { measuredAt, temperatureC: measurement.temperatureC, timeQuality, ...(sensorId ? { sensorId } : {}) };
+    return {
+      measuredAt,
+      temperatureC: measurement.temperatureC,
+      timeQuality,
+      deliveryQuality,
+      ...(sensorId ? { sensorId } : {}),
+    };
   });
 
   return { deviceId, packetId, measurements: parsed };
@@ -478,6 +490,7 @@ export const ingestTelemetry = onRequest(
         const storedMeasurements = packet.measurements.map((measurement) => ({
           temperatureC: measurement.temperatureC,
           timeQuality: measurement.timeQuality,
+          deliveryQuality: measurement.deliveryQuality,
           ...(measurement.sensorId ? { sensorId: measurement.sensorId } : {}),
           ...(hasMeasuredTime(measurement) ? { measuredAt: Timestamp.fromDate(measurement.measuredAt) } : {}),
         }));

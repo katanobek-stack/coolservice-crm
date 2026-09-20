@@ -349,12 +349,13 @@ export function listenDeviceHistory(
         const measuredAt = asDate(measurement.measuredAt);
         const temperatureC = measurement.temperatureC;
         const timeQuality = measurement.timeQuality === "estimated" ? "estimated" : "exact";
+        const deliveryQuality = measurement.deliveryQuality === "delayed" ? "delayed" : "realtime";
         if (
           measuredAt
           && typeof temperatureC === "number"
           && Number.isFinite(temperatureC)
         ) {
-          points.push({ measuredAt, temperatureC, timeQuality });
+          points.push({ measuredAt, temperatureC, timeQuality, deliveryQuality });
         }
       });
     });
@@ -396,6 +397,7 @@ export function listenDeviceUnplacedHistory(
           sensorId: typeof measurement.sensorId === "string" ? measurement.sensorId : null,
           temperatureC: measurement.temperatureC,
           receivedAt,
+          deliveryQuality: measurement.deliveryQuality === "delayed" ? "delayed" : "realtime",
         });
       });
     });

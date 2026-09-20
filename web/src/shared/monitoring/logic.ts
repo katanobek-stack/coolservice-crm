@@ -54,14 +54,22 @@ export function monitoringStatus(
 export function sortAndDedupePoints(points: TemperaturePoint[]): TemperaturePoint[] {
   const byTime = new Map<number, TemperaturePoint>();
   points.forEach((point) => {
-    const normalized = point.timeQuality === "estimated" ? point : { ...point, timeQuality: "exact" as const };
+    const normalized: TemperaturePoint = {
+      ...point,
+      timeQuality: point.timeQuality === "estimated" ? "estimated" : "exact",
+      deliveryQuality: point.deliveryQuality === "delayed" ? "delayed" : "realtime",
+    };
     const timestamp = normalized.measuredAt.getTime();
     const existing = byTime.get(timestamp);
     // A recovered UTC reading is stronger evidence than an estimated duplicate.
+    // At equal time quality, retain delayed delivery so an outage is not hidden.
     if (
       !existing
-      || existing.timeQuality === normalized.timeQuality
       || existing.timeQuality === "estimated" && normalized.timeQuality === "exact"
+      || existing.timeQuality === normalized.timeQuality
+        && existing.deliveryQuality === "realtime" && normalized.deliveryQuality === "delayed"
+      || existing.timeQuality === normalized.timeQuality
+        && existing.deliveryQuality === normalized.deliveryQuality
     ) {
       byTime.set(timestamp, normalized);
     }
@@ -92,7 +100,9 @@ export function downsampleTemperaturePoints(
 
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
-  const bucketCount = Math.max(1, Math.floor((maxPoints - 2) / 2));
+  // Keep extrema for every time/delivery quality combination in a bucket. This
+  // avoids hiding a delayed interval merely because it is not a global spike.
+  const bucketCount = Math.max(1, Math.floor((maxPoints - 2) / 8));
   const spanMs = Math.max(1, last.measuredAt.getTime() - first.measuredAt.getTime());
   const buckets: TemperaturePoint[][] = Array.from({ length: bucketCount }, () => []);
 
@@ -105,33 +115,46 @@ export function downsampleTemperaturePoints(
   const retained = [first, last];
   buckets.forEach((bucket) => {
     if (bucket.length === 0) return;
-    let minimum = bucket[0];
-    let maximum = bucket[0];
+    const groups = new Map<string, TemperaturePoint[]>();
     bucket.forEach((point) => {
-      if (point.temperatureC < minimum.temperatureC) minimum = point;
-      if (point.temperatureC > maximum.temperatureC) maximum = point;
+      const key = `${point.timeQuality ?? "exact"}:${point.deliveryQuality ?? "realtime"}`;
+      groups.set(key, [...(groups.get(key) ?? []), point]);
     });
-    retained.push(minimum);
-    if (maximum.measuredAt.getTime() !== minimum.measuredAt.getTime()) retained.push(maximum);
+    groups.forEach((group) => {
+      let minimum = group[0];
+      let maximum = group[0];
+      group.forEach((point) => {
+        if (point.temperatureC < minimum.temperatureC) minimum = point;
+        if (point.temperatureC > maximum.temperatureC) maximum = point;
+      });
+      retained.push(minimum);
+      if (maximum.measuredAt.getTime() !== minimum.measuredAt.getTime()) retained.push(maximum);
+    });
   });
   return sortAndDedupePoints(retained);
 }
 
 export interface TemperatureChartSegment {
   timeQuality: "exact" | "estimated";
+  deliveryQuality: "realtime" | "delayed";
   from: TemperaturePoint;
   to: TemperaturePoint;
 }
 
-/** A line never crosses a change between exact and estimated device time. */
+/** A line never crosses a change in device time quality or delivery quality. */
 export function temperatureChartSegments(points: TemperaturePoint[]): TemperatureChartSegment[] {
   const sorted = sortAndDedupePoints(points);
   const segments: TemperatureChartSegment[] = [];
   for (let index = 1; index < sorted.length; index += 1) {
     const from = sorted[index - 1];
     const to = sorted[index];
-    if (from.timeQuality === to.timeQuality) {
-      segments.push({ timeQuality: from.timeQuality ?? "exact", from, to });
+    if (from.timeQuality === to.timeQuality && from.deliveryQuality === to.deliveryQuality) {
+      segments.push({
+        timeQuality: from.timeQuality ?? "exact",
+        deliveryQuality: from.deliveryQuality ?? "realtime",
+        from,
+        to,
+      });
     }
   }
   return segments;

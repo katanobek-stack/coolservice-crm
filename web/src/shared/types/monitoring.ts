@@ -2,6 +2,7 @@ export type MonitoringTargetType = "vehicle" | "chamber";
 export type MonitoringPeriod = "hour" | "halfDay" | "day";
 export type MonitoringAlertEventState = "active" | "recovered" | "historical" | "closed_by_settings";
 export type MonitoringRuleDirection = "above" | "below";
+export type MonitoringDeliveryQuality = "realtime" | "delayed";
 export type MonitoringRegistrationState = "home" | "roaming" | "searching" | "denied" | "unknown";
 export type MonitoringFailureCode =
   | "none"
@@ -59,6 +60,8 @@ export interface TemperaturePoint {
   temperatureC: number;
   /** Missing is accepted only for legacy in-memory callers and means exact. */
   timeQuality?: "exact" | "estimated";
+  /** Missing is accepted only for legacy data and means realtime delivery. */
+  deliveryQuality?: MonitoringDeliveryQuality;
 }
 
 export interface UnplacedTemperaturePoint {
@@ -66,6 +69,7 @@ export interface UnplacedTemperaturePoint {
   sensorId: string | null;
   temperatureC: number;
   receivedAt: Date | null;
+  deliveryQuality?: MonitoringDeliveryQuality;
 }
 
 export interface MonitoringHistoryResult {

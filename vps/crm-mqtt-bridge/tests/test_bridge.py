@@ -48,24 +48,41 @@ class BridgeTests(unittest.TestCase):
             payload = {
                 "controllerId": "device-001", "packetId": "boot-a:estimated", "sensorId": "temperature-1",
                 "measuredAt": "2026-09-17T01:23:45.000Z", "value": -18.5, "timeQuality": "estimated",
+                "deliveryQuality": "delayed",
             }
             _, body = bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
             self.assertEqual(json.loads(body)["measurements"][0]["timeQuality"], "estimated")
+            self.assertEqual(json.loads(body)["measurements"][0]["deliveryQuality"], "delayed")
             payload["timeQuality"] = "unknown"
             with self.assertRaises(ValueError):
                 bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+
+            payload["timeQuality"] = "exact"
+            payload["deliveryQuality"] = "unknown"
+            with self.assertRaises(ValueError):
+                bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
+
+    def test_legacy_telemetry_omits_delivery_quality_for_server_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            _, body = bridge.telemetry_body({
+                "controllerId": "device-001", "packetId": "boot-a:legacy", "sensorId": "temperature-1",
+                "measuredAt": "2026-09-17T01:23:45.000Z", "value": -18.5,
+            }, "coolmonitor/devices/device-001/telemetry")
+            self.assertNotIn("deliveryQuality", json.loads(body)["measurements"][0])
 
     def test_unplaced_telemetry_omits_measured_at_and_preserves_sensor_id(self):
         with tempfile.TemporaryDirectory() as directory:
             bridge = load_bridge(Path(directory))
             payload = {
                 "controllerId": "device-001", "packetId": "previous-boot:1", "sensorId": "temperature-1",
-                "value": -18.5, "timeQuality": "unplaced",
+                "value": -18.5, "timeQuality": "unplaced", "deliveryQuality": "delayed",
             }
             _, body = bridge.telemetry_body(payload, "coolmonitor/devices/device-001/telemetry")
             measurement = json.loads(body)["measurements"][0]
             self.assertEqual(measurement, {
                 "temperatureC": -18.5, "sensorId": "temperature-1", "timeQuality": "unplaced",
+                "deliveryQuality": "delayed",
             })
             payload["measuredAt"] = "2026-09-17T01:23:45.000Z"
             with self.assertRaises(ValueError):
