@@ -1,5 +1,18 @@
 # История изменений телеметрии
 
+## 2026-09-20 — dry-run backfill `device-001` за 2026-09-19 UTC
+
+**Результат read-only dry-run.** Просканировано 8 047 legacy packet-документов
+`device-001`. По `measuredAt` за 2026-09-19 UTC запланированы 360 размещённых
+points; `unplacedPoints` по `receivedAt` за тот же день — 0. Это затронет 6
+уникальных hour-rollup документов. Уже существующих stableMeasurementId — 0,
+ошибок в выбранном диапазоне — 0.
+
+**Оценка execute.** Для этого логического диапазона потребуется 360 point
+creates, 360 packet/hour rollup updates и 360 checkpoint writes: всего примерно
+1 080 Firestore writes. Никаких writes, checkpoint, backfill, deploy или
+изменений production-данных dry-run не выполнил.
+
 ## 2026-09-20 — PR A: dual-write `ingestTelemetry` опубликован и проверен
 
 **Публикация.** В `coolservice-crm` опубликована только Cloud Function
