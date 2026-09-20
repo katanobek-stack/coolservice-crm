@@ -1,5 +1,16 @@
 # История изменений телеметрии
 
+## 2026-09-20 — VPS bridge для `deliveryQuality` обновлён
+
+**Фактическое обновление.** `bridge.py` из `main` вручную установлен на VPS.
+`crm-mqtt-bridge.service` активен; bridge подключён к MQTT и подписан на
+telemetry/status topics, запущены 32 delivery workers. Новые telemetry-пакеты
+доставляются в CRM с HTTP 202, а глубина durable SQLite-очереди равна 0.
+
+**Не выполнялось этим действием.** Deploy Firebase и GitHub Pages, изменения
+прошивки ESP32, Mosquitto, systemd-конфигурации, env-файлов, ключей и
+production-данных.
+
 ## 2026-09-20 — качество доставки точки (`deliveryQuality`)
 
 **Причина.** Контроллер может продолжать измерять температуру при отсутствии
