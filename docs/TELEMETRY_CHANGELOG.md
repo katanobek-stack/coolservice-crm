@@ -1,5 +1,18 @@
 # История изменений телеметрии
 
+## 2026-09-20 — PR A: dual-write `ingestTelemetry` опубликован и проверен
+
+**Публикация.** В `coolservice-crm` опубликована только Cloud Function
+`ingestTelemetry` (europe-west1). Firestore Rules и indexes не публиковались;
+backfill не запускался.
+
+**Проверка.** POST с `Content-Type: application/json` без Authorization вернул
+HTTP 401 `invalid_device_credentials`. Read-only проверка следующей естественно
+полученной telemetry `device-001` подтвердила создание deterministic point и
+соответствующего hour-rollup: point имеет `exact/realtime`, rollup существует и
+содержит `exact_realtime` 5-минутную корзину. Проверка не создавала тестовых
+пакетов и не изменяла legacy packets, VPS, прошивку или старые production-данные.
+
 ## 2026-09-20 — PR A: read-модель history и rollup подготовлены локально
 
 **Причина.** Raw packet-массивы не масштабируются для navigator и периодов 3/7/30
