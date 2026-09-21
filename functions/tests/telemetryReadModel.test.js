@@ -3,6 +3,7 @@ const { test } = require("node:test");
 const { Timestamp } = require("firebase-admin/firestore");
 const {
   nextRollupData,
+  canonicalBackfillSensorId,
   rollupDocumentId,
   stableMeasurementId,
 } = require("../lib/telemetryReadModel");
@@ -11,6 +12,13 @@ test("stable measurement id is deterministic and unique per packet index", () =>
   assert.equal(stableMeasurementId("packet:1", 0), stableMeasurementId("packet:1", 0));
   assert.notEqual(stableMeasurementId("packet:1", 0), stableMeasurementId("packet:1", 1));
   assert.match(stableMeasurementId("packet:1", 0), /^[A-Za-z0-9_-]{43}$/);
+});
+
+test("backfill canonicalizes only the documented legacy device alias", () => {
+  assert.equal(canonicalBackfillSensorId("device-001", undefined), "temperature-1");
+  assert.equal(canonicalBackfillSensorId("device-001", "default"), "temperature-1");
+  assert.equal(canonicalBackfillSensorId("device-001", "temperature-1"), "temperature-1");
+  assert.equal(canonicalBackfillSensorId("another-device", undefined), "default");
 });
 
 test("rollup keeps quality series and five-minute min/max ranges separate", () => {

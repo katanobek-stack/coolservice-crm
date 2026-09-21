@@ -2,6 +2,15 @@ import { createHash } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 
 export const DEFAULT_SENSOR_ID = "default";
+/**
+ * Legacy packets from device-001 predate the explicit DS18B20 sensor id.  They
+ * describe the same physical sensor as current `temperature-1` packets.  This
+ * mapping is deliberately used by backfill tools only: ingest preserves the
+ * incoming payload and never rewrites historical packet documents.
+ */
+const LEGACY_BACKFILL_SENSOR_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "device-001": { default: "temperature-1" },
+};
 export const RAW_POINT_RETENTION_MS = 35 * 24 * 60 * 60 * 1000;
 export const ROLLUP_RETENTION_MS = 13 * 31 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -61,6 +70,11 @@ function addAggregate(existing: unknown, temperatureC: number): Aggregate {
 
 export function normalizedSensorId(sensorId: string | undefined): string {
   return sensorId ?? DEFAULT_SENSOR_ID;
+}
+
+export function canonicalBackfillSensorId(deviceId: string, sensorId: string | undefined): string {
+  const normalized = normalizedSensorId(sensorId);
+  return LEGACY_BACKFILL_SENSOR_ALIASES[deviceId]?.[normalized] ?? normalized;
 }
 
 export function stableMeasurementId(packetId: string, measurementIndex: number): string {

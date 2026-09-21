@@ -1,5 +1,25 @@
 # История изменений телеметрии
 
+## 2026-09-21 — инструмент repair sensorId read-модели (локально)
+
+**Причина.** Legacy measurements `device-001` без sensorId ранее стали
+read-model series `default`, хотя это тот же физический датчик
+`temperature-1`. Будущий UI raw/overview читает series по sensorId и разделил
+бы их.
+
+**Изменено.** Generic backfill теперь канонически сопоставляет legacy
+`device-001/default` с `temperature-1`, не меняя packet-документы. Добавлен
+manual Admin repair с dry-run manifest, отдельным checkpoint, почасовыми
+transactions, deterministic point IDs, read-only verifier и guarded rollback.
+Он допускает только `device-001`, один UTC-день и mapping
+`default -> temperature-1`.
+
+**Проверки.** Добавлена unit-проверка canonical mapping; scripts проверены
+синтаксически. Production dry-run/execute/rollback намеренно не запускались.
+
+**Намеренно не менялось.** Production Firestore, deploy, Rules, indexes, VPS,
+firmware, UI, ключи и env-файлы.
+
 ## 2026-09-21 — аудит sensorId и план scoped migration `device-001`
 
 **Read-only результат.** Исторический scope 2026-09-19 содержит 360 points и

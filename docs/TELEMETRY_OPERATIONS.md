@@ -166,7 +166,10 @@ UTC-дня обязательна. Она только читает Firestore и
 npm --prefix functions run verify:monitoring-read-model -- --project coolservice-crm --device-id device-001 --sensor-id temperature-1 --utc-day 2026-09-18
 ```
 
-Для legacy пакетов без `sensorId` в команде используется `--sensor-id default`.
+Для legacy пакетов без `sensorId` generic backfill нормализует `default`; для
+единственного исторического датчика `device-001` он затем канонически
+сопоставляет это значение с `temperature-1`. Это правило применяется только к
+read-model backfill и не переписывает legacy `packets`.
 Backfill не изменяет `packets`, `monitoringDeviceState`, alerts, credentials или
 клиентские документы. Перед execute нужно опубликовать только согласованные
 Function/Rules/indexes, затем выполнить dry-run, маленький rate-limited execute,
