@@ -21,6 +21,7 @@
     "repair:monitoring-sensor-id": "npm run build && node scripts/repair-monitoring-sensor-id.js",
     "verify:monitoring-sensor-id-repair": "node scripts/verify-monitoring-sensor-id-repair.js",
     "test:read-model": "npm run build && node --test tests/telemetryReadModel.test.js",
+    "test:sensor-id-repair": "node --test tests/verifyMonitoringSensorIdRepair.test.js",
     "test:emulator": "node --test tests/telemetry.emulator.test.js"
   },
   "dependencies": {
