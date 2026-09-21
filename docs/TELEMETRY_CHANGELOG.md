@@ -1,5 +1,32 @@
 # История изменений телеметрии
 
+## 2026-09-21 — scoped execute backfill `device-001`, 2026-09-19 UTC
+
+**Выполнено.** После подтверждения IAM-роли `roles/datastore.user` для
+служебного principal запущен только возобновляемый scoped execute для
+`device-001` и окна `2026-09-19T00:00:00Z` —
+`2026-09-20T00:00:00Z`. Checkpoint хранится отдельно в
+`monitoringMaintenance/telemetryReadModelBackfill/checkpoints/device-001__2026-09-19`;
+темп ограничен 120 packet-группами в минуту. Выполнение завершилось со
+статусом `completed`: обработано 360 групп, создано 360 timed points,
+`skipped=0`.
+
+**Read-only сверка.** Legacy и новая read-модель совпали: `N=360`,
+`min=24.88 °C`, `max=25.06 °C`, `avg=24.9661666667 °C` (техническая разница
+суммы на уровне floating-point округления). Создано 0 unplaced points и 6
+hour-rollups; их агрегаты также дают `N=360`, те же min/max/avg. Исторические
+measurements этого дня не имели `sensorId`, поэтому обе стороны корректно
+нормализованы в sensor `default`, а не в будущий `temperature-1`.
+
+**Идемпотентность.** Все 360 point-документов имеют deterministic
+`stableMeasurementId(packetId, measurementIndex)`. Read-only проверка
+повторного запуска определила, что каждая выбранная packet-группа будет
+пропущена: новых points — 0, обновлений rollup — 0; снимок count/sum rollups
+до и после проверки совпал.
+
+**Намеренно не менялось.** Другие дни backfill, Firestore Rules и indexes,
+VPS, Mosquitto, firmware, UI, ключи, env-файлы и production deploy.
+
 ## 2026-09-21 — read-only аудит dry-run `device-001`, 2026-09-19 UTC
 
 **Диапазон.** Отобраны ровно 360 timed measurements по условию
