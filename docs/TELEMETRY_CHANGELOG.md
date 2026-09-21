@@ -1,5 +1,34 @@
 # История изменений телеметрии
 
+## 2026-09-21 — полный dry-run backfill `device-001` (без 2026-09-19 UTC)
+
+**Режим и граница.** Выполнен только read-only dry-run всей legacy-истории
+`device-001`. Из обработки исключены все 360 timed measurements уже готового
+scope `2026-09-19` UTC. Прочитано 10 628 packet-документов; checkpoint, points,
+unplacedPoints и rollups не записывались.
+
+**Результат.** План содержит 10 478 timed points и 58 unplaced points.
+Диапазон `measuredAt`: от `2026-09-13T06:52:28Z` до
+`2026-09-21T10:31:34Z`; 8 UTC-дней и 94 hour-rollups. Уже существуют 2 728
+timed stable IDs, unplaced stable IDs — 0. Из 10 268 packet-групп кандидатов
+2 728 полностью существуют, 7 540 ожидают записи, частичных групп — 0.
+
+**sensorId.** Все source measurements нормализуются в один target sensor
+`temperature-1`: 7 996 legacy `default` и 2 900 уже явных `temperature-1`.
+Legacy packets при этом не меняются.
+
+**Разбивка UTC.** 2026-09-13 — 722 points / 10 rollups; 09-14 — 11 / 4;
+09-15 — 1 410 / 15; 09-16 — 252 / 5; 09-17 — 1 212 / 11; 09-18 — 3 330 / 17;
+09-20 — 2 277 / 21; 09-21 — 1 264 / 11. День 09-19 намеренно исключён.
+
+**Оценка будущего execute.** При лимите 120 packet-групп в минуту нижняя
+оценка составляет 62,83 минуты. Потребуется ориентировочно 23 098 Firestore
+writes: 7 750 timed points, 58 unplaced points, 7 750 обновлений rollup и
+7 540 checkpoint-записей. Это расчёт dry-run, не разрешение на execute.
+
+**Намеренно не менялось.** Production-данные, execute backfill, Rules,
+indexes, Firebase deploy, VPS/Mosquitto, firmware, ключи и env-файлы.
+
 ## 2026-09-21 — восстановление GitHub Pages
 
 **Инцидент.** CRM по адресу `/coolservice-crm/app/` отвечала стандартной
