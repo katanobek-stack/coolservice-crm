@@ -1,5 +1,20 @@
 # История изменений телеметрии
 
+## 2026-09-21 — восстановление GitHub Pages
+
+**Инцидент.** CRM по адресу `/coolservice-crm/app/` отвечала стандартной
+страницей GitHub Pages 404. Репозиторий временно был private, поэтому Pages
+site был отключён. Workflow `Deploy to GitHub Pages #154` завершался на
+`actions/configure-pages` с `Get Pages site failed` / HTTP 404.
+
+**Восстановление.** После возвращения публичной visibility в Settings → Pages
+выбран source `GitHub Actions`. Штатный ручной запуск `Deploy to GitHub Pages
+#155` для `main` (`d97a6d2`) успешно завершился; CRM снова открывается на
+`https://katanobek-stack.github.io/coolservice-crm/app/` до формы входа.
+
+**Намеренно не менялось.** Исходный код CRM, Firebase, Firestore,
+VPS/Mosquitto, backfill, firmware, ключи и env-файлы.
+
 ## 2026-09-21 — verifier repair sensorId: floating-point допуск (локально)
 
 **Факт repair.** Scoped execute `device-001`, 2026-09-19 перенёс 360 points и
