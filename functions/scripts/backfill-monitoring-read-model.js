@@ -8,6 +8,7 @@ const { getApps, initializeApp } = require("firebase-admin/app");
 const { FieldPath, FieldValue, getFirestore, Timestamp } = require("firebase-admin/firestore");
 const {
   isTimedReadModelMeasurement,
+  canonicalBackfillSensorId,
   nextRollupData,
   normalizedSensorId,
   pointDocumentData,
@@ -49,7 +50,7 @@ function asTimedMeasurement(packetId, measurement, measurementIndex) {
   return {
     packetId,
     measurementIndex,
-    sensorId: typeof measurement.sensorId === "string" ? measurement.sensorId : undefined,
+    sensorId: canonicalBackfillSensorId(deviceId, typeof measurement.sensorId === "string" ? measurement.sensorId : undefined),
     temperatureC: measurement.temperatureC,
     measuredAt: measurement.measuredAt.toDate(),
     timeQuality,
@@ -64,7 +65,7 @@ function asUnplacedMeasurement(packetId, measurement, measurementIndex) {
   return {
     packetId,
     measurementIndex,
-    sensorId: measurement.sensorId,
+    sensorId: canonicalBackfillSensorId(deviceId, measurement.sensorId),
     temperatureC: measurement.temperatureC,
     timeQuality: "unplaced",
     deliveryQuality: measurement.deliveryQuality === "delayed" ? "delayed" : "realtime",
