@@ -1,5 +1,24 @@
 # История изменений телеметрии
 
+## 2026-09-21 — verifier repair sensorId: floating-point допуск (локально)
+
+**Факт repair.** Scoped execute `device-001`, 2026-09-19 перенёс 360 points и
+6 hour-rollups из `default` в `temperature-1`, не меняя legacy packets.
+Итоговая read-only сверка: `default=0 points/0 rollups`,
+`temperature-1=360 points/6 rollups`; N/min/max совпали с legacy.
+
+**Найденная ошибка.** Первый verifier пометил результат как mismatch из-за
+JSON-сравнения avg: эквивалентные суммы отличались только представлением
+IEEE-754. Это не было расхождением данных.
+
+**Изменено.** N и min/max сравниваются строго, avg — по явному
+`abs(actual - expected) <= 1e-9`. Добавлены tests для допустимого
+floating-point отличия и реального расхождения. Повторный read-only verifier
+должен вернуть `matches=true`.
+
+**Намеренно не менялось.** Другие дни backfill, rollback, deploy, Rules,
+indexes, VPS, firmware, UI, ключи и env-файлы.
+
 ## 2026-09-21 — инструмент repair sensorId read-модели (локально)
 
 **Причина.** Legacy measurements `device-001` без sensorId ранее стали
