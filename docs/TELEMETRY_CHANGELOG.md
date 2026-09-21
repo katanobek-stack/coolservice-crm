@@ -1,5 +1,23 @@
 # История изменений телеметрии
 
+## 2026-09-21 — аудит sensorId и план scoped migration `device-001`
+
+**Read-only результат.** Исторический scope 2026-09-19 содержит 360 points и
+6 rollups с нормализованным `sensorId: default`; новые данные того же
+физического датчика используют `temperature-1` (на момент снимка 2 570 points
+и 23 rollups). Текущий UI всё ещё читает legacy packets и sensorId не
+разделяет. Будущий UI raw/overview будет читать points/rollups по точному
+sensorId, поэтому без alias или migration эти значения стали бы разными
+series.
+
+**План.** Добавлен documentation-only план ограниченной reversible migration
+`default -> temperature-1` только за 2026-09-19: dry-run manifest,
+hour-transaction, отдельный checkpoint, deterministic point IDs, строгая
+verify и rollback. Legacy packets не изменяются; execute не запускался.
+
+**Намеренно не менялось.** Production Firestore-данные, Functions, Rules,
+indexes, deploy, VPS, firmware, UI, ключи и env-файлы.
+
 ## 2026-09-21 — scoped execute backfill `device-001`, 2026-09-19 UTC
 
 **Выполнено.** После подтверждения IAM-роли `roles/datastore.user` для
