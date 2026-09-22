@@ -27,7 +27,7 @@ function entriesFromPackets(packets) {
 }
 async function runBatch(batch) {
   const pointRefs = batch.entries.map((e) => db.doc(`${root}/points/${e.stableId}`));
-  const rollupId = rollupDocumentId("temperature-1", batch.entries[0].measuredAtMs), rollupRef = db.doc(`${root}/hourRollups/${rollupId}`);
+  const rollupId = rollupDocumentId("temperature-1", batch.entries[0].measuredAtMs), rollupRef = db.doc(`${root}/rollups/${rollupId}`);
   return db.runTransaction(async (tx) => {
     const snapshots = await tx.getAll(...pointRefs, rollupRef); const rollupSnapshot = snapshots.pop();
     const existing = new Set(snapshots.filter((s) => s.exists).map((s) => s.id));
