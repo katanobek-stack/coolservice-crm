@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
@@ -20,6 +20,11 @@ import {
   downsampleTemperaturePoints,
   temperatureChartSegments,
   monitoringPeriodMs,
+  chartXAxisTicks,
+  panChartWindow,
+  resizeChartWindow,
+  zoomChartWindow,
+  type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
 } from "../../shared/monitoring/logic";
@@ -151,19 +156,33 @@ function qualityDetails(point: TemperaturePoint): string[] {
   return details;
 }
 
+function chartAxisLabel(timestamp: number, spanMs: number): string {
+  const date = new Date(timestamp);
+  return spanMs > 24 * 60 * 60_000
+    ? date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+type NavigatorDrag = { mode: "pan" | "start" | "end"; originX: number; window: ChartWindow };
+
 function TemperatureChart({ points, period, rules }: {
   points: TemperaturePoint[];
   period: MonitoringPeriod;
   rules: MonitoringTemperatureRule[];
 }) {
   const [selectedPointMs, setSelectedPointMs] = useState<number | null>(null);
-  const [zoom, setZoom] = useState<{ start: number; end: number } | null>(null);
+  const [zoom, setZoom] = useState<ChartWindow | null>(null);
+  const [navigatorDrag, setNavigatorDrag] = useState<NavigatorDrag | null>(null);
+  const [baseEndMs, setBaseEndMs] = useState(() => Date.now());
+  useEffect(() => {
+    setBaseEndMs(Date.now());
+    setZoom(null);
+    setSelectedPointMs(null);
+  }, [period]);
   const sorted = useMemo(
     () => [...points].sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime()),
     [points],
   );
-  const rendered = useMemo(() => downsampleTemperaturePoints(sorted), [sorted]);
-  const segments = useMemo(() => temperatureChartSegments(rendered), [rendered]);
   if (sorted.length === 0) {
     return (
       <div className="monitor-empty monitor-empty--chart">
@@ -179,12 +198,18 @@ function TemperatureChart({ points, period, rules }: {
   const padding = { top: 24, right: 22, bottom: 42, left: 60 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const nowMs = Date.now();
+  const nowMs = baseEndMs;
   const startMs = nowMs - monitoringPeriodMs(period);
-  const visibleStart = zoom?.start ?? startMs;
-  const visibleEnd = zoom?.end ?? nowMs;
+  const baseWindow = { start: startMs, end: nowMs };
+  const visibleWindow = zoom ?? baseWindow;
+  const visibleStart = visibleWindow.start;
+  const visibleEnd = visibleWindow.end;
   const visiblePoints = sorted.filter((point) => point.measuredAt.getTime() >= visibleStart && point.measuredAt.getTime() <= visibleEnd);
-  const temperatures = sorted.map((point) => point.temperatureC);
+  const rendered = downsampleTemperaturePoints(visiblePoints);
+  const segments = temperatureChartSegments(rendered);
+  const navigatorPoints = downsampleTemperaturePoints(sorted, 180);
+  const navigatorSegments = temperatureChartSegments(navigatorPoints);
+  const temperatures = visiblePoints.map((point) => point.temperatureC);
   const enabledRules = rules.filter((rule) => rule.enabled);
   const scaleTemperatures = [
     ...temperatures,
@@ -202,13 +227,49 @@ function TemperatureChart({ points, period, rules }: {
   const y = (temperature: number) => padding.top
     + ((max - temperature) / (max - min)) * chartHeight;
   const yTicks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
-  const xTicks = Array.from({ length: 5 }, (_, index) => startMs + ((nowMs - startMs) * index) / 4);
+  const xTicks = chartXAxisTicks(visibleWindow);
   const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
-  const estimatedCount = sorted.filter((point) => point.timeQuality === "estimated").length;
-  const delayedCount = sorted.filter((point) => point.deliveryQuality === "delayed").length;
+  const estimatedCount = visiblePoints.filter((point) => point.timeQuality === "estimated").length;
+  const delayedCount = visiblePoints.filter((point) => point.deliveryQuality === "delayed").length;
   const selectedPoint = selectedPointMs === null
     ? null
     : rendered.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
+  const navigator = { width: 900, height: 82, left: 20, right: 20, top: 10, bottom: 16 };
+  const navigatorWidth = navigator.width - navigator.left - navigator.right;
+  const navigatorHeight = navigator.height - navigator.top - navigator.bottom;
+  const navigatorTemperatures = navigatorPoints.map((point) => point.temperatureC);
+  const navigatorMin = Math.min(...navigatorTemperatures);
+  const navigatorMax = Math.max(...navigatorTemperatures);
+  const navigatorSpread = Math.max(navigatorMax - navigatorMin, 1);
+  const navigatorY = (temperature: number) => navigator.top
+    + ((navigatorMax + navigatorSpread * 0.08 - temperature) / (navigatorSpread * 1.16)) * navigatorHeight;
+  const navigatorX = (timestamp: number) => navigator.left
+    + ((timestamp - startMs) / (nowMs - startMs)) * navigatorWidth;
+  const selectionX = navigatorX(visibleStart);
+  const selectionWidth = Math.max(2, navigatorX(visibleEnd) - selectionX);
+
+  function pointerToTime(clientX: number, element: SVGSVGElement): number {
+    const rect = element.getBoundingClientRect();
+    const scale = navigatorWidth / navigator.width;
+    const fraction = Math.max(0, Math.min(1, (clientX - rect.left - rect.width * navigator.left / navigator.width) / (rect.width * scale)));
+    return startMs + fraction * (nowMs - startMs);
+  }
+
+  function beginNavigatorDrag(mode: NavigatorDrag["mode"], event: ReactPointerEvent<SVGRectElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setNavigatorDrag({ mode, originX: event.clientX, window: visibleWindow });
+  }
+
+  function moveNavigator(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!navigatorDrag) return;
+    const nextTime = pointerToTime(event.clientX, event.currentTarget);
+    const originTime = pointerToTime(navigatorDrag.originX, event.currentTarget);
+    const next = navigatorDrag.mode === "pan"
+      ? panChartWindow(navigatorDrag.window, startMs, nowMs, nextTime - originTime)
+      : resizeChartWindow(navigatorDrag.window, navigatorDrag.mode, nextTime, startMs, nowMs);
+    setZoom(next);
+  }
   return (
     <>
       <div className="monitor-chart-stats">
@@ -219,11 +280,16 @@ function TemperatureChart({ points, period, rules }: {
         <div><span>Оценочное время</span><strong>{estimatedCount}</strong></div>
         <div><span>Доставлено позже</span><strong>{delayedCount}</strong></div>
       </div>
-      {rendered.length < sorted.length && (
-        <div className="monitor-history-subtitle">На графике показано {rendered.length} из {sorted.length} точек</div>
+      {rendered.length < visiblePoints.length && (
+        <div className="monitor-history-subtitle">На графике показано {rendered.length} из {visiblePoints.length} точек</div>
       )}
       <button type="button" className="monitor-chart-reset" onClick={() => setZoom(null)} disabled={!zoom}>Сбросить масштаб</button>
-      <div className="monitor-chart-scroll" aria-label="График температуры" onWheel={(event) => { event.preventDefault(); const factor = event.deltaY < 0 ? .75 : 1.33; const span = Math.min(nowMs - startMs, Math.max(60_000, (visibleEnd - visibleStart) * factor)); const focus = visibleStart + (event.nativeEvent.offsetX / 900) * (visibleEnd - visibleStart); setZoom({ start: Math.max(startMs, focus - span / 2), end: Math.min(nowMs, focus + span / 2) }); }}>
+      <div className="monitor-chart-scroll" aria-label="График температуры" onWheel={(event) => {
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const focusFraction = (event.clientX - rect.left) / rect.width;
+        setZoom(zoomChartWindow(visibleWindow, startMs, nowMs, focusFraction, event.deltaY < 0 ? 0.75 : 1.33));
+      }}>
         <svg className="monitor-chart" viewBox={`0 0 ${width} ${height}`} role="img">
           <title>Температура за {periodLabel(period)}</title>
           {yTicks.map((tick) => (
@@ -243,12 +309,12 @@ function TemperatureChart({ points, period, rules }: {
           {xTicks.map((tick) => (
             <text
               key={tick}
-              x={padding.left + ((tick - startMs) / (nowMs - startMs)) * chartWidth}
+              x={x(new Date(tick))}
               y={height - 14}
               textAnchor="middle"
               className="monitor-chart-label"
             >
-              {new Date(tick).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+              {chartAxisLabel(tick, visibleEnd - visibleStart)}
             </text>
           ))}
           {enabledRules.map((rule) => (
@@ -296,7 +362,53 @@ function TemperatureChart({ points, period, rules }: {
           })}
         </svg>
       </div>
-      <div className="monitor-navigator" aria-label="Навигатор графика"><input type="range" min={startMs} max={nowMs} value={visibleStart} onChange={(e) => setZoom({ start: Math.min(Number(e.target.value), visibleEnd - 60_000), end: visibleEnd })} /><input type="range" min={startMs} max={nowMs} value={visibleEnd} onChange={(e) => setZoom({ start: visibleStart, end: Math.max(Number(e.target.value), visibleStart + 60_000) })} /><span>{visiblePoints.length} точек в окне</span></div>
+      <div className="monitor-navigator" aria-label="Навигатор графика">
+        <svg
+          className="monitor-navigator-chart"
+          viewBox={`0 0 ${navigator.width} ${navigator.height}`}
+          role="slider"
+          aria-label="Окно видимого периода"
+          aria-valuetext={`${chartAxisLabel(visibleStart, nowMs - startMs)} — ${chartAxisLabel(visibleEnd, nowMs - startMs)}`}
+          onPointerMove={moveNavigator}
+          onPointerUp={() => setNavigatorDrag(null)}
+          onPointerCancel={() => setNavigatorDrag(null)}
+        >
+          <rect className="monitor-navigator-background" x={navigator.left} y={navigator.top} width={navigatorWidth} height={navigatorHeight} />
+          {navigatorSegments.map((segment) => (
+            <path
+              key={`navigator-${segment.from.measuredAt.getTime()}-${segment.to.measuredAt.getTime()}`}
+              d={`M ${navigatorX(segment.from.measuredAt.getTime()).toFixed(2)} ${navigatorY(segment.from.temperatureC).toFixed(2)} L ${navigatorX(segment.to.measuredAt.getTime()).toFixed(2)} ${navigatorY(segment.to.temperatureC).toFixed(2)}`}
+              className={`monitor-navigator-line monitor-navigator-line--${segment.timeQuality} monitor-navigator-line--${segment.deliveryQuality}`}
+            />
+          ))}
+          <rect className="monitor-navigator-shade" x={navigator.left} y={navigator.top} width={Math.max(0, selectionX - navigator.left)} height={navigatorHeight} />
+          <rect className="monitor-navigator-shade" x={selectionX + selectionWidth} y={navigator.top} width={Math.max(0, navigator.left + navigatorWidth - selectionX - selectionWidth)} height={navigatorHeight} />
+          <rect
+            className="monitor-navigator-window"
+            x={selectionX}
+            y={navigator.top}
+            width={selectionWidth}
+            height={navigatorHeight}
+            onPointerDown={(event) => beginNavigatorDrag("pan", event)}
+          />
+          <rect
+            className="monitor-navigator-handle"
+            x={selectionX - 6}
+            y={navigator.top}
+            width={12}
+            height={navigatorHeight}
+            onPointerDown={(event) => beginNavigatorDrag("start", event)}
+          />
+          <rect
+            className="monitor-navigator-handle"
+            x={selectionX + selectionWidth - 6}
+            y={navigator.top}
+            width={12}
+            height={navigatorHeight}
+            onPointerDown={(event) => beginNavigatorDrag("end", event)}
+          />
+        </svg>
+      </div>
       {selectedPoint && (
         <div className="monitor-point-detail" role="status">
           <strong>{selectedPoint.temperatureC.toFixed(2)} °C</strong>

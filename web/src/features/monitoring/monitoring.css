@@ -601,5 +601,13 @@
   .monitor-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .monitor-chart-reset { margin: 8px 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: var(--text2); cursor: pointer; }
-.monitor-navigator { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 0; color: var(--text3); font-size: 12px; }
-.monitor-navigator input { min-width: 0; accent-color: var(--accent); touch-action: pan-x; }
+.monitor-navigator { padding-top: 12px; touch-action: none; }
+.monitor-navigator-chart { display: block; width: 100%; height: auto; min-height: 66px; overflow: visible; }
+.monitor-navigator-background { fill: #eff6ff; stroke: #bfdbfe; }
+.monitor-navigator-line { fill: none; stroke: #2563eb; stroke-width: 2; stroke-linecap: round; }
+.monitor-navigator-line--delayed { stroke: #ea580c; }
+.monitor-navigator-line--estimated { stroke-dasharray: 6 4; }
+.monitor-navigator-shade { fill: rgba(15, 23, 42, 0.40); pointer-events: none; }
+.monitor-navigator-window { fill: rgba(255, 255, 255, 0.06); stroke: #2563eb; stroke-width: 2; cursor: grab; touch-action: none; }
+.monitor-navigator-window:active { cursor: grabbing; }
+.monitor-navigator-handle { fill: #2563eb; rx: 3px; cursor: ew-resize; touch-action: none; }

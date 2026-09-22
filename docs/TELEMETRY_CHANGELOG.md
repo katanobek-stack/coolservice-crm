@@ -387,3 +387,24 @@ Historical backfill intentionally stopped after a checkpoint defect was found.
 It will not be repaired. Monitoring overview reads only dual-written rollups
 from the cutover `2026-09-22T00:00:00Z`; earlier overview history is shown as
 still accumulating. Raw history remains limited to windows no longer than 24h.
+
+## 2026-09-22 — единый navigator для графика мониторинга (подготовка)
+
+**Причина.** Предыдущая версия показывала два независимых range-ползунка, а
+подписи X-оси основного графика продолжали использовать границы базового
+периода после zoom или pan.
+
+**Изменено.** Navigator теперь является единым мини-графиком на весь базовый
+период с одним перемещаемым окном и двумя границами. Перетаскивание середины
+двигает окно в его границах, а handles меняют только соответствующую границу.
+Колесо основного графика меняет это же окно вокруг указателя; «Сбросить
+масштаб» возвращает окно ко всему периоду. X-ось и статистика пересчитываются
+по текущему visible range. Стили `exact`/`estimated` и
+`realtime`/`delayed` сохранены также в мини-графике.
+
+**Проверки.** Добавлены unit-тесты изменения подписей оси после zoom,
+перемещения окна и изменения обеих границ. До commit/PR/deploy данная запись
+описывает только локальную подготовку.
+
+**Намеренно не менялось.** Firebase, Firestore Rules/indexes, VPS, Mosquitto,
+firmware, ключи и env-файлы.
