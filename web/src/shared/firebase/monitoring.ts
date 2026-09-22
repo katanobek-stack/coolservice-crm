@@ -34,6 +34,7 @@ import type {
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
 export const ALERT_EVENT_LIMIT = 200;
+export const HISTORY_PACKET_LIMIT = 1000;
 /** Overview starts only once dual-write points/rollups is authoritative. */
 export const MONITORING_OVERVIEW_CUTOVER_MS = Date.parse("2026-09-22T00:00:00.000Z");
 
@@ -353,6 +354,7 @@ export function listenDeviceHistory(
     collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
     where("lastMeasuredAt", ">", startedAt),
     orderBy("lastMeasuredAt", "desc"),
+    limit(HISTORY_PACKET_LIMIT),
   );
 
   return onSnapshot(packets, (snapshot) => {
@@ -379,7 +381,7 @@ export function listenDeviceHistory(
     onData({
       points: pointsInHistoryWindow(points, startedAt.toMillis(), nowMs),
       packetCount: snapshot.size,
-      limitReached: false,
+      limitReached: snapshot.size >= HISTORY_PACKET_LIMIT,
     });
   }, onError);
 }
