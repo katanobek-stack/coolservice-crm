@@ -160,6 +160,9 @@ describe("monitoring history", () => {
     assert.equal(monitoringPeriodMs("hour"), 60 * 60_000);
     assert.equal(monitoringPeriodMs("halfDay"), 12 * 60 * 60_000);
     assert.equal(monitoringPeriodMs("day"), 24 * 60 * 60_000);
+    assert.equal(monitoringPeriodMs("threeDays"), 3 * 24 * 60 * 60_000);
+    assert.equal(monitoringPeriodMs("week"), 7 * 24 * 60 * 60_000);
+    assert.equal(monitoringPeriodMs("month"), 30 * 24 * 60 * 60_000);
   });
 
   test("keeps every measurement from 2880 half-minute packets in the daily window", () => {

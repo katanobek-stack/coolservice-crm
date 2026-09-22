@@ -381,3 +381,9 @@ writes, меньше безопасного лимита 450. Повторный
 существующие stable IDs исключаются до изменения rollup. Добавлены проверки
 неупорядоченных packetId, crash/resume и отсутствия повторного применения
 существующих point IDs. Production execute не запускался.
+## 2026-09-22 — legacy backfill intentionally stopped; overview cutover
+
+Historical backfill intentionally stopped after a checkpoint defect was found.
+It will not be repaired. Monitoring overview reads only dual-written rollups
+from the cutover `2026-09-22T00:00:00Z`; earlier overview history is shown as
+still accumulating. Raw history remains limited to windows no longer than 24h.
