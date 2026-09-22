@@ -373,3 +373,11 @@ writes, меньше безопасного лимита 450. Повторный
 
 **Не выполнено.** Production execute, dry-run against production после этой
 правки, следующие UTC-дни, deploy, Rules/indexes, VPS, firmware и UI.
+## 2026-09-22 — исправление scoped checkpoint (подготовка)
+
+Старый курсор `lastCompletedPacketId` признан устаревшим: он не используется
+после перехода на почасовые batch. Новый checkpoint хранит `utcHourMs` и
+`batchLastStableMeasurementId`; при restart повторно сканируется день, а уже
+существующие stable IDs исключаются до изменения rollup. Добавлены проверки
+неупорядоченных packetId, crash/resume и отсутствия повторного применения
+существующих point IDs. Production execute не запускался.

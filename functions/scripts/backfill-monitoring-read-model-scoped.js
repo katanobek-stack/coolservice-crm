@@ -3,7 +3,7 @@
 const { getApps, initializeApp } = require("firebase-admin/app");
 const { FieldPath, getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { canonicalBackfillSensorId, pointDocumentData, nextRollupData, rollupDocumentId, stableMeasurementId } = require("../lib/telemetryReadModel");
-const { MAX_POINT_WRITES, planHourBatches, applyOnlyMissing } = require("./scoped-backfill-batches");
+const { MAX_POINT_WRITES, planHourBatches, applyOnlyMissing, checkpointCursor, pendingAfterCursor, isCurrentCursor } = require("./scoped-backfill-batches");
 const option = (name, fallback) => { const i = process.argv.indexOf(name); return i < 0 ? fallback : process.argv[i + 1]; };
 const projectId = option("--project"), deviceId = option("--device-id"), day = option("--utc-day");
 const execute = process.argv.includes("--execute"), rate = Number(option("--rate-per-minute", "120"));
@@ -23,7 +23,7 @@ function entriesFromPackets(packets) {
   // Packet-id order preserves the existing partial checkpoint contract. MQTT
   // packet IDs used by this controller are chronological, so each batch stays
   // within one UTC hour without skipping an earlier checkpointed packet.
-  return result.sort((a,b) => a.packetId.localeCompare(b.packetId) || a.index - b.index);
+  return result.sort((a,b) => a.measuredAtMs-b.measuredAtMs || a.stableId.localeCompare(b.stableId));
 }
 async function runBatch(batch) {
   const pointRefs = batch.entries.map((e) => db.doc(`${root}/points/${e.stableId}`));
@@ -37,10 +37,9 @@ async function runBatch(batch) {
       tx.create(db.doc(`${root}/points/${e.stableId}`), pointDocumentData(deviceId, m, e.receivedAt)); rollup = nextRollupData(rollup, deviceId, m, e.receivedAt);
     }
     if (missing.length) tx.set(rollupRef, rollup);
-    const last = batch.entries[batch.entries.length - 1];
-    tx.set(checkpoint, { deviceId, utcDay: day, status: "running", lastCompletedPacketId: last.packetId, processedPacketGroups: batch.entries.length, batchWrites: missing.length + 2, ratePerMinute: rate, updatedAt: Timestamp.now() }, { merge: true });
+    tx.set(checkpoint, { deviceId, utcDay: day, status: "running", ...checkpointCursor(batch), processedPacketGroups: batch.entries.length, batchWrites: missing.length + 2, ratePerMinute: rate, updatedAt: Timestamp.now() }, { merge: true });
     return { created: missing.length, skipped: batch.entries.length - missing.length };
   });
 }
-async function main() { const [packets, cp] = await Promise.all([db.collection(`${root}/packets`).orderBy(FieldPath.documentId()).get(), checkpoint.get()]); const all = entriesFromPackets(packets); const after = cp.data()?.lastCompletedPacketId; const pending = after ? all.filter((e) => e.packetId > after) : all; const batches = planHourBatches(pending); const report = { mode: execute ? "execute" : "dry-run", deviceId, utcDay: day, checkpoint: cp.exists ? cp.data()?.lastCompletedPacketId ?? null : null, timedPoints: all.length, pendingTimedPoints: pending.length, batches: batches.length, maxPointWrites: MAX_POINT_WRITES, maxFirestoreWritesPerTransaction: MAX_POINT_WRITES + 2, ratePerMinute: rate }; if (!execute) return console.log(JSON.stringify(report)); let created=0, skipped=0; for (const batch of batches) { const begun=Date.now(), result=await runBatch(batch); created+=result.created; skipped+=result.skipped; const wait=Math.max(0, Math.ceil(batch.entries.length*60000/rate)-(Date.now()-begun)); if(wait) await new Promise(r=>setTimeout(r,wait)); } await checkpoint.set({ status:"completed", completedAt:Timestamp.now() },{merge:true}); console.log(JSON.stringify({...report,created,skipped})); }
+async function main() { const [packets, cp] = await Promise.all([db.collection(`${root}/packets`).orderBy(FieldPath.documentId()).get(), checkpoint.get()]); const all = entriesFromPackets(packets); const cursor = isCurrentCursor(cp.data()) ? cp.data() : null; const batches = pendingAfterCursor(planHourBatches(all), cursor); const report = { mode: execute ? "execute" : "dry-run", deviceId, utcDay: day, checkpoint: cursor, staleCheckpointIgnored: cp.exists && !cursor, timedPoints: all.length, pendingTimedPoints: batches.reduce((n,b)=>n+b.entries.length,0), batches: batches.length, maxPointWrites: MAX_POINT_WRITES, maxFirestoreWritesPerTransaction: MAX_POINT_WRITES + 2, ratePerMinute: rate }; if (!execute) return console.log(JSON.stringify(report)); let created=0, skipped=0; for (const batch of batches) { const begun=Date.now(), result=await runBatch(batch); created+=result.created; skipped+=result.skipped; const wait=Math.max(0, Math.ceil(batch.entries.length*60000/rate)-(Date.now()-begun)); if(wait) await new Promise(r=>setTimeout(r,wait)); } await checkpoint.set({ status:"completed", completedAt:Timestamp.now() },{merge:true}); console.log(JSON.stringify({...report,created,skipped})); }
 main().catch((e)=>{console.error(e.stack||e.message);process.exitCode=1});

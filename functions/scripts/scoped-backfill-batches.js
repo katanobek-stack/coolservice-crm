@@ -18,4 +18,20 @@ function applyOnlyMissing(existingIds, candidates) {
   return candidates.filter((candidate) => !existingIds.has(candidate.stableId));
 }
 
-module.exports = { MAX_POINT_WRITES, planHourBatches, applyOnlyMissing };
+function checkpointCursor(batch) {
+  const last = batch.entries[batch.entries.length - 1];
+  return { utcHourMs: batch.hourStartMs, batchLastStableMeasurementId: last.stableId };
+}
+
+function pendingAfterCursor(batches, cursor) {
+  if (!Number.isFinite(cursor?.utcHourMs) || typeof cursor?.batchLastStableMeasurementId !== "string") return batches;
+  const pending = batches.flatMap((batch) => batch.entries).filter((entry) => entry.measuredAtMs > cursor.utcHourMs
+    || (entry.measuredAtMs === cursor.utcHourMs && entry.stableId > cursor.batchLastStableMeasurementId));
+  return planHourBatches(pending);
+}
+
+function isCurrentCursor(cursor) {
+  return Number.isFinite(cursor?.utcHourMs) && typeof cursor?.batchLastStableMeasurementId === "string";
+}
+
+module.exports = { MAX_POINT_WRITES, planHourBatches, applyOnlyMissing, checkpointCursor, pendingAfterCursor, isCurrentCursor };
