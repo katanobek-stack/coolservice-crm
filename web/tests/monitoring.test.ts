@@ -9,6 +9,10 @@ import {
   pointsInHistoryWindow,
   sortAndDedupePoints,
   temperatureChartSegments,
+  chartXAxisTicks,
+  panChartWindow,
+  resizeChartWindow,
+  zoomChartWindow,
   violatesTemperatureRule,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
@@ -80,6 +84,30 @@ describe("monitoring statuses", () => {
 });
 
 describe("monitoring history", () => {
+  test("rebuilds the main x axis from the current zoomed window", () => {
+    const baseStart = Date.parse("2026-09-22T09:35:00Z");
+    const baseEnd = Date.parse("2026-09-22T21:35:00Z");
+    const initial = { start: baseStart, end: baseEnd };
+    const zoomed = zoomChartWindow(initial, baseStart, baseEnd, 0.75, 0.25);
+    assert.notDeepEqual(chartXAxisTicks(zoomed), chartXAxisTicks(initial));
+    assert.equal(chartXAxisTicks(zoomed)[0], zoomed.start);
+    assert.equal(chartXAxisTicks(zoomed).at(-1), zoomed.end);
+  });
+
+  test("panning the navigator moves one visible window without changing its width", () => {
+    const initial = { start: 100_000, end: 160_000 };
+    const panned = panChartWindow(initial, 0, 300_000, 45_000);
+    assert.deepEqual(panned, { start: 145_000, end: 205_000 });
+    assert.deepEqual(panChartWindow(initial, 0, 300_000, -200_000), { start: 0, end: 60_000 });
+  });
+
+  test("navigator handles resize only their respective boundary", () => {
+    const initial = { start: 100_000, end: 220_000 };
+    assert.deepEqual(resizeChartWindow(initial, "start", 150_000, 0, 300_000), { start: 150_000, end: 220_000 });
+    assert.deepEqual(resizeChartWindow(initial, "end", 180_000, 0, 300_000), { start: 100_000, end: 180_000 });
+    assert.deepEqual(resizeChartWindow(initial, "start", 210_000, 0, 300_000), { start: 160_000, end: 220_000 });
+  });
+
   test("keeps unplaced samples out of the chart and temperature statistics pipeline", () => {
     assert.equal(isChartTimeQuality("exact"), true);
     assert.equal(isChartTimeQuality("estimated"), true);

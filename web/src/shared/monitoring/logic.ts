@@ -9,6 +9,80 @@ import type {
 export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
+export const MIN_CHART_WINDOW_MS = 60_000;
+
+export interface ChartWindow {
+  start: number;
+  end: number;
+}
+
+/** Keeps a navigator window inside its base period without changing its span. */
+export function normalizeChartWindow(
+  window: ChartWindow,
+  baseStart: number,
+  baseEnd: number,
+  minimumSpanMs = MIN_CHART_WINDOW_MS,
+): ChartWindow {
+  const baseSpan = Math.max(0, baseEnd - baseStart);
+  const minimum = Math.min(minimumSpanMs, baseSpan);
+  const requestedSpan = Math.max(minimum, Math.min(baseSpan, window.end - window.start));
+  const start = Math.max(baseStart, Math.min(baseEnd - requestedSpan, window.start));
+  return { start, end: start + requestedSpan };
+}
+
+export function chartXAxisTicks(window: ChartWindow, count = 5): number[] {
+  if (count <= 1) return [window.start];
+  const span = window.end - window.start;
+  return Array.from({ length: count }, (_, index) => window.start + span * index / (count - 1));
+}
+
+export function panChartWindow(
+  window: ChartWindow,
+  baseStart: number,
+  baseEnd: number,
+  deltaMs: number,
+): ChartWindow {
+  return normalizeChartWindow({ start: window.start + deltaMs, end: window.end + deltaMs }, baseStart, baseEnd);
+}
+
+export function resizeChartWindow(
+  window: ChartWindow,
+  edge: "start" | "end",
+  nextValue: number,
+  baseStart: number,
+  baseEnd: number,
+): ChartWindow {
+  const minimum = Math.min(MIN_CHART_WINDOW_MS, baseEnd - baseStart);
+  if (edge === "start") {
+    return {
+      start: Math.max(baseStart, Math.min(nextValue, window.end - minimum)),
+      end: window.end,
+    };
+  }
+  return {
+    start: window.start,
+    end: Math.min(baseEnd, Math.max(nextValue, window.start + minimum)),
+  };
+}
+
+export function zoomChartWindow(
+  window: ChartWindow,
+  baseStart: number,
+  baseEnd: number,
+  focusFraction: number,
+  factor: number,
+): ChartWindow {
+  const span = window.end - window.start;
+  const nextSpan = Math.max(
+    Math.min(MIN_CHART_WINDOW_MS, baseEnd - baseStart),
+    Math.min(baseEnd - baseStart, span * factor),
+  );
+  const focus = window.start + span * Math.max(0, Math.min(1, focusFraction));
+  return normalizeChartWindow({
+    start: focus - nextSpan * Math.max(0, Math.min(1, focusFraction)),
+    end: focus + nextSpan * (1 - Math.max(0, Math.min(1, focusFraction))),
+  }, baseStart, baseEnd);
+}
 
 /** Only samples with a usable device timestamp may enter chart/statistic points. */
 export function isChartTimeQuality(
