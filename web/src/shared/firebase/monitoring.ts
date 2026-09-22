@@ -34,6 +34,8 @@ import type {
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
 export const ALERT_EVENT_LIMIT = 200;
+/** Overview starts only once dual-write points/rollups is authoritative. */
+export const MONITORING_OVERVIEW_CUTOVER_MS = Date.parse("2026-09-22T00:00:00.000Z");
 
 function asDate(value: unknown): Date | null {
   if (value instanceof Timestamp) return value.toDate();
@@ -331,6 +333,21 @@ export function listenDeviceHistory(
   onError: (error: Error) => void,
   nowMs = Date.now(),
 ): Unsubscribe {
+  if (monitoringPeriodMs(period) > 24 * 60 * 60_000) {
+    const cutover = Timestamp.fromMillis(Math.max(MONITORING_OVERVIEW_CUTOVER_MS, nowMs - monitoringPeriodMs(period)));
+    const rollups = query(collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "rollups"), where("hourStart", ">=", cutover), orderBy("hourStart", "asc"));
+    return onSnapshot(rollups, (snapshot) => {
+      const points: TemperaturePoint[] = [];
+      snapshot.docs.forEach((item) => Object.values(item.data().buckets5m ?? {}).forEach((bucket: any) => Object.entries(bucket.aggregates ?? {}).forEach(([quality, aggregate]: [string, any]) => {
+        if (!Number.isFinite(aggregate.minTemperatureC) || !Number.isFinite(aggregate.maxTemperatureC)) return;
+        const measuredAt = asDate(bucket.bucketStart); if (!measuredAt) return;
+        const [timeQuality, deliveryQuality] = quality.split("_");
+        points.push({ measuredAt, temperatureC: aggregate.minTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
+        if (aggregate.maxTemperatureC !== aggregate.minTemperatureC) points.push({ measuredAt: new Date(measuredAt.getTime() + 1), temperatureC: aggregate.maxTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
+      })));
+      onData({ points, packetCount: snapshot.size, limitReached: false });
+    }, onError);
+  }
   const startedAt = Timestamp.fromMillis(nowMs - monitoringPeriodMs(period));
   const packets = query(
     collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),

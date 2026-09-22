@@ -163,7 +163,10 @@ export function temperatureChartSegments(points: TemperaturePoint[]): Temperatur
 export function monitoringPeriodMs(period: MonitoringPeriod): number {
   if (period === "hour") return 60 * 60_000;
   if (period === "halfDay") return 12 * 60 * 60_000;
-  return 24 * 60 * 60_000;
+  if (period === "day") return 24 * 60 * 60_000;
+  if (period === "threeDays") return 3 * 24 * 60 * 60_000;
+  if (period === "week") return 7 * 24 * 60 * 60_000;
+  return 30 * 24 * 60 * 60_000;
 }
 
 export function violatesTemperatureRule(

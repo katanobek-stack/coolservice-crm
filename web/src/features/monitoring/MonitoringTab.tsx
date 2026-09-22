@@ -136,7 +136,10 @@ function ActiveAlertBadge({ count }: { count: number }) {
 function periodLabel(period: MonitoringPeriod): string {
   if (period === "hour") return "1 час";
   if (period === "halfDay") return "12 часов";
-  return "24 часа";
+  if (period === "day") return "24 часа";
+  if (period === "threeDays") return "3 дня";
+  if (period === "week") return "7 дней";
+  return "30 дней";
 }
 
 const DELAYED_DELIVERY_MESSAGE = "Точка измерена при отсутствии подтверждённой MQTT-связи и доставлена позже";
@@ -154,6 +157,7 @@ function TemperatureChart({ points, period, rules }: {
   rules: MonitoringTemperatureRule[];
 }) {
   const [selectedPointMs, setSelectedPointMs] = useState<number | null>(null);
+  const [zoom, setZoom] = useState<{ start: number; end: number } | null>(null);
   const sorted = useMemo(
     () => [...points].sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime()),
     [points],
@@ -177,6 +181,9 @@ function TemperatureChart({ points, period, rules }: {
   const chartHeight = height - padding.top - padding.bottom;
   const nowMs = Date.now();
   const startMs = nowMs - monitoringPeriodMs(period);
+  const visibleStart = zoom?.start ?? startMs;
+  const visibleEnd = zoom?.end ?? nowMs;
+  const visiblePoints = sorted.filter((point) => point.measuredAt.getTime() >= visibleStart && point.measuredAt.getTime() <= visibleEnd);
   const temperatures = sorted.map((point) => point.temperatureC);
   const enabledRules = rules.filter((rule) => rule.enabled);
   const scaleTemperatures = [
@@ -191,8 +198,7 @@ function TemperatureChart({ points, period, rules }: {
   const min = scaleMin - spread * 0.12;
   const max = scaleMax + spread * 0.12;
 
-  const x = (date: Date) => padding.left
-    + ((date.getTime() - startMs) / (nowMs - startMs)) * chartWidth;
+  const x = (date: Date) => padding.left + ((date.getTime() - visibleStart) / (visibleEnd - visibleStart)) * chartWidth;
   const y = (temperature: number) => padding.top
     + ((max - temperature) / (max - min)) * chartHeight;
   const yTicks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
@@ -216,7 +222,8 @@ function TemperatureChart({ points, period, rules }: {
       {rendered.length < sorted.length && (
         <div className="monitor-history-subtitle">На графике показано {rendered.length} из {sorted.length} точек</div>
       )}
-      <div className="monitor-chart-scroll" aria-label="График температуры">
+      <button type="button" className="monitor-chart-reset" onClick={() => setZoom(null)} disabled={!zoom}>Сбросить масштаб</button>
+      <div className="monitor-chart-scroll" aria-label="График температуры" onWheel={(event) => { event.preventDefault(); const factor = event.deltaY < 0 ? .75 : 1.33; const span = Math.min(nowMs - startMs, Math.max(60_000, (visibleEnd - visibleStart) * factor)); const focus = visibleStart + (event.nativeEvent.offsetX / 900) * (visibleEnd - visibleStart); setZoom({ start: Math.max(startMs, focus - span / 2), end: Math.min(nowMs, focus + span / 2) }); }}>
         <svg className="monitor-chart" viewBox={`0 0 ${width} ${height}`} role="img">
           <title>Температура за {periodLabel(period)}</title>
           {yTicks.map((tick) => (
@@ -289,6 +296,7 @@ function TemperatureChart({ points, period, rules }: {
           })}
         </svg>
       </div>
+      <div className="monitor-navigator" aria-label="Навигатор графика"><input type="range" min={startMs} max={nowMs} value={visibleStart} onChange={(e) => setZoom({ start: Math.min(Number(e.target.value), visibleEnd - 60_000), end: visibleEnd })} /><input type="range" min={startMs} max={nowMs} value={visibleEnd} onChange={(e) => setZoom({ start: visibleStart, end: Math.max(Number(e.target.value), visibleStart + 60_000) })} /><span>{visiblePoints.length} точек в окне</span></div>
       {selectedPoint && (
         <div className="monitor-point-detail" role="status">
           <strong>{selectedPoint.temperatureC.toFixed(2)} °C</strong>
@@ -678,7 +686,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               </div>
             </div>
             <div className="monitor-period-tabs" aria-label="Период графика">
-              {(["hour", "halfDay", "day"] as MonitoringPeriod[]).map((value) => (
+              {(["hour", "halfDay", "day", "threeDays", "week", "month"] as MonitoringPeriod[]).map((value) => (
                 <button
                   key={value}
                   type="button"

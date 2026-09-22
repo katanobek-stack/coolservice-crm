@@ -1,5 +1,5 @@
 export type MonitoringTargetType = "vehicle" | "chamber";
-export type MonitoringPeriod = "hour" | "halfDay" | "day";
+export type MonitoringPeriod = "hour" | "halfDay" | "day" | "threeDays" | "week" | "month";
 export type MonitoringAlertEventState = "active" | "recovered" | "historical" | "closed_by_settings";
 export type MonitoringRuleDirection = "above" | "below";
 export type MonitoringDeliveryQuality = "realtime" | "delayed";
