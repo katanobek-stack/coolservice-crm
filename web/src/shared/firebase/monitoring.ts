@@ -358,6 +358,7 @@ export function listenDeviceHistory(
   return onSnapshot(packets, (snapshot) => {
     const points: TemperaturePoint[] = [];
     snapshot.docs.forEach((packet) => {
+      const receivedAt = asDate(packet.data().receivedAt);
       const measurements = packet.data().measurements;
       if (!Array.isArray(measurements)) return;
       measurements.forEach((measurement) => {
@@ -372,7 +373,7 @@ export function listenDeviceHistory(
           && typeof temperatureC === "number"
           && Number.isFinite(temperatureC)
         ) {
-          points.push({ measuredAt, temperatureC, timeQuality, deliveryQuality });
+          points.push({ measuredAt, temperatureC, timeQuality, deliveryQuality, receivedAt });
         }
       });
     });
@@ -405,7 +406,7 @@ export function listenDeviceUnplacedHistory(
       const receivedAt = asDate(packet.data().receivedAt);
       const measurements = packet.data().measurements;
       if (!Array.isArray(measurements)) return;
-      measurements.forEach((measurement) => {
+      measurements.forEach((measurement, measurementIndex) => {
         if (typeof measurement !== "object" || measurement === null) return;
         if (measurement.timeQuality !== "unplaced") return;
         if (typeof measurement.temperatureC !== "number" || !Number.isFinite(measurement.temperatureC)) return;
@@ -414,6 +415,7 @@ export function listenDeviceUnplacedHistory(
           sensorId: typeof measurement.sensorId === "string" ? measurement.sensorId : null,
           temperatureC: measurement.temperatureC,
           receivedAt,
+          measurementIndex,
           deliveryQuality: measurement.deliveryQuality === "delayed" ? "delayed" : "realtime",
         });
       });

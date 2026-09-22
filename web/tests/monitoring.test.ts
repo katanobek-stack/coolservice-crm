@@ -13,6 +13,7 @@ import {
   panChartWindow,
   resizeChartWindow,
   zoomChartWindow,
+  placeUnplacedPoints,
   violatesTemperatureRule,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
@@ -250,5 +251,65 @@ describe("independent temperature rules", () => {
     assert.equal(violatesTemperatureRule(-12, {
       enabled: true, direction: "below", thresholdC: -10,
     }), true);
+  });
+});
+
+
+describe("unplaced point placement", () => {
+  function timedPoint(offsetMs: number, temperatureC: number, receivedAt: Date): TemperaturePoint {
+    return { measuredAt: new Date(NOW + offsetMs), temperatureC, receivedAt };
+  }
+
+  test("distributes same-packet unplaced samples evenly across the packet timed span", () => {
+    const receivedAt = new Date(NOW - 5 * 60_000);
+    const timed = [
+      timedPoint(-10 * 60_000, -20, receivedAt),
+      timedPoint(0, -18, receivedAt),
+    ];
+    const placed = placeUnplacedPoints(timed, [
+      { packetId: "p1", receivedAt, measurementIndex: 0, temperatureC: -19 },
+      { packetId: "p1", receivedAt, measurementIndex: 1, temperatureC: -17 },
+    ], NOW);
+    assert.deepEqual(
+      placed.map((point) => [point.measuredAt.getTime() - NOW, point.timeQuality]),
+      [[-400_000, "unplaced"], [-200_000, "unplaced"]],
+    );
+  });
+
+  test("brackets an unplaced-only packet between the last timed point before and the first timed point after", () => {
+    const timed = [
+      timedPoint(-20 * 60_000, -20, new Date(NOW - 20 * 60_000)),
+      timedPoint(0, -18, new Date(NOW - 60_000)),
+    ];
+    const placed = placeUnplacedPoints(timed, [
+      { packetId: "p9", receivedAt: new Date(NOW - 90_000), measurementIndex: 0, temperatureC: -19 },
+    ], NOW);
+    assert.equal(placed.length, 1);
+    assert.equal(placed[0].measuredAt.getTime(), NOW - 10 * 60_000);
+    assert.equal(placed[0].timeQuality, "unplaced");
+  });
+
+  test("extends past the last timed point when no later timed point exists", () => {
+    const timed = [timedPoint(-60 * 60_000, -20, new Date(NOW - 60 * 60_000))];
+    const placed = placeUnplacedPoints(timed, [
+      { packetId: "p1", receivedAt: new Date(NOW - 60_000), measurementIndex: 0, temperatureC: -19 },
+      { packetId: "p1", receivedAt: new Date(NOW - 60_000), measurementIndex: 1, temperatureC: -18 },
+    ], NOW);
+    assert.deepEqual(
+      placed.map((point) => point.measuredAt.getTime() - NOW),
+      [-3_540_000, -3_480_000],
+    );
+  });
+
+  test("keeps placed points ordered and bridges chart segments through them", () => {
+    const points: TemperaturePoint[] = [
+      { measuredAt: new Date(NOW - 12 * 60_000), temperatureC: -20, timeQuality: "exact" },
+      { measuredAt: new Date(NOW - 8 * 60_000), temperatureC: -19, timeQuality: "unplaced" },
+      { measuredAt: new Date(NOW - 4 * 60_000), temperatureC: -18, timeQuality: "unplaced" },
+      { measuredAt: new Date(NOW), temperatureC: -17, timeQuality: "exact" },
+    ];
+    const segments = temperatureChartSegments(points);
+    assert.equal(segments.length, 3);
+    assert.ok(segments.every((segment) => segment.timeQuality === "unplaced"));
   });
 });

@@ -24,6 +24,7 @@ import {
   panChartWindow,
   resizeChartWindow,
   zoomChartWindow,
+  placeUnplacedPoints,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -151,6 +152,7 @@ const DELAYED_DELIVERY_MESSAGE = "Точка измерена при отсут�
 
 function qualityDetails(point: TemperaturePoint): string[] {
   const details: string[] = [];
+  if (point.timeQuality === "unplaced") details.push("Время приблизительное — измерение без достоверного времени, размещено между соседними точками");
   if (point.timeQuality === "estimated") details.push("Время оценочное — восстановлено после отсутствия UTC");
   if (point.deliveryQuality === "delayed") details.push(DELAYED_DELIVERY_MESSAGE);
   return details;
@@ -209,10 +211,12 @@ function TemperatureChart({ points, period, rules }: {
   const segments = temperatureChartSegments(rendered);
   const navigatorPoints = downsampleTemperaturePoints(sorted, 180);
   const navigatorSegments = temperatureChartSegments(navigatorPoints);
-  const temperatures = visiblePoints.map((point) => point.temperatureC);
+  const timedVisiblePoints = visiblePoints.filter((point) => point.timeQuality !== "unplaced");
+  const unplacedVisibleCount = visiblePoints.length - timedVisiblePoints.length;
+  const temperatures = timedVisiblePoints.map((point) => point.temperatureC);
   const enabledRules = rules.filter((rule) => rule.enabled);
   const scaleTemperatures = [
-    ...temperatures,
+    ...visiblePoints.map((point) => point.temperatureC),
     ...enabledRules.map((rule) => rule.thresholdC),
   ];
   const rawMin = Math.min(...temperatures);
@@ -228,9 +232,13 @@ function TemperatureChart({ points, period, rules }: {
     + ((max - temperature) / (max - min)) * chartHeight;
   const yTicks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
   const xTicks = chartXAxisTicks(visibleWindow);
-  const average = temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length;
-  const estimatedCount = visiblePoints.filter((point) => point.timeQuality === "estimated").length;
-  const delayedCount = visiblePoints.filter((point) => point.deliveryQuality === "delayed").length;
+  const average = temperatures.length > 0
+    ? temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length
+    : NaN;
+  const hasTimedTemperatures = temperatures.length > 0;
+  const estimatedCount = timedVisiblePoints.filter((point) => point.timeQuality === "estimated").length;
+  const delayedCount = timedVisiblePoints.filter((point) => point.deliveryQuality === "delayed").length;
+  const hasUnplacedPoints = visiblePoints.some((point) => point.timeQuality === "unplaced");
   const selectedPoint = selectedPointMs === null
     ? null
     : rendered.find((point) => point.measuredAt.getTime() === selectedPointMs) ?? null;
@@ -273,10 +281,11 @@ function TemperatureChart({ points, period, rules }: {
   return (
     <>
       <div className="monitor-chart-stats">
-        <div><span>Минимум</span><strong>{rawMin.toFixed(1)} °C</strong></div>
-        <div><span>Средняя</span><strong>{average.toFixed(1)} °C</strong></div>
-        <div><span>Максимум</span><strong>{rawMax.toFixed(1)} °C</strong></div>
-        <div><span>Получено за период</span><strong>{sorted.length}</strong></div>
+        <div><span>Минимум</span><strong>{hasTimedTemperatures ? `${rawMin.toFixed(1)} °C` : "—"}</strong></div>
+        <div><span>Средняя</span><strong>{hasTimedTemperatures ? `${average.toFixed(1)} °C` : "—"}</strong></div>
+        <div><span>Максимум</span><strong>{hasTimedTemperatures ? `${rawMax.toFixed(1)} °C` : "—"}</strong></div>
+        <div><span>Получено за период</span><strong>{timedVisiblePoints.length}</strong></div>
+        <div><span>Без времени (на графике)</span><strong>{unplacedVisibleCount}</strong></div>
         <div><span>Оценочное время</span><strong>{estimatedCount}</strong></div>
         <div><span>Доставлено позже</span><strong>{delayedCount}</strong></div>
       </div>
@@ -419,6 +428,9 @@ function TemperatureChart({ points, period, rules }: {
       <div className="monitor-chart-legend">
         <span><i className="monitor-legend-line" /> Точка доставлена при подтверждённой MQTT-связи</span>
         <span><i className="monitor-legend-line monitor-legend-line--delayed" /> {DELAYED_DELIVERY_MESSAGE}</span>
+        {hasUnplacedPoints && (
+          <span><i className="monitor-legend-line monitor-legend-line--unplaced" /> Время приблизительное — измерение без достоверного времени из памяти контроллера</span>
+        )}
         <span><i className="monitor-legend-line monitor-legend-line--estimated" /> Пунктир: время оценочное — восстановлено после отсутствия UTC</span>
         <span>Линия лишь соединяет соседние измерения и не означает наличие данных между ними</span>
         {enabledRules.length > 0 && <span><i className="monitor-legend-limit" /> Пороги включённых правил</span>}
@@ -434,7 +446,7 @@ function UnplacedMeasurements({ points }: { points: UnplacedTemperaturePoint[] }
         <strong>Без достоверного времени</strong>
         <span>{points.length}</span>
       </div>
-      <p>Сохранены устройством, но не включены в график и статистику температуры.</p>
+      <p>Измерения без достоверного времени, накопленные контроллером в памяти. На графике размещены приблизительно (фиолетовым), в статистику не входят.</p>
       {points.length === 0 ? (
         <div className="monitor-unplaced-empty">Таких точек нет.</div>
       ) : (
@@ -718,6 +730,15 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     });
   }, [selectedId]);
 
+  const placedUnplacedPoints = useMemo(
+    () => placeUnplacedPoints(history.points, unplacedPoints),
+    [history.points, unplacedPoints],
+  );
+  const chartPoints = useMemo(
+    () => [...history.points, ...placedUnplacedPoints],
+    [history.points, placedUnplacedPoints],
+  );
+
   const selectedDevice = devices.find((device) => device.id === selectedId);
   const role = myProfile?.role ?? "mechanic";
   const canManageSettings = role === "owner" || role === "admin" || role === "manager";
@@ -821,7 +842,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
             ) : (
               <>
                 <TemperatureChart
-                  points={history.points}
+                  points={chartPoints}
                   period={period}
                   rules={rules}
                 />

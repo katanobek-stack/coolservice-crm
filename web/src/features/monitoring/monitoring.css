@@ -331,9 +331,11 @@
 .monitor-chart-line { fill: none; stroke: #2563eb; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
 .monitor-chart-line--delayed { stroke: #ea580c; }
 .monitor-chart-line--estimated { stroke-dasharray: 8 6; }
+.monitor-chart-line--unplaced { stroke: #7c3aed; }
 .monitor-chart-point { fill: #fff; stroke: #2563eb; stroke-width: 2.5; }
 .monitor-chart-point--delayed { stroke: #ea580c; fill: #fff7ed; }
 .monitor-chart-point--estimated { stroke-dasharray: 3 2; }
+.monitor-chart-point--unplaced { stroke: #7c3aed; fill: #f5f3ff; }
 .monitor-chart-point { cursor: pointer; }
 .monitor-chart-point:focus { outline: none; stroke: #0f172a; stroke-width: 4; }
 .monitor-chart-limit { stroke: #dc2626; stroke-width: 2; stroke-dasharray: 8 5; }
@@ -368,6 +370,7 @@
 .monitor-legend-line { width: 18px; height: 3px; border-radius: 2px; background: #2563eb; }
 .monitor-legend-line--delayed { background: #ea580c; }
 .monitor-legend-line--estimated { background: repeating-linear-gradient(to right, #2563eb 0 7px, transparent 7px 11px); }
+.monitor-legend-line--unplaced { background: #7c3aed; }
 .monitor-legend-limit { width: 18px; border-top: 2px dashed #dc2626; }
 .monitor-limit-warning {
   margin-bottom: 12px;
@@ -607,6 +610,7 @@
 .monitor-navigator-line { fill: none; stroke: #2563eb; stroke-width: 2; stroke-linecap: round; }
 .monitor-navigator-line--delayed { stroke: #ea580c; }
 .monitor-navigator-line--estimated { stroke-dasharray: 6 4; }
+.monitor-navigator-line--unplaced { stroke: #7c3aed; }
 .monitor-navigator-shade { fill: rgba(15, 23, 42, 0.40); pointer-events: none; }
 .monitor-navigator-window { fill: rgba(255, 255, 255, 0.06); stroke: #2563eb; stroke-width: 2; cursor: grab; touch-action: none; }
 .monitor-navigator-window:active { cursor: grabbing; }
