@@ -1,0 +1,4 @@
+const assert = require("node:assert/strict"); const { test } = require("node:test");
+const { planHourBatches, applyOnlyMissing } = require("../scripts/scoped-backfill-batches");
+test("resume batches only entries after a partial checkpoint and cap point writes", () => { const entries=Array.from({length:455},(_,i)=>({stableId:`p${i}`,pointCount:1,measuredAtMs:Date.parse("2026-09-15T01:00:00Z"),packetId:`${i}`})); const batches=planHourBatches(entries); assert.deepEqual(batches.map(b=>b.pointCount),[400,55]); });
+test("batch idempotency excludes existing stable ids before rollup calculation", () => { const candidates=[{stableId:"a"},{stableId:"b"}]; assert.deepEqual(applyOnlyMissing(new Set(["a"]),candidates),[{stableId:"b"}]); assert.deepEqual(applyOnlyMissing(new Set(["a","b"]),candidates),[]); });

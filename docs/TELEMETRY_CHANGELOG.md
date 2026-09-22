@@ -357,3 +357,19 @@ VPS/service/systemd/Mosquitto, MQTT-пароли, device keys и firmware.
 `vps/crm-mqtt-bridge/bridge.py` основан на реальном работающем bridge:
 сохраняет telemetry, добавляет status и миграцию SQLite без потери pending
 telemetry. Он является артефактом для ручного обновления, а не изменением VPS.
+## 2026-09-22 — пакетный scoped executor (подготовка, без production execute)
+
+**Причина.** Первый scoped execute `device-001` за 2026-09-15 был остановлен на
+совместимом checkpoint после 55 packet-групп: мелкие транзакции конкурировали за
+один hour-rollup и были слишком медленными.
+
+**Изменено.** Добавлен отдельный scoped-инструмент с dry-run по UTC-дню,
+канонизацией `default` в `temperature-1`, почасовыми batch-ами до 400 point
+документов. В одной транзакции создаются только отсутствующие stable IDs,
+пересчитывается один rollup и записывается checkpoint; максимум — 402 Firestore
+writes, меньше безопасного лимита 450. Повторный batch не меняет rollup, если
+все point IDs уже существуют. Ограничение запуска — не более 120 packet-групп
+в минуту. Добавлены unit-тесты разбивки batch и исключения существующих IDs.
+
+**Не выполнено.** Production execute, dry-run against production после этой
+правки, следующие UTC-дни, deploy, Rules/indexes, VPS, firmware и UI.
