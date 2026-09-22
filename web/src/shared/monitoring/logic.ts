@@ -3,8 +3,10 @@ import type {
   MonitoringControllerStatus,
   MonitoringPeriod,
   MonitoringTemperatureRule,
+  MonitoringTargetType,
   TemperaturePoint,
 } from "../types/monitoring";
+import type { Client } from "../types/client";
 
 export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
@@ -251,4 +253,23 @@ export function violatesTemperatureRule(
   return rule.direction === "above"
     ? temperatureC > rule.thresholdC
     : temperatureC < rule.thresholdC;
+}
+
+/** Human-readable "client · object" label for a monitoring target (device or alert event). */
+export function objectLabel(
+  target: { clientId?: string; targetType?: MonitoringTargetType; targetId?: string },
+  clients: Client[],
+): string {
+  if (!target.clientId || !target.targetType || !target.targetId) return "Объект не привязан";
+  const client = clients.find((item) => item.id === target.clientId);
+  if (!client) return `Клиент ${target.clientId} · объект ${target.targetId}`;
+  if (target.targetType === "vehicle") {
+    const vehicle = (client.vehicles ?? []).find((item) => item.id === target.targetId);
+    const vehicleName = vehicle
+      ? [vehicle.brand ?? vehicle.model, vehicle.plate].filter(Boolean).join(" · ")
+      : `автомобиль ${target.targetId}`;
+    return `${client.name} · ${vehicleName}`;
+  }
+  const chamber = (client.chambers ?? []).find((item) => item.id === target.targetId);
+  return `${client.name} · ${chamber?.notes?.trim() || `камера ${target.targetId}`}`;
 }

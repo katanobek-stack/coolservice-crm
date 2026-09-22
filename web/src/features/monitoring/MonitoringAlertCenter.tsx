@@ -5,6 +5,7 @@ import {
   listenMonitoringAlerts,
   markMonitoringAlertViewed,
 } from "../../shared/firebase/monitoring";
+import { objectLabel } from "../../shared/monitoring/logic";
 import type { MonitoringAlertEvent } from "../../shared/types/monitoring";
 
 function localDateTime(value: Date | null): string {
@@ -30,20 +31,6 @@ function stateLabel(event: MonitoringAlertEvent): string {
 
 function ruleCondition(event: MonitoringAlertEvent): string {
   return `${event.direction === "above" ? "выше" : "ниже"} ${event.thresholdC.toFixed(1)} °C`;
-}
-
-function objectLabel(event: MonitoringAlertEvent, clients: ReturnType<typeof useData>["clients"]): string {
-  if (!event.clientId || !event.targetType || !event.targetId) return "Объект не привязан";
-  const client = clients.find((item) => item.id === event.clientId);
-  if (!client) return `Клиент ${event.clientId} · объект ${event.targetId}`;
-  if (event.targetType === "vehicle") {
-    const vehicle = (client.vehicles ?? []).find((item) => item.id === event.targetId);
-    return `${client.name} · ${vehicle
-      ? [vehicle.brand ?? vehicle.model, vehicle.plate].filter(Boolean).join(" · ")
-      : `автомобиль ${event.targetId}`}`;
-  }
-  const chamber = (client.chambers ?? []).find((item) => item.id === event.targetId);
-  return `${client.name} · ${chamber?.notes?.trim() || `камера ${event.targetId}`}`;
 }
 
 export function MonitoringAlertCenter({ onOpenDevice }: {
