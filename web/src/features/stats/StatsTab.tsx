@@ -1,7 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
+import {
+  DEFAULT_OFFLINE_THRESHOLD_MINUTES,
+  listenMonitoringControllerStatuses,
+  listenMonitoringDevices,
+  listenMonitoringSettings,
+  listenMonitoringStates,
+} from "../../shared/firebase/monitoring";
+import {
+  controllerConnectionStatus,
+  monitoringStatus,
+} from "../../shared/monitoring/logic";
+import type {
+  MonitoringControllerStatus,
+  MonitoringDevice,
+  MonitoringDeviceState,
+} from "../../shared/types/monitoring";
 import {
   repairStatus,
   taskStatus,
@@ -38,6 +54,12 @@ interface EnrichedRepair extends Repair {
 
 const MONTH_NAMES      = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const MONTH_NAMES_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+const APPOINTMENT_TYPE_LABELS: Record<string, string> = {
+  diagnostics: "Диагностика",
+  repair: "Ремонт",
+  consultation: "Консультация",
+};
 
 function freonMonthLabel(mk: string): string {
   const [y, m] = mk.split("-");
@@ -711,7 +733,7 @@ function RepairCard({ clientName, description, date, cost, status, plate, isAdmi
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { clients, tasks, staff, freezers, finance: rawFinance, expenses } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance, expenses, appointments } = useData();
   const { myProfile, isOwner } = useAuth();
   const { canSeeDashboardFinancials } = usePermissions();
   const role           = myProfile?.role ?? "mechanic";
@@ -747,6 +769,61 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const doneToday         = doneRepairs.filter((r) => repairFinancialDay(r) === localDay).length;
   const activeTasks       = tasks.filter((t) => t.status !== "done").length;
+
+  // ── Monitoring overview (dashboard widget) ────────────────────────────
+  const [monDevices, setMonDevices] = useState<MonitoringDevice[]>([]);
+  const [monStates, setMonStates] = useState<Map<string, MonitoringDeviceState>>(new Map());
+  const [monControllerStatuses, setMonControllerStatuses] = useState<Map<string, MonitoringControllerStatus>>(new Map());
+  const [monThreshold, setMonThreshold] = useState(DEFAULT_OFFLINE_THRESHOLD_MINUTES);
+  const [monLoaded, setMonLoaded] = useState(false);
+  const [monNowMs, setMonNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const unsubscribeDevices = listenMonitoringDevices((next) => { setMonDevices(next); setMonLoaded(true); }, () => setMonLoaded(true));
+    const unsubscribeStates = listenMonitoringStates(setMonStates, () => undefined);
+    const unsubscribeStatuses = listenMonitoringControllerStatuses(setMonControllerStatuses, () => undefined);
+    const unsubscribeSettings = listenMonitoringSettings(setMonThreshold, () => undefined);
+    const timer = window.setInterval(() => setMonNowMs(Date.now()), 30_000);
+    return () => {
+      unsubscribeDevices();
+      unsubscribeStates();
+      unsubscribeStatuses();
+      unsubscribeSettings();
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const monStats = useMemo(() => {
+    let online = 0;
+    let attention = 0;
+    let alarms = 0;
+    const problems: Array<{ id: string; name: string; label: string }> = [];
+    monDevices.forEach((device) => {
+      const state = monStates.get(device.id);
+      alarms += Object.keys(state?.activeAlertIds ?? {}).length;
+      if (!device.enabled) return;
+      const reading = monitoringStatus(state, monNowMs, monThreshold).reading;
+      const connection = controllerConnectionStatus(monControllerStatuses.get(device.id), monNowMs, monThreshold);
+      if (connection === "online" && reading === "fresh") {
+        online += 1;
+      } else {
+        attention += 1;
+        problems.push({
+          id: device.id,
+          name: device.name,
+          label: connection === "offline" ? "нет связи" : reading === "stale" ? "данные устарели" : "нет данных",
+        });
+      }
+    });
+    return { total: monDevices.length, online, attention, alarms, problems: problems.slice(0, 3) };
+  }, [monDevices, monStates, monControllerStatuses, monThreshold, monNowMs]);
+
+  // ── Today's appointments ──────────────────────────────────────────────
+  const todayAppointments = useMemo(() =>
+    (appointments ?? [])
+      .filter((a) => a.date === localDay && a.status !== "closed")
+      .sort((a, b) => a.time.localeCompare(b.time)),
+  [appointments, localDay]);
 
   const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
 
@@ -1000,6 +1077,91 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           delta={`${inProgressRepairs.length} в ремонте`}
         />
       </div>
+
+      {/* Monitoring overview */}
+      {monLoaded && monStats.total > 0 && (
+        <Section
+          title="Оборудование"
+          icon="ti-device-desktop-analytics"
+          count={`${monStats.total} устройств`}
+          actions={
+            <button className="btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => onNavigate("monitoring")}>
+              Мониторинг
+            </button>
+          }
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 10, padding: "14px 20px" }}>
+            {([
+              { label: "Всего", value: monStats.total, color: "var(--text)" },
+              { label: "На связи", value: monStats.online, color: "#16a34a" },
+              { label: "Внимание", value: monStats.attention, color: monStats.attention > 0 ? "#d97706" : "var(--text3)" },
+              { label: "Аварии", value: monStats.alarms, color: monStats.alarms > 0 ? "#dc2626" : "var(--text3)" },
+            ] as const).map((item) => (
+              <div key={item.label} style={{ background: "var(--bg3)", borderRadius: 10, padding: "10px 8px", border: "1px solid var(--border)", textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: item.color, fontFamily: "JetBrains Mono, monospace" }}>{item.value}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+          {monStats.problems.length > 0 && (
+            <div style={{ padding: "0 20px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {monStats.problems.map((problem) => (
+                <button
+                  key={problem.id}
+                  type="button"
+                  onClick={() => onNavigate("monitoring")}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{problem.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#d97706", flexShrink: 0 }}>{problem.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* Today appointments */}
+      <Section
+        title="Сегодня в сервисе"
+        icon="ti-calendar"
+        count={todayAppointments.length > 0 ? `${todayAppointments.length} записей` : undefined}
+        actions={
+          <button className="btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => onNavigate("calendar")}>
+            Календарь
+          </button>
+        }
+      >
+        {todayAppointments.length === 0 ? (
+          <div style={{ padding: "20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+            Записей на сегодня нет
+          </div>
+        ) : (
+          <div>
+            {todayAppointments.map((a) => (
+              <div key={a.id} style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--accent2)", flexShrink: 0 }}>{a.time}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.clientName}
+                  </div>
+                  {(a.carPlate || a.note) && (
+                    <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {a.carPlate && <span className="mono">{a.carPlate}</span>}
+                      {a.carPlate && a.note ? " · " : ""}
+                      {a.note}
+                    </div>
+                  )}
+                </div>
+                <span className="status-badge new">{APPOINTMENT_TYPE_LABELS[a.type] ?? a.type}</span>
+                {(a.assigneeNames ?? []).length > 0 && (
+                  <span style={{ fontSize: 11, color: "var(--text3)", flexShrink: 0 }}>{a.assigneeNames.join(", ")}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
 
       {/* Active repairs */}
       <Section
