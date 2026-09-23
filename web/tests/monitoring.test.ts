@@ -139,7 +139,7 @@ describe("monitoring history", () => {
     );
   });
 
-  test("keeps time quality through dedupe and only joins matching chart segments", () => {
+  test("keeps time quality through dedupe and joins runs styling transitions by the weaker endpoint", () => {
     const sameTime = new Date(NOW - 50_000);
     const points: TemperaturePoint[] = [
       { measuredAt: new Date(NOW - 70_000), temperatureC: -18, timeQuality: "exact" },
@@ -151,10 +151,10 @@ describe("monitoring history", () => {
     const deduped = sortAndDedupePoints(points);
     assert.deepEqual(deduped.map((point) => point.timeQuality), ["exact", "estimated", "exact", "exact"]);
     assert.equal(deduped[2].temperatureC, -17.7, "exact wins an equal measuredAt");
-    assert.deepEqual(temperatureChartSegments(deduped).map((segment) => segment.timeQuality), ["exact"]);
+    assert.deepEqual(temperatureChartSegments(deduped).map((segment) => segment.timeQuality), ["estimated", "estimated", "exact"]);
   });
 
-  test("keeps delayed delivery independent from time quality and does not join across either change", () => {
+  test("keeps delayed delivery independent from time quality and connects runs with the weaker endpoint style", () => {
     const sameTime = new Date(NOW - 60_000);
     const points: TemperaturePoint[] = [
       { measuredAt: new Date(NOW - 80_000), temperatureC: -18, timeQuality: "exact", deliveryQuality: "realtime" },
@@ -168,7 +168,7 @@ describe("monitoring history", () => {
     assert.equal(deduped[1].deliveryQuality, "delayed", "delayed wins an equal measuredAt");
     assert.deepEqual(
       temperatureChartSegments(deduped).map((segment) => `${segment.timeQuality}:${segment.deliveryQuality}`),
-      ["exact:delayed"],
+      ["exact:delayed", "exact:delayed", "estimated:delayed", "estimated:delayed"],
     );
   });
 

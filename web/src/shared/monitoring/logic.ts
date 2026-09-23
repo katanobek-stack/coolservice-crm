@@ -217,9 +217,10 @@ export interface TemperatureChartSegment {
 }
 
 /**
- * A line never crosses a change in device time quality or delivery quality,
- * except through approximately placed unplaced points: they bridge the gap
- * between timed neighbours so the chart stays continuous.
+ * Neighbouring samples always connect into one continuous line. A segment is
+ * styled by its "weaker" endpoint (unplaced over estimated over exact; delayed
+ * over realtime), so a transition between online and offline runs is drawn in
+ * the offline colour without breaking the chart.
  */
 export function temperatureChartSegments(points: TemperaturePoint[]): TemperatureChartSegment[] {
   const sorted = sortAndDedupePoints(points);
@@ -227,22 +228,20 @@ export function temperatureChartSegments(points: TemperaturePoint[]): Temperatur
   for (let index = 1; index < sorted.length; index += 1) {
     const from = sorted[index - 1];
     const to = sorted[index];
-    const bridgesUnplaced = from.timeQuality === "unplaced" || to.timeQuality === "unplaced";
-    if (
-      bridgesUnplaced
-      || from.timeQuality === to.timeQuality && from.deliveryQuality === to.deliveryQuality
-    ) {
-      segments.push({
-        timeQuality: bridgesUnplaced
-          ? "unplaced"
-          : from.timeQuality ?? "exact",
-        deliveryQuality: from.deliveryQuality === "delayed" || to.deliveryQuality === "delayed"
-          ? "delayed"
-          : "realtime",
-        from,
-        to,
-      });
-    }
+    const fromQuality = from.timeQuality ?? "exact";
+    const toQuality = to.timeQuality ?? "exact";
+    segments.push({
+      timeQuality: fromQuality === "unplaced" || toQuality === "unplaced"
+        ? "unplaced"
+        : fromQuality === "estimated" || toQuality === "estimated"
+          ? "estimated"
+          : "exact",
+      deliveryQuality: from.deliveryQuality === "delayed" || to.deliveryQuality === "delayed"
+        ? "delayed"
+        : "realtime",
+      from,
+      to,
+    });
   }
   return segments;
 }
