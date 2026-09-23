@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
@@ -301,8 +301,9 @@ const MECH_COLORS = [
   { bg: "rgba(6,182,212,0.15)",   color: "#0891b2", bar: "var(--cyan)"   },
 ];
 
-function MechanicRow({ name, monthlyCars, monthLabel, idx, crownColor }: {
+function MechanicRow({ name, monthlyCars, monthLabel, idx, closed, active, crownColor }: {
   name: string; monthlyCars: number; monthLabel: string; idx: number;
+  closed: number; active: number;
   crownColor?: string | null;
 }) {
   const c        = MECH_COLORS[idx % MECH_COLORS.length];
@@ -328,6 +329,12 @@ function MechanicRow({ name, monthlyCars, monthLabel, idx, crownColor }: {
           🔧 {monthlyCars} машин
         </div>
         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{monthLabel}</div>
+        {(closed > 0 || active > 0) && (
+          <div style={{ fontSize: 11, marginTop: 2 }}>
+            <span style={{ color: "#16a34a" }}>✓ {closed} закрыто</span>
+            {active > 0 && <span style={{ color: "#b45309" }}> · ● {active} в работе</span>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -530,7 +537,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
             💰 Доходы
           </div>
-          {clientRevList.length === 0 && rentalIncome === 0 ? (
+          {clientRevList.length === 0 && monthRental === 0 ? (
             <div style={{ fontSize: 12, color: "var(--text3)", padding: "8px 0" }}>Нет данных</div>
           ) : (
             <>
@@ -544,11 +551,11 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
                   </span>
                 </div>
               ))}
-              {rentalIncome > 0 && (
+              {monthRental > 0 && (
                 <div style={rowStyle}>
                   <span style={{ color: "var(--text)", fontSize: 12.5, flex: 1, marginRight: 8 }}>🏠 Аренда камер</span>
                   <span style={{ color: "#16a34a", fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
-                    {fmtMoney(rentalIncome)}
+                    {fmtMoney(monthRental)}
                   </span>
                 </div>
               )}
@@ -736,7 +743,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   const inProgressRepairs = allRepairs.filter((r) => repairStatus(r) === "in_progress");
   const doneRepairs       = allRepairs.filter((r) => repairStatus(r) === "done");
-  const doneToday         = doneRepairs.filter((r) => repairFinancialDay(r) === now.toISOString().slice(0,10)).length;
+  // Local calendar day — toISOString() would give UTC and shift "today" for UTC+10.
+  const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const doneToday         = doneRepairs.filter((r) => repairFinancialDay(r) === localDay).length;
   const activeTasks       = tasks.filter((t) => t.status !== "done").length;
 
   const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
@@ -803,9 +812,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
   // ── Top clients ───────────────────────────────────────────────────────────
   const topClients = useMemo(() => {
-    const map = new Map<string, { name: string; rev: number; cnt: number }>();
+    const map = new Map<string, { clientId: string; name: string; rev: number; cnt: number }>();
     doneRepairs.forEach((r) => {
-      const prev = map.get(r.clientId) ?? { name: r.clientName, rev: 0, cnt: 0 };
+      const prev = map.get(r.clientId) ?? { clientId: r.clientId, name: r.clientName, rev: 0, cnt: 0 };
       map.set(r.clientId, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
     });
     return Array.from(map.values()).filter((c) => c.rev > 0).sort((a,b) => b.rev-a.rev).slice(0,5);
@@ -874,7 +883,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const mechRating = useMemo(() => {
     const mechRevenueMap = new Map<string, number>();
     const closedThisMonthAll = allRepairs.filter(
-      (r) => repairFinancialMonth(r) === curMonthKey,
+      (r) => repairStatus(r) === "done" && repairFinancialMonth(r) === curMonthKey,
     );
     closedThisMonthAll.forEach((r) => {
         const cost = parseFloat(String(r.cost ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
@@ -1073,6 +1082,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                 monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
                 monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
                 idx={i}
+                closed={m.closed}
+                active={m.active}
                 crownColor={mechRating.find((e) => e.uid === m.uid)?.crownColor}
               />
             ))}
@@ -1117,7 +1128,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           <div style={{ padding: "16px 20px" }}>
             {(topClients || []).map((c) => (
               <BarRow
-                key={c.name}
+                key={c.clientId}
                 label={c.name}
                 value={c.rev}
                 maxValue={topClients[0].rev}
