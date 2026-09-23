@@ -152,6 +152,35 @@ function ActiveAlertBadge({ count }: { count: number }) {
   return <span className="monitor-badge monitor-badge--alert-active">Активных аварий: {count}</span>;
 }
 
+type MonitoringFilter = "all" | "online" | "attention" | "alarms";
+
+function MiniTemperatureSparkline({ points, status }: { points: TemperaturePoint[]; status: ConnectionStatus }) {
+  const values = points.slice(-24).map((point) => point.temperatureC);
+  const min = values.length > 0 ? Math.min(...values) : 0;
+  const max = values.length > 0 ? Math.max(...values) : 1;
+  const spread = Math.max(max - min, 1);
+  const chartPoints = values.map((value, index) => {
+    const x = values.length <= 1 ? 90 : (index / (values.length - 1)) * 180;
+    const y = 26 - ((value - min) / spread) * 20;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const stroke = status === "offline" ? "#dc2626" : status === "online" ? "#2563eb" : "#d97706";
+  return <svg className="monitor-mini-chart" viewBox="0 0 180 32" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}><path d="M 0 30 L 180 30" className="monitor-mini-chart-baseline" />{chartPoints.length > 0 && <polyline points={chartPoints.join(" ")} fill="none" stroke={stroke} />}</svg>;
+}
+
+function MonitoringSummary({ total, online, attention, alarms, filter, onFilter }: {
+  total: number; online: number; attention: number; alarms: number;
+  filter: MonitoringFilter; onFilter: (value: MonitoringFilter) => void;
+}) {
+  const items: Array<{ id: MonitoringFilter; label: string; value: number; icon: string; tone: string }> = [
+    { id: "all", label: "Всего устройств", value: total, icon: "ti-device-desktop", tone: "neutral" },
+    { id: "online", label: "На связи", value: online, icon: "ti-wifi", tone: "success" },
+    { id: "attention", label: "Требуют внимания", value: attention, icon: "ti-alert-triangle", tone: "warning" },
+    { id: "alarms", label: "Активные аварии", value: alarms, icon: "ti-bell-ringing", tone: "danger" },
+  ];
+  return <div className="monitor-summary" aria-label="Сводка мониторинга">{items.map((item) => <button type="button" key={item.id} className={`monitor-summary-card monitor-summary-card--${item.tone} ${filter === item.id ? "is-active" : ""}`} onClick={() => onFilter(item.id)}><span className="monitor-summary-icon"><i className={`ti ${item.icon}`} /></span><span className="monitor-summary-copy"><span>{item.label}</span><strong>{item.value}</strong></span><i className="ti ti-chevron-right monitor-summary-arrow" /></button>)}</div>;
+}
+
 function periodLabel(period: MonitoringPeriod): string {
   if (period === "hour") return "1 час";
   if (period === "halfDay") return "12 часов";
@@ -650,6 +679,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesError, setRulesError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
+  const [search, setSearch] = useState("");
+  const [monitoringFilter, setMonitoringFilter] = useState<MonitoringFilter>("all");
+  const [previewHistory, setPreviewHistory] = useState<Map<string, TemperaturePoint[]>>(new Map());
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
@@ -693,6 +725,14 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
       unsubscribeSettings();
     };
   }, []);
+
+  useEffect(() => {
+    if (!devicesLoaded) return undefined;
+    const unsubscribe = devices.map((device) => listenDeviceHistory(device.id, "hour", (result) => {
+      setPreviewHistory((current) => new Map(current).set(device.id, result.points));
+    }, () => undefined));
+    return () => unsubscribe.forEach((stop) => stop());
+  }, [devices, devicesLoaded]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -754,6 +794,25 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const role = myProfile?.role ?? "mechanic";
   const canManageSettings = role === "owner" || role === "admin" || role === "manager";
   const loading = !devicesLoaded || !statesLoaded || !controllerStatusesLoaded;
+  const deviceStatuses = devices.map((device) => ({
+    device,
+    state: states.get(device.id),
+    controllerStatus: controllerStatuses.get(device.id),
+    status: monitoringStatus(states.get(device.id), nowMs, threshold),
+    activeAlertCount: Object.keys(states.get(device.id)?.activeAlertIds ?? {}).length,
+  }));
+  const onlineCount = deviceStatuses.filter((item) => item.status.connection === "online").length;
+  const attentionCount = deviceStatuses.filter((item) => item.status.connection !== "online" || item.status.reading !== "fresh").length;
+  const alarmCount = deviceStatuses.filter((item) => item.activeAlertCount > 0).length;
+  const filteredDeviceStatuses = deviceStatuses.filter((item) => {
+    const normalizedSearch = search.trim().toLocaleLowerCase("ru");
+    const searchable = `${item.device.name} ${objectLabel(item.device, clients)}`.toLocaleLowerCase("ru");
+    if (normalizedSearch && !searchable.includes(normalizedSearch)) return false;
+    if (monitoringFilter === "online" && item.status.connection !== "online") return false;
+    if (monitoringFilter === "attention" && item.status.connection === "online" && item.status.reading === "fresh") return false;
+    if (monitoringFilter === "alarms" && item.activeAlertCount === 0) return false;
+    return true;
+  });
 
   async function changeThreshold(value: number) {
     setThresholdSaving(true);
@@ -909,13 +968,18 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
           <span>На этом этапе реестр создаётся через защищённый Admin-процесс.</span>
         </div>
       ) : (
-        <div className="monitor-device-grid">
-          {devices.map((device) => {
-            const state = states.get(device.id);
-            const controllerStatus = controllerStatuses.get(device.id);
-            const status = monitoringStatus(state, nowMs, threshold);
+        <>
+          <MonitoringSummary total={devices.length} online={onlineCount} attention={attentionCount} alarms={alarmCount} filter={monitoringFilter} onFilter={setMonitoringFilter} />
+          <div className="monitor-filter-bar">
+            <label className="monitor-search"><i className="ti ti-search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск устройства или клиента" aria-label="Поиск устройства или клиента" /></label>
+            <button type="button" className={`monitor-filter-button ${monitoringFilter === "alarms" ? "is-active" : ""}`} onClick={() => setMonitoringFilter(monitoringFilter === "alarms" ? "all" : "alarms")}><i className="ti ti-filter" /> Только аварии</button>
+          </div>
+          {filteredDeviceStatuses.length === 0 ? (
+            <div className="monitor-empty monitor-empty--filtered"><i className="ti ti-filter-off" /><strong>Устройства не найдены</strong><span>Измените поиск или выбранный фильтр.</span></div>
+          ) : (
+          <div className="monitor-device-grid">
+          {filteredDeviceStatuses.map(({ device, state, controllerStatus, status, activeAlertCount }) => {
             const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
-            const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
             return (
               <button
                 type="button"
@@ -934,6 +998,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
                 <div className="monitor-card-temperature">
                   {formatTemperature(state?.temperatureC)}
                 </div>
+                <MiniTemperatureSparkline points={previewHistory.get(device.id) ?? []} status={connection} />
                 <div className="monitor-card-badges">
                   {device.isTest && <span className="monitor-test-badge">Тест</span>}
                   {!device.enabled && <span className="monitor-badge monitor-badge--disabled">Отключено</span>}
@@ -948,7 +1013,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               </button>
             );
           })}
-        </div>
+          </div>
+          )}
+        </>
       )}
     </div>
   );

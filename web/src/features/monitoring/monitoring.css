@@ -53,6 +53,23 @@
   font-weight: 700;
 }
 
+.monitor-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.monitor-summary-card { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg2); color: var(--text); text-align: left; cursor: pointer; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05); transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease; }
+.monitor-summary-card:hover, .monitor-summary-card.is-active { border-color: #93c5fd; box-shadow: 0 7px 20px rgba(37, 99, 235, 0.1); transform: translateY(-1px); }
+.monitor-summary-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 12px; background: #eff6ff; color: #2563eb; font-size: 21px; }
+.monitor-summary-card--success .monitor-summary-icon { background: #dcfce7; color: #15803d; }
+.monitor-summary-card--warning .monitor-summary-icon { background: #fef3c7; color: #d97706; }
+.monitor-summary-card--danger .monitor-summary-icon { background: #fee2e2; color: #dc2626; }
+.monitor-summary-copy { min-width: 0; display: grid; gap: 3px; }
+.monitor-summary-copy span { color: var(--text2); font-size: 12px; font-weight: 700; }
+.monitor-summary-copy strong { font: 800 25px/1 'JetBrains Mono', monospace; }
+.monitor-summary-arrow { margin-left: auto; color: var(--text3); font-size: 17px; }
+.monitor-filter-bar { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg2); }
+.monitor-search { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; padding: 0 10px; color: var(--text3); }
+.monitor-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 14px; }
+.monitor-filter-button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--border2); border-radius: 8px; background: var(--bg2); color: var(--text2); font-size: 13px; font-weight: 700; cursor: pointer; }
+.monitor-filter-button.is-active { border-color: #fca5a5; background: #fff1f2; color: #b91c1c; }
+
 .monitor-device-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -131,6 +148,10 @@
   letter-spacing: -2px;
   color: var(--text);
 }
+
+.monitor-mini-chart { width: 100%; height: 32px; overflow: visible; }
+.monitor-mini-chart polyline { stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.monitor-mini-chart-baseline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
 
 .monitor-card-badges,
 .monitor-detail-badges {
@@ -425,6 +446,7 @@
 .monitor-rule-form-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
 
 @media (max-width: 850px) {
+  .monitor-summary { grid-template-columns: 1fr 1fr; }
   .monitor-detail-kpis { grid-template-columns: 1fr 1fr; }
   .monitor-detail-kpi--temperature { grid-column: 1 / -1; }
   .monitor-rule-card { grid-template-columns: 1fr auto; }
@@ -439,6 +461,13 @@
   .monitor-page-intro h2,
   .monitor-detail-head h2 { font-size: 21px; }
   .monitor-threshold { width: 100%; justify-content: space-between; }
+  .monitor-summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .monitor-summary-card { padding: 11px; gap: 8px; }
+  .monitor-summary-icon { width: 34px; height: 34px; flex-basis: 34px; font-size: 17px; }
+  .monitor-summary-copy span { font-size: 10px; }
+  .monitor-summary-copy strong { font-size: 20px; }
+  .monitor-filter-bar { align-items: stretch; flex-direction: column; }
+  .monitor-search { min-height: 34px; }
   .monitor-device-grid { grid-template-columns: 1fr; gap: 11px; }
   .monitor-device-card { padding: 16px; gap: 14px; }
   .monitor-card-temperature { font-size: 40px; }
