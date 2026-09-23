@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
@@ -25,6 +25,7 @@ import {
   resizeChartWindow,
   zoomChartWindow,
   placeUnplacedPoints,
+  objectLabel,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -73,6 +74,17 @@ function relativeTime(value: Date | null | undefined, nowMs: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} ч. назад`;
   return `${Math.floor(hours / 24)} дн. назад`;
+}
+
+function formatUptime(totalSeconds: number): string {
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days} дн. ${hours} ч`;
+  if (hours > 0) return `${hours} ч ${minutes} мин`;
+  if (minutes > 0) return `${minutes} мин ${seconds} сек`;
+  return `${seconds} сек`;
 }
 
 function ReadingBadge({ status }: { status: ReadingStatus }) {
@@ -127,6 +139,7 @@ function DiagnosticsPanel({ status, connection, nowMs }: {
         <div><span>GPRS</span><strong>{status.gprsConnected ? "Подключён" : "Нет подключения"}</strong></div>
         <div><span>MQTT</span><strong>{status.mqttConnected ? "Подключён" : "Нет подключения"}</strong></div>
         <div><span>Очередь точек</span><strong>{status.queueDepth}</strong></div>
+        <div><span>Время работы</span><strong>{formatUptime(status.uptimeSeconds)}</strong></div>
         <div><span>Последняя ошибка</span><strong>{failureLabel(status.lastFailureCode)}</strong></div>
         <div><span>Последний статус</span><strong>{relativeTime(status.reportedAt, nowMs)}</strong><small>{formatDateTime(status.reportedAt)}</small></div>
         <div><span>Получен сервером</span><strong>{formatDateTime(status.receivedAt)}</strong><small>ID: {status.statusId}</small></div>
@@ -175,12 +188,30 @@ function TemperatureChart({ points, period, rules }: {
   const [selectedPointMs, setSelectedPointMs] = useState<number | null>(null);
   const [zoom, setZoom] = useState<ChartWindow | null>(null);
   const [navigatorDrag, setNavigatorDrag] = useState<NavigatorDrag | null>(null);
+  const chartScrollRef = useRef<HTMLDivElement>(null);
   const [baseEndMs, setBaseEndMs] = useState(() => Date.now());
   useEffect(() => {
     setBaseEndMs(Date.now());
     setZoom(null);
     setSelectedPointMs(null);
   }, [period]);
+  useEffect(() => {
+    const element = chartScrollRef.current;
+    if (!element) return undefined;
+    // React attaches onWheel as a passive listener, so preventDefault there does
+    // not stop the page from scrolling while zooming; use a native listener.
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const end = baseEndMs;
+      const start = end - monitoringPeriodMs(period);
+      const rect = element.getBoundingClientRect();
+      const focusFraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const factor = event.deltaY < 0 ? 0.75 : 1.33;
+      setZoom((current) => zoomChartWindow(current ?? { start, end }, start, end, focusFraction, factor));
+    };
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, [baseEndMs, period]);
   const sorted = useMemo(
     () => [...points].sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime()),
     [points],
@@ -292,13 +323,8 @@ function TemperatureChart({ points, period, rules }: {
       {rendered.length < visiblePoints.length && (
         <div className="monitor-history-subtitle">На графике показано {rendered.length} из {visiblePoints.length} точек</div>
       )}
-      <button type="button" className="monitor-chart-reset" onClick={() => setZoom(null)} disabled={!zoom}>Сбросить масштаб</button>
-      <div className="monitor-chart-scroll" aria-label="График температуры" onWheel={(event) => {
-        event.preventDefault();
-        const rect = event.currentTarget.getBoundingClientRect();
-        const focusFraction = (event.clientX - rect.left) / rect.width;
-        setZoom(zoomChartWindow(visibleWindow, startMs, nowMs, focusFraction, event.deltaY < 0 ? 0.75 : 1.33));
-      }}>
+      {zoom && <button type="button" className="monitor-chart-reset" onClick={() => setZoom(null)}>Сбросить масштаб</button>}
+      <div className="monitor-chart-scroll" aria-label="График температуры" ref={chartScrollRef}>
         <svg className="monitor-chart" viewBox={`0 0 ${width} ${height}`} role="img">
           <title>Температура за {periodLabel(period)}</title>
           {yTicks.map((tick) => (
@@ -462,21 +488,6 @@ function UnplacedMeasurements({ points }: { points: UnplacedTemperaturePoint[] }
       )}
     </section>
   );
-}
-
-function objectLabel(device: MonitoringDevice, clients: ReturnType<typeof useData>["clients"]): string {
-  if (!device.clientId || !device.targetType || !device.targetId) return "Объект не привязан";
-  const client = clients.find((item) => item.id === device.clientId);
-  if (!client) return `Клиент ${device.clientId} · объект ${device.targetId}`;
-  if (device.targetType === "vehicle") {
-    const vehicle = (client.vehicles ?? []).find((item) => item.id === device.targetId);
-    const vehicleName = vehicle
-      ? [vehicle.brand ?? vehicle.model, vehicle.plate].filter(Boolean).join(" · ")
-      : `автомобиль ${device.targetId}`;
-    return `${client.name} · ${vehicleName}`;
-  }
-  const chamber = (client.chambers ?? []).find((item) => item.id === device.targetId);
-  return `${client.name} · ${chamber?.notes?.trim() || `камера ${device.targetId}`}`;
 }
 
 function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
@@ -841,6 +852,11 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               </div>
             ) : (
               <>
+                {history.limitReached && (
+                  <div className="monitor-limit-warning">
+                    Показана не вся история за период — достигнут лимит выборки. Выберите более короткий период.
+                  </div>
+                )}
                 <TemperatureChart
                   points={chartPoints}
                   period={period}
