@@ -34,7 +34,6 @@ import type {
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
 export const ALERT_EVENT_LIMIT = 200;
-export const HISTORY_PACKET_LIMIT = 1000;
 /** Overview starts only once dual-write points/rollups is authoritative. */
 export const MONITORING_OVERVIEW_CUTOVER_MS = Date.parse("2026-09-22T00:00:00.000Z");
 
@@ -350,39 +349,34 @@ export function listenDeviceHistory(
     }, onError);
   }
   const startedAt = Timestamp.fromMillis(nowMs - monitoringPeriodMs(period));
-  const packets = query(
-    collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
-    where("lastMeasuredAt", ">", startedAt),
-    orderBy("lastMeasuredAt", "desc"),
-    limit(HISTORY_PACKET_LIMIT),
+  // Timed points are written one document per measurement and retained for
+  // 35 days. Reading this projection avoids truncating a dense 12h/24h window
+  // at the old 1000-packet cap (which made the chart look incomplete).
+  const pointsQuery = query(
+    collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "points"),
+    where("measuredAt", ">", startedAt),
+    orderBy("measuredAt", "asc"),
   );
 
-  return onSnapshot(packets, (snapshot) => {
-    const points: TemperaturePoint[] = [];
-    snapshot.docs.forEach((packet) => {
-      const receivedAt = asDate(packet.data().receivedAt);
-      const measurements = packet.data().measurements;
-      if (!Array.isArray(measurements)) return;
-      measurements.forEach((measurement) => {
-        if (typeof measurement !== "object" || measurement === null) return;
-        if (!isChartTimeQuality(measurement.timeQuality)) return;
-        const measuredAt = asDate(measurement.measuredAt);
-        const temperatureC = measurement.temperatureC;
-        const timeQuality = measurement.timeQuality === "estimated" ? "estimated" : "exact";
-        const deliveryQuality = measurement.deliveryQuality === "delayed" ? "delayed" : "realtime";
-        if (
-          measuredAt
-          && typeof temperatureC === "number"
-          && Number.isFinite(temperatureC)
-        ) {
-          points.push({ measuredAt, temperatureC, timeQuality, deliveryQuality, receivedAt });
-        }
-      });
+  return onSnapshot(pointsQuery, (snapshot) => {
+    const points: TemperaturePoint[] = snapshot.docs.flatMap((point) => {
+      const data = point.data();
+      const measuredAt = asDate(data.measuredAt);
+      const temperatureC = data.temperatureC;
+      if (!measuredAt || typeof temperatureC !== "number" || !Number.isFinite(temperatureC)) return [];
+      if (!isChartTimeQuality(data.timeQuality)) return [];
+      return [{
+        measuredAt,
+        temperatureC,
+        timeQuality: data.timeQuality === "estimated" ? "estimated" : "exact",
+        deliveryQuality: data.deliveryQuality === "delayed" ? "delayed" : "realtime",
+        receivedAt: asDate(data.receivedAt) ?? undefined,
+      }];
     });
     onData({
       points: pointsInHistoryWindow(points, startedAt.toMillis(), nowMs),
       packetCount: snapshot.size,
-      limitReached: snapshot.size >= HISTORY_PACKET_LIMIT,
+      limitReached: false,
     });
   }, onError);
 }
