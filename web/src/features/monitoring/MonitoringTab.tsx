@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
@@ -155,17 +155,44 @@ function ActiveAlertBadge({ count }: { count: number }) {
 type MonitoringFilter = "all" | "online" | "attention" | "alarms";
 
 function MiniTemperatureSparkline({ points, status }: { points: TemperaturePoint[]; status: ConnectionStatus }) {
+  const gradientId = `monitor-spark-${useId().replace(/:/g, "")}`;
   const values = points.slice(-24).map((point) => point.temperatureC);
   const min = values.length > 0 ? Math.min(...values) : 0;
   const max = values.length > 0 ? Math.max(...values) : 1;
   const spread = Math.max(max - min, 1);
   const chartPoints = values.map((value, index) => {
     const x = values.length <= 1 ? 90 : (index / (values.length - 1)) * 180;
-    const y = 26 - ((value - min) / spread) * 20;
+    const y = 48 - ((value - min) / spread) * 34;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const stroke = status === "offline" ? "#dc2626" : status === "online" ? "#2563eb" : "#d97706";
-  return <svg className="monitor-mini-chart" viewBox="0 0 180 32" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}><path d="M 0 30 L 180 30" className="monitor-mini-chart-baseline" />{chartPoints.length > 0 && <polyline points={chartPoints.join(" ")} fill="none" stroke={stroke} />}</svg>;
+  const colors = status === "offline"
+    ? ["#fb7185", "#dc2626"]
+    : status === "online"
+      ? ["#22d3ee", "#2563eb"]
+      : ["#fbbf24", "#d97706"];
+  const line = chartPoints.join(" ");
+  const area = chartPoints.length > 0 ? `${line} 180,60 0,60` : "";
+  return (
+    <svg className="monitor-mini-chart" viewBox="0 0 180 64" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={colors[0]} />
+          <stop offset="100%" stopColor={colors[1]} />
+        </linearGradient>
+        <linearGradient id={`${gradientId}-fill`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={colors[1]} stopOpacity=".22" />
+          <stop offset="100%" stopColor={colors[1]} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="M 0 60 L 180 60" className="monitor-mini-chart-baseline" />
+      {area && <polygon points={area} fill={`url(#${gradientId}-fill)`} />}
+      {line && <>
+        <polyline points={line} fill="none" stroke={colors[1]} className="monitor-mini-chart-shadow" />
+        <polyline points={line} fill="none" stroke={`url(#${gradientId})`} className="monitor-mini-chart-line" />
+        <circle cx={chartPoints.at(-1)?.split(",")[0]} cy={chartPoints.at(-1)?.split(",")[1]} r="3.2" fill={colors[1]} className="monitor-mini-chart-dot" />
+      </>}
+    </svg>
+  );
 }
 
 function MonitoringSummary({ total, online, attention, alarms, filter, onFilter }: {
