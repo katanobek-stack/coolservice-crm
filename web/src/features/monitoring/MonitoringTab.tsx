@@ -105,6 +105,14 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   return <span className={`monitor-badge monitor-badge--connection-${status}`}>{labels[status]}</span>;
 }
 
+type TemperatureTone = "normal" | "warning" | "danger";
+
+function temperatureTone(reading: ReadingStatus, connection: ConnectionStatus): TemperatureTone {
+  if (connection === "offline" || reading === "missing") return "danger";
+  if (connection === "unknown" || reading === "stale") return "warning";
+  return "normal";
+}
+
 function registrationLabel(status: MonitoringControllerStatus): string {
   const labels: Record<MonitoringControllerStatus["registrationState"], string> = {
     home: "Домашняя сеть", roaming: "Роуминг", searching: "Поиск сети",
@@ -154,7 +162,7 @@ function ActiveAlertBadge({ count }: { count: number }) {
 
 type MonitoringFilter = "all" | "online" | "attention" | "alarms";
 
-function MiniTemperatureSparkline({ points, status }: { points: TemperaturePoint[]; status: ConnectionStatus }) {
+function MiniTemperatureSparkline({ points, tone }: { points: TemperaturePoint[]; tone: TemperatureTone }) {
   const gradientId = `monitor-spark-${useId().replace(/:/g, "")}`;
   const values = points.slice(-24).map((point) => point.temperatureC);
   const min = values.length > 0 ? Math.min(...values) : 0;
@@ -165,9 +173,9 @@ function MiniTemperatureSparkline({ points, status }: { points: TemperaturePoint
     const y = 48 - ((value - min) / spread) * 34;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const colors = status === "offline"
+  const colors = tone === "danger"
     ? ["#fb7185", "#dc2626"]
-    : status === "online"
+    : tone === "normal"
       ? ["#22d3ee", "#2563eb"]
       : ["#fbbf24", "#d97706"];
   const line = chartPoints.join(" ");
@@ -1007,6 +1015,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
           <div className="monitor-device-grid">
           {filteredDeviceStatuses.map(({ device, state, controllerStatus, status, activeAlertCount }) => {
             const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
+            const tone = temperatureTone(status.reading, connection);
             return (
               <button
                 type="button"
@@ -1022,20 +1031,19 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
                   </div>
                   <i className="ti ti-chevron-right monitor-card-arrow" />
                 </div>
-                <div className="monitor-card-temperature">
+                <div className={`monitor-card-temperature monitor-card-temperature--${tone}`}>
                   {formatTemperature(state?.temperatureC)}
                 </div>
-                <MiniTemperatureSparkline points={previewHistory.get(device.id) ?? []} status={connection} />
+                <MiniTemperatureSparkline points={previewHistory.get(device.id) ?? []} tone={tone} />
                 <div className="monitor-card-badges">
                   {device.isTest && <span className="monitor-test-badge">Тест</span>}
                   {!device.enabled && <span className="monitor-badge monitor-badge--disabled">Отключено</span>}
                   {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
-                  <ReadingBadge status={status.reading} />
-                  <ConnectionBadge status={connection} />
                 </div>
-                <div className="monitor-card-times">
-                  <div><span>Измерено</span><strong>{relativeTime(state?.measuredAt, nowMs)}</strong></div>
-                  <div><span>Статус связи</span><strong>{relativeTime(controllerStatus?.reportedAt, nowMs)}</strong></div>
+                <div className="monitor-card-meta">
+                  <div><span>Сеть</span><strong className={`monitor-card-meta-status monitor-card-meta-status--${connection}`}>{connection === "online" ? "На связи" : connection === "offline" ? "Нет связи" : "Нет статуса"}</strong></div>
+                  <div><span>Показание</span><strong>{status.reading === "fresh" ? "Актуально" : status.reading === "stale" ? "Устарело" : "Нет данных"}</strong></div>
+                  <div><span>Обновлено</span><strong>{relativeTime(state?.measuredAt, nowMs)}</strong></div>
                 </div>
               </button>
             );
