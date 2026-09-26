@@ -10,6 +10,7 @@ const MAX_DEVICE_KEY_LENGTH = 256;
 const MIN_DEVICE_KEY_LENGTH = 32;
 const MAX_LOGS_PER_HEARTBEAT = 40;
 const MAX_LOG_MESSAGE_LENGTH = 600;
+const COMMAND_CLAIM_TIMEOUT_MS = 2 * 60_000;
 
 export const SERVICE_CONTROLLER_COMMANDS = [
   "SERVICE PING",
@@ -19,6 +20,8 @@ export const SERVICE_CONTROLLER_COMMANDS = [
 
 export type ServiceControllerCommand = typeof SERVICE_CONTROLLER_COMMANDS[number];
 export type ServiceLogLevel = "ERROR" | "WARN" | "INFO";
+export type ServiceConnectionState = "online" | "offline";
+export type ServiceCommandResult = "ok" | "error";
 
 export interface ServiceHeartbeat {
   controllerId: string;
@@ -36,6 +39,29 @@ export interface ServiceHeartbeat {
   resetReason: string;
   uartConnected: boolean;
   logs: Array<{ id: string; level: ServiceLogLevel; message: string; reportedAt: Date }>;
+}
+
+export interface ServiceLogMessage {
+  controllerId: string;
+  logId: string;
+  reportedAt: Date;
+  level: ServiceLogLevel;
+  message: string;
+}
+
+export interface ServiceStatus {
+  controllerId: string;
+  statusId: string;
+  reportedAt: Date;
+  state: ServiceConnectionState;
+}
+
+export interface ServiceCommandResultMessage {
+  controllerId: string;
+  commandId: string;
+  reportedAt: Date;
+  result: ServiceCommandResult;
+  message: string;
 }
 
 class ValidationError extends Error {}
@@ -113,7 +139,8 @@ export function parseServiceHeartbeat(value: unknown): ServiceHeartbeat {
   if (typeof value.gprsConnected !== "boolean" || typeof value.uartConnected !== "boolean") {
     throw new ValidationError("connection field is invalid");
   }
-  if (!Array.isArray(value.logs) || value.logs.length > MAX_LOGS_PER_HEARTBEAT) throw new ValidationError("logs are invalid");
+  const rawLogs = value.logs === undefined ? [] : value.logs;
+  if (!Array.isArray(rawLogs) || rawLogs.length > MAX_LOGS_PER_HEARTBEAT) throw new ValidationError("logs are invalid");
   return {
     controllerId,
     heartbeatId,
@@ -129,7 +156,7 @@ export function parseServiceHeartbeat(value: unknown): ServiceHeartbeat {
     psramBytes: nonNegativeInteger(value.psramBytes, "psramBytes"),
     resetReason: stringField(value.resetReason, "resetReason", 120)!,
     uartConnected: value.uartConnected,
-    logs: value.logs.map((item, index) => parseLog(item, heartbeatId, index)),
+    logs: rawLogs.map((item, index) => parseLog(item, heartbeatId, index)),
   };
 }
 
@@ -137,10 +164,64 @@ export function isAllowedServiceControllerCommand(value: unknown): value is Serv
   return typeof value === "string" && (SERVICE_CONTROLLER_COMMANDS as readonly string[]).includes(value);
 }
 
+export function parseServiceLogMessage(value: unknown): ServiceLogMessage {
+  if (!isRecord(value)) throw new ValidationError("body must be an object");
+  allowedKeys(value, ["controllerId", "logId", "reportedAt", "level", "message"]);
+  const controllerId = stringField(value.controllerId, "controllerId", 64)!;
+  const logId = stringField(value.logId, "logId", 96)!;
+  if (!ID_PATTERN.test(controllerId) || !EVENT_ID_PATTERN.test(logId)) throw new ValidationError("controllerId or logId is invalid");
+  if (value.level !== "ERROR" && value.level !== "WARN" && value.level !== "INFO") throw new ValidationError("log.level is invalid");
+  return {
+    controllerId,
+    logId,
+    reportedAt: parseUtc(value.reportedAt, "reportedAt"),
+    level: value.level,
+    message: stringField(value.message, "message", MAX_LOG_MESSAGE_LENGTH)!,
+  };
+}
+
+export function parseServiceStatus(value: unknown): ServiceStatus {
+  if (!isRecord(value)) throw new ValidationError("body must be an object");
+  allowedKeys(value, ["controllerId", "statusId", "reportedAt", "state"]);
+  const controllerId = stringField(value.controllerId, "controllerId", 64)!;
+  const statusId = stringField(value.statusId, "statusId", 96)!;
+  if (!ID_PATTERN.test(controllerId) || !EVENT_ID_PATTERN.test(statusId)) throw new ValidationError("controllerId or statusId is invalid");
+  if (value.state !== "online" && value.state !== "offline") throw new ValidationError("state is invalid");
+  return { controllerId, statusId, reportedAt: parseUtc(value.reportedAt, "reportedAt"), state: value.state };
+}
+
+export function parseServiceCommandResult(value: unknown): ServiceCommandResultMessage {
+  if (!isRecord(value)) throw new ValidationError("body must be an object");
+  allowedKeys(value, ["controllerId", "commandId", "reportedAt", "result", "message"]);
+  const controllerId = stringField(value.controllerId, "controllerId", 64)!;
+  const commandId = stringField(value.commandId, "commandId", 96)!;
+  if (!ID_PATTERN.test(controllerId) || !EVENT_ID_PATTERN.test(commandId)) throw new ValidationError("controllerId or commandId is invalid");
+  if (value.result !== "ok" && value.result !== "error") throw new ValidationError("result is invalid");
+  return {
+    controllerId,
+    commandId,
+    reportedAt: parseUtc(value.reportedAt, "reportedAt"),
+    result: value.result,
+    message: stringField(value.message, "message", MAX_LOG_MESSAGE_LENGTH)!,
+  };
+}
+
 function readBearerToken(header: string | undefined): string | null {
   const match = /^Bearer ([^\s]+)$/.exec(header ?? "");
   if (!match || match[1].length < MIN_DEVICE_KEY_LENGTH || match[1].length > MAX_DEVICE_KEY_LENGTH) return null;
   return match[1];
+}
+
+async function authenticateServiceController(controllerId: string, deviceKey: string): Promise<boolean> {
+  const firestore = getFirestore();
+  const [controller, credential] = await firestore.getAll(
+    firestore.doc(`serviceControllers/${controllerId}`),
+    firestore.doc(`monitoringDeviceCredentials/${controllerId}`),
+  );
+  return controller.exists
+    && controller.data()?.enabled === true
+    && credential.exists
+    && verifyDeviceKey(controllerId, deviceKey, credential.data()!);
 }
 
 async function assertManager(uid: string, tokenRole: unknown): Promise<void> {
@@ -206,6 +287,175 @@ export const ingestServiceControllerHeartbeat = onRequest(
       if (error instanceof HttpsError && error.code === "not-found") { response.status(404).json({ error: "controller_not_registered" }); return; }
       response.status(500).json({ error: "heartbeat_storage_failed" });
     }
+  },
+);
+
+/**
+ * MQTT bridge endpoint for service/{controllerId}/log. It is intentionally
+ * separate from heartbeat so a burst of log entries cannot delay a heartbeat.
+ */
+export const ingestServiceControllerLog = onRequest(
+  { region: REGION, cors: false, invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.status(405).json({ error: "method_not_allowed" }); return; }
+    if (!request.is("application/json")) { response.status(415).json({ error: "application_json_required" }); return; }
+    const deviceKey = readBearerToken(request.get("authorization"));
+    let log: ServiceLogMessage;
+    try { log = parseServiceLogMessage(request.body); } catch { response.status(400).json({ error: "invalid_log" }); return; }
+    if (!deviceKey || !await authenticateServiceController(log.controllerId, deviceKey)) {
+      response.status(401).json({ error: "invalid_device_credentials" }); return;
+    }
+    const firestore = getFirestore();
+    const entryRef = firestore.doc(`serviceControllerLogs/${log.controllerId}/entries/${log.logId}`);
+    const receivedAt = Timestamp.now();
+    const outcome = await firestore.runTransaction(async (transaction) => {
+      if ((await transaction.get(entryRef)).exists) return "duplicate" as const;
+      transaction.set(entryRef, {
+        ...log, reportedAt: Timestamp.fromDate(log.reportedAt), receivedAt,
+      });
+      return "stored" as const;
+    });
+    response.status(outcome === "stored" ? 202 : 200).json({ logId: log.logId, outcome });
+  },
+);
+
+/** MQTT bridge endpoint for retained service/{controllerId}/status, including LWT offline. */
+export const ingestServiceControllerStatus = onRequest(
+  { region: REGION, cors: false, invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.status(405).json({ error: "method_not_allowed" }); return; }
+    if (!request.is("application/json")) { response.status(415).json({ error: "application_json_required" }); return; }
+    const deviceKey = readBearerToken(request.get("authorization"));
+    let status: ServiceStatus;
+    try { status = parseServiceStatus(request.body); } catch { response.status(400).json({ error: "invalid_status" }); return; }
+    if (!deviceKey || !await authenticateServiceController(status.controllerId, deviceKey)) {
+      response.status(401).json({ error: "invalid_device_credentials" }); return;
+    }
+    const firestore = getFirestore();
+    const controllerRef = firestore.doc(`serviceControllers/${status.controllerId}`);
+    const eventRef = controllerRef.collection("statuses").doc(status.statusId);
+    const receivedAt = Timestamp.now();
+    const outcome = await firestore.runTransaction(async (transaction) => {
+      const [controller, existing] = await Promise.all([transaction.get(controllerRef), transaction.get(eventRef)]);
+      if (existing.exists) return "duplicate" as const;
+      transaction.set(eventRef, {
+        ...status, reportedAt: Timestamp.fromDate(status.reportedAt), receivedAt,
+      });
+      const lastReported = controller.data()?.lastStatusReportedAt;
+      const isNewest = !(lastReported instanceof Timestamp) || status.reportedAt.getTime() >= lastReported.toMillis();
+      if (isNewest) {
+        transaction.set(controllerRef, {
+          connectionState: status.state,
+          lastStatusAt: receivedAt,
+          lastStatusReportedAt: Timestamp.fromDate(status.reportedAt),
+          updatedAt: receivedAt,
+        }, { merge: true });
+      }
+      return "stored" as const;
+    });
+    response.status(outcome === "stored" ? 202 : 200).json({ statusId: status.statusId, outcome });
+  },
+);
+
+/** MQTT bridge endpoint for service/{controllerId}/command/result. */
+export const ingestServiceControllerCommandResult = onRequest(
+  { region: REGION, cors: false, invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.status(405).json({ error: "method_not_allowed" }); return; }
+    if (!request.is("application/json")) { response.status(415).json({ error: "application_json_required" }); return; }
+    const deviceKey = readBearerToken(request.get("authorization"));
+    let result: ServiceCommandResultMessage;
+    try { result = parseServiceCommandResult(request.body); } catch { response.status(400).json({ error: "invalid_command_result" }); return; }
+    if (!deviceKey || !await authenticateServiceController(result.controllerId, deviceKey)) {
+      response.status(401).json({ error: "invalid_device_credentials" }); return;
+    }
+    const firestore = getFirestore();
+    const commandRef = firestore.doc(`serviceControllerCommands/${result.controllerId}/commands/${result.commandId}`);
+    const resultRef = firestore.doc(`serviceControllerCommandResults/${result.controllerId}/results/${result.commandId}`);
+    const receivedAt = Timestamp.now();
+    const outcome = await firestore.runTransaction(async (transaction) => {
+      const [command, existing] = await Promise.all([transaction.get(commandRef), transaction.get(resultRef)]);
+      if (!command.exists || !isAllowedServiceControllerCommand(command.data()?.command)) {
+        throw new HttpsError("not-found", "Command is not registered");
+      }
+      if (existing.exists) return "duplicate" as const;
+      transaction.set(resultRef, {
+        ...result, reportedAt: Timestamp.fromDate(result.reportedAt), receivedAt,
+      });
+      transaction.set(commandRef, {
+        status: result.result === "ok" ? "completed" : "failed",
+        result: result.result,
+        resultMessage: result.message,
+        resultReportedAt: Timestamp.fromDate(result.reportedAt),
+        completedAt: receivedAt,
+      }, { merge: true });
+      return "stored" as const;
+    });
+    response.status(outcome === "stored" ? 202 : 200).json({ commandId: result.commandId, outcome });
+  },
+);
+
+/**
+ * Bridge-only pull endpoint. A claim expires, so bridge restarts can result in
+ * an at-least-once MQTT publish; controller firmware must deduplicate commandId.
+ */
+export const claimServiceControllerCommand = onRequest(
+  { region: REGION, cors: false, invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.status(405).json({ error: "method_not_allowed" }); return; }
+    if (!request.is("application/json") || !isRecord(request.body) || !ID_PATTERN.test(String(request.body.controllerId ?? ""))) {
+      response.status(400).json({ error: "invalid_controller" }); return;
+    }
+    const controllerId = request.body.controllerId as string;
+    const deviceKey = readBearerToken(request.get("authorization"));
+    if (!deviceKey || !await authenticateServiceController(controllerId, deviceKey)) {
+      response.status(401).json({ error: "invalid_device_credentials" }); return;
+    }
+    const firestore = getFirestore();
+    const commands = firestore.collection(`serviceControllerCommands/${controllerId}/commands`);
+    const now = Timestamp.now();
+    const claimBefore = now.toMillis() - COMMAND_CLAIM_TIMEOUT_MS;
+    const claimed = await firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(commands.where("status", "in", ["queued", "claimed"]).limit(25));
+      const next = snapshot.docs
+        .filter((doc) => isAllowedServiceControllerCommand(doc.data().command))
+        .filter((doc) => doc.data().status === "queued" || (doc.data().claimedAt instanceof Timestamp && doc.data().claimedAt.toMillis() <= claimBefore))
+        .sort((left, right) => (left.data().requestedAt?.toMillis?.() ?? 0) - (right.data().requestedAt?.toMillis?.() ?? 0))[0];
+      if (!next) return null;
+      transaction.set(next.ref, { status: "claimed", claimedAt: now }, { merge: true });
+      return { commandId: next.id, command: next.data().command as ServiceControllerCommand, requestedAt: next.data().requestedAt?.toDate?.()?.toISOString?.() ?? null };
+    });
+    if (!claimed) { response.status(204).end(); return; }
+    response.status(200).json({ controllerId, ...claimed });
+  },
+);
+
+/** Bridge-only acknowledgement after Paho accepted the QoS 1 publish locally. */
+export const markServiceControllerCommandDispatched = onRequest(
+  { region: REGION, cors: false, invoker: "public", timeoutSeconds: 30, memory: "256MiB" },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") { response.status(405).json({ error: "method_not_allowed" }); return; }
+    if (!request.is("application/json") || !isRecord(request.body)) { response.status(400).json({ error: "invalid_command" }); return; }
+    const controllerId = typeof request.body.controllerId === "string" ? request.body.controllerId : "";
+    const commandId = typeof request.body.commandId === "string" ? request.body.commandId : "";
+    const deviceKey = readBearerToken(request.get("authorization"));
+    if (!ID_PATTERN.test(controllerId) || !EVENT_ID_PATTERN.test(commandId) || !deviceKey || !await authenticateServiceController(controllerId, deviceKey)) {
+      response.status(401).json({ error: "invalid_device_credentials" }); return;
+    }
+    const commandRef = getFirestore().doc(`serviceControllerCommands/${controllerId}/commands/${commandId}`);
+    const command = await commandRef.get();
+    if (!command.exists || !isAllowedServiceControllerCommand(command.data()?.command)) {
+      response.status(404).json({ error: "command_not_registered" }); return;
+    }
+    if (command.data()?.status !== "completed" && command.data()?.status !== "failed") {
+      await commandRef.set({ status: "dispatched", dispatchedAt: Timestamp.now() }, { merge: true });
+    }
+    response.status(202).json({ commandId, outcome: "dispatched" });
   },
 );
 

@@ -46,7 +46,7 @@ function ControllerList({ controllers, selectedId, nowMs, onSelect }: {
 }) {
   if (controllers.length === 0) return <div className="service-monitor-empty">Контроллеры ещё не зарегистрированы. Реестр создаётся доверенным администратором.</div>;
   return <div className="service-controller-list">{controllers.map((controller) => {
-    const online = isServiceControllerOnline(controller.enabled, controller.lastHeartbeatAt, nowMs);
+    const online = isServiceControllerOnline(controller.enabled, controller.lastHeartbeatAt, nowMs, controller.connectionState, controller.lastStatusAt);
     return <button key={controller.id} type="button" className={`service-controller-card ${selectedId === controller.id ? "is-selected" : ""}`} onClick={() => onSelect(controller.id)}>
       <div className="service-controller-card-head"><span className={`service-status-dot ${online ? "is-online" : "is-offline"}`} /><strong>{controller.name}</strong><span className={`service-status ${online ? "is-online" : "is-offline"}`}>{online ? "Онлайн" : "Оффлайн"}</span></div>
       <span>{controller.objectName}</span>
@@ -60,7 +60,7 @@ function ControllerList({ controllers, selectedId, nowMs, onSelect }: {
 function ControllerDetails({ controller, nowMs, onCommand, canCommand, commandBusy, commandMessage }: {
   controller: ServiceController; nowMs: number; onCommand: (command: ServiceControllerCommand) => void; canCommand: boolean; commandBusy: boolean; commandMessage: string;
 }) {
-  const online = isServiceControllerOnline(controller.enabled, controller.lastHeartbeatAt, nowMs);
+  const online = isServiceControllerOnline(controller.enabled, controller.lastHeartbeatAt, nowMs, controller.connectionState, controller.lastStatusAt);
   const facts = [
     ["Версия прошивки", controller.firmwareVersion ?? "Нет данных", "ti ti-code"],
     ["Uptime", formatUptime(controller.uptimeSeconds), "ti ti-clock-hour-4"],
@@ -69,6 +69,7 @@ function ControllerDetails({ controller, nowMs, onCommand, canCommand, commandBu
     ["PSRAM", formatBytes(controller.psramBytes), "ti ti-memory"],
     ["Последняя перезагрузка", controller.resetReason ?? "Нет данных", "ti ti-refresh-alert"],
     ["Последний heartbeat", localDateTime(controller.lastHeartbeatAt), "ti ti-heartbeat"],
+    ["Последний MQTT-статус", localDateTime(controller.lastStatusAt), "ti ti-broadcast"],
     ["UART-связь", controller.uartConnected === null ? "Нет данных" : controller.uartConnected ? "Подключена" : "Нет связи", "ti ti-plug-connected"],
   ];
   return <>

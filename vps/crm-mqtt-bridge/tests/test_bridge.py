@@ -17,6 +17,12 @@ def load_bridge(data_dir: Path):
         "MQTT_USERNAME": "test", "MQTT_PASSWORD": "test", "MQTT_TOPIC": "coolmonitor/devices/+/telemetry",
         "CRM_URL": "https://telemetry.example.test", "CRM_STATUS_URL": "https://status.example.test",
         "CRM_DEVICE_ID": "device-001", "CRM_DEVICE_KEY": "test-key",
+        "CRM_SERVICE_HEARTBEAT_URL": "https://service.example.test/heartbeat",
+        "CRM_SERVICE_LOG_URL": "https://service.example.test/log",
+        "CRM_SERVICE_STATUS_URL": "https://service.example.test/status",
+        "CRM_SERVICE_COMMAND_RESULT_URL": "https://service.example.test/command-result",
+        "CRM_SERVICE_COMMAND_CLAIM_URL": "https://service.example.test/command-claim",
+        "CRM_SERVICE_COMMAND_DISPATCH_URL": "https://service.example.test/command-dispatch",
     })
     sys.modules.pop("bridge", None)
     return importlib.import_module("bridge")
@@ -99,6 +105,39 @@ class BridgeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bridge.status_body(invalid, "coolmonitor/devices/device-001/status")
 
+    def test_service_topics_validate_controller_and_preserve_stable_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            heartbeat_id, heartbeat = bridge.service_heartbeat_body({
+                "controllerId": "device-001", "heartbeatId": "boot-a:heartbeat-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "ip": None, "simSignal": 21,
+                "modemState": "ready", "gprsConnected": True, "firmwareVersion": "1.0.0",
+                "uptimeSeconds": 60, "freeHeapBytes": 1, "flashBytes": 2, "psramBytes": 0,
+                "resetReason": "power_on", "uartConnected": True,
+            }, "service/device-001/heartbeat")
+            self.assertEqual(heartbeat_id, "boot-a:heartbeat-1")
+            self.assertEqual(json.loads(heartbeat)["controllerId"], "device-001")
+            log_id, _ = bridge.service_log_body({
+                "controllerId": "device-001", "logId": "boot-a:log-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "level": "INFO", "message": "TARGET << ready",
+            }, "service/device-001/log")
+            self.assertEqual(log_id, "boot-a:log-1")
+            status_id, _ = bridge.service_status_body({
+                "controllerId": "device-001", "statusId": "boot-a:offline",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "state": "offline",
+            }, "service/device-001/status")
+            self.assertEqual(status_id, "boot-a:offline")
+            result_id, _ = bridge.service_command_result_body({
+                "controllerId": "device-001", "commandId": "command-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "result": "ok", "message": "pong",
+            }, "service/device-001/command/result")
+            self.assertEqual(result_id, "command-1")
+            with self.assertRaises(ValueError):
+                bridge.service_log_body({
+                    "controllerId": "device-002", "logId": "boot-a:log-1",
+                    "reportedAt": "2026-09-17T01:23:45.000Z", "level": "INFO", "message": "x",
+                }, "service/device-001/log")
+
     def test_legacy_queue_migration_keeps_pending_telemetry(self):
         with tempfile.TemporaryDirectory() as directory:
             data_dir = Path(directory)
@@ -117,7 +156,8 @@ class BridgeTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual(row, ("telemetry", "legacy-packet", 2, "pending", None))
             bridge.enqueue("status", "legacy-packet", "{}")
-            self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 2)
+            bridge.enqueue("service_log", "legacy-log", "{}")
+            self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 3)
 
     def test_restart_returns_inflight_delivery_to_pending(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -36,6 +36,8 @@ function mapController(id: string, data: DocumentData): ServiceController {
     enabled: data.enabled === true,
     lastHeartbeatAt: asDate(data.lastHeartbeatAt),
     lastReportedAt: asDate(data.lastReportedAt),
+    connectionState: data.connectionState === "online" || data.connectionState === "offline" ? data.connectionState : null,
+    lastStatusAt: asDate(data.lastStatusAt),
     ip: asString(data.ip),
     simSignal: Number.isInteger(data.simSignal) && data.simSignal >= 0 && data.simSignal <= 31 ? data.simSignal : null,
     modemState: asString(data.modemState, "Нет данных")!,

@@ -1,5 +1,6 @@
 export type ServiceLogLevel = "ERROR" | "WARN" | "INFO";
 export type ServiceControllerCommand = "SERVICE PING" | "SERVICE STATUS" | "SERVICE INFO";
+export type ServiceConnectionState = "online" | "offline" | null;
 
 export interface ServiceController {
   id: string;
@@ -9,6 +10,8 @@ export interface ServiceController {
   enabled: boolean;
   lastHeartbeatAt: Date | null;
   lastReportedAt: Date | null;
+  connectionState: ServiceConnectionState;
+  lastStatusAt: Date | null;
   ip: string | null;
   simSignal: number | null;
   modemState: string;

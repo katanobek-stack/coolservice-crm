@@ -1,7 +1,7 @@
 # Обновление реального crm-mqtt-bridge на VPS
 
 `bridge.py` основан на работающем bridge. Он сохраняет его telemetry contract,
-current systemd service и environment names, добавляя только status topic и
+current systemd service и environment names, добавляя status topic и
 `CRM_STATUS_URL`.
 
 - telemetry: `coolmonitor/devices/+/telemetry` → `CRM_URL`;
@@ -12,6 +12,12 @@ MQTT остаётся обычным TCP на текущем `MQTT_PORT` (1883),
 SQLite. Ключ берётся только из существующего `CRM_DEVICE_KEY` и не попадает в
 логи. Очередь мигрирует атомарно: старые `pending(packet_id, …)` и `rejected`
 копируются как `telemetry` в таблицы с ключом `(message_type, message_id)`.
+
+Сервисный монитор использует тот же MQTT client и SQLite queue, а не отдельный
+broker или service. Его topics и обязательные URL описаны в
+docs/SERVICE_MONITOR_MQTT.md. Пока все CRM_SERVICE_*_URL не добавлены в
+существующий env-файл, bridge безопасно оставляет service subscription
+выключенной и не влияет на telemetry/status.
 
 ## Обновление
 

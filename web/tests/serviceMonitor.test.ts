@@ -23,4 +23,15 @@ describe("service monitor connection state", () => {
     assert.equal(isServiceControllerOnline(false, new Date(now), now), false);
     assert.equal(isServiceControllerOnline(true, null, now), false);
   });
+
+  test("uses a retained MQTT offline state immediately, even before heartbeat expiry", () => {
+    assert.equal(
+      isServiceControllerOnline(true, new Date(now), now, "offline", new Date(now)),
+      false,
+    );
+    assert.equal(
+      isServiceControllerOnline(true, new Date(now - 1_000), now, "online", new Date(now)),
+      true,
+    );
+  });
 });

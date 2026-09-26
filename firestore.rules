@@ -306,6 +306,10 @@ service cloud.firestore {
       match /heartbeats/{heartbeatId} {
         allow read, write: if false;
       }
+
+      match /statuses/{statusId} {
+        allow read, write: if false;
+      }
     }
 
     match /serviceControllerLogs/{controllerId} {
@@ -322,6 +326,15 @@ service cloud.firestore {
       allow read, write: if false;
 
       match /commands/{commandId} {
+        allow read: if isAuth() && isManagerOrAbove();
+        allow write: if false;
+      }
+    }
+
+    match /serviceControllerCommandResults/{controllerId} {
+      allow read, write: if false;
+
+      match /results/{commandId} {
         allow read: if isAuth() && isManagerOrAbove();
         allow write: if false;
       }
