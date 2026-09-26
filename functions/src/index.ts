@@ -6,6 +6,7 @@ import * as admin from "firebase-admin";
 export { parseVoiceCommand } from "./parseVoiceCommand";
 export { ingestTelemetry } from "./telemetry";
 export { ingestControllerStatus } from "./controllerStatus";
+export { ingestServiceControllerHeartbeat, queueServiceControllerCommand } from "./serviceMonitor";
 export { closeAlertsOnMonitoringDeviceDisable } from "./monitoringDeviceSettings";
 export { saveMonitoringTemperatureRule } from "./monitoringTemperatureRules";
 

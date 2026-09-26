@@ -295,5 +295,36 @@ service cloud.firestore {
     match /monitoringDeviceCredentials/{deviceId} {
       allow read, write: if false;
     }
+
+    // Service-monitor diagnostics are a distinct server-owned channel. The
+    // browser may observe controllers and their sanitized logs, but cannot
+    // forge heartbeats, logs, or queued commands.
+    match /serviceControllers/{controllerId} {
+      allow read: if isAuth();
+      allow write: if false;
+
+      match /heartbeats/{heartbeatId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /serviceControllerLogs/{controllerId} {
+      allow read: if isAuth();
+      allow write: if false;
+
+      match /entries/{entryId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
+    }
+
+    match /serviceControllerCommands/{controllerId} {
+      allow read, write: if false;
+
+      match /commands/{commandId} {
+        allow read: if isAuth() && isManagerOrAbove();
+        allow write: if false;
+      }
+    }
   }
 }
