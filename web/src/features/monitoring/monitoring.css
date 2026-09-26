@@ -153,9 +153,10 @@
 .monitor-card-temperature--danger { color: #dc2626; }
 
 .monitor-mini-chart {
-  width: calc(100% + 24px);
+  align-self: stretch;
+  width: calc(100% + 32px);
   height: 64px;
-  margin-left: -12px;
+  margin: 0 -16px;
   overflow: visible;
 }
 .monitor-mini-chart polyline { stroke-linecap: round; stroke-linejoin: round; }
