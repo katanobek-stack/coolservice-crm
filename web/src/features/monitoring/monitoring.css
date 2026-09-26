@@ -154,9 +154,9 @@
 
 .monitor-mini-chart {
   align-self: stretch;
-  width: calc(100% + 32px);
+  width: calc(100% + 16px);
   height: 64px;
-  margin: 0 -16px;
+  margin: 0 -8px;
   overflow: visible;
 }
 .monitor-mini-chart polyline { stroke-linecap: round; stroke-linejoin: round; }
