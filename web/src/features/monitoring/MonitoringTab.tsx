@@ -168,11 +168,13 @@ function MiniTemperatureSparkline({ points, tone }: { points: TemperaturePoint[]
   const min = values.length > 0 ? Math.min(...values) : 0;
   const max = values.length > 0 ? Math.max(...values) : 1;
   const spread = Math.max(max - min, 1);
-  const chartPoints = values.map((value, index) => {
+  const yFor = (value: number) => (48 - ((value - min) / spread) * 34).toFixed(1);
+  const chartPoints = values.length === 1
+    ? [`0.0,${yFor(values[0] ?? 0)}`, `180.0,${yFor(values[0] ?? 0)}`]
+    : values.map((value, index) => {
     const x = values.length <= 1 ? 90 : (index / (values.length - 1)) * 180;
-    const y = 48 - ((value - min) / spread) * 34;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
+    return `${x.toFixed(1)},${yFor(value)}`;
+    });
   const colors = tone === "danger"
     ? ["#fb7185", "#dc2626"]
     : tone === "normal"
@@ -181,7 +183,7 @@ function MiniTemperatureSparkline({ points, tone }: { points: TemperaturePoint[]
   const line = chartPoints.join(" ");
   const area = chartPoints.length > 0 ? `${line} 180,60 0,60` : "";
   return (
-    <svg className="monitor-mini-chart" viewBox="0 0 180 64" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}>
+    <svg className="monitor-mini-chart" viewBox="0 0 180 64" preserveAspectRatio="none" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}>
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor={colors[0]} />
