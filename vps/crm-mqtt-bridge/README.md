@@ -9,15 +9,18 @@ current systemd service и environment names, добавляя status topic и
 
 MQTT остаётся обычным TCP на текущем `MQTT_PORT` (1883), без TLS. HTTP выполняет
 основной delivery loop, а callback только валидирует и сохраняет запись в
-SQLite. Ключ берётся только из существующего `CRM_DEVICE_KEY` и не попадает в
-логи. Очередь мигрирует атомарно: старые `pending(packet_id, …)` и `rejected`
+SQLite. Обычные telemetry/status используют только существующий
+`CRM_DEVICE_KEY`. Сервисный монитор использует только отдельный
+`CRM_SERVICE_CONTROLLER_KEY`; ключи не попадают в логи. Очередь мигрирует атомарно: старые `pending(packet_id, …)` и `rejected`
 копируются как `telemetry` в таблицы с ключом `(message_type, message_id)`.
 
 Сервисный монитор использует тот же MQTT client и SQLite queue, а не отдельный
 broker или service. Его topics и обязательные URL описаны в
-docs/SERVICE_MONITOR_MQTT.md. Пока все CRM_SERVICE_*_URL не добавлены в
+docs/SERVICE_MONITOR_MQTT.md. Пока все CRM_SERVICE_*_URL **и**
+`CRM_SERVICE_CONTROLLER_KEY` не добавлены в
 существующий env-файл, bridge безопасно оставляет service subscription
-выключенной и не влияет на telemetry/status.
+выключенной, не доставляет сохранённые service-строки и не влияет на
+telemetry/status.
 
 ## Обновление
 

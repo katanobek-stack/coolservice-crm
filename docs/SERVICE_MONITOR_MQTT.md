@@ -94,14 +94,17 @@ RESET, GPIO0 и любые AT-команды не имеют MQTT-контрак
 MQTT — основной путь: bridge переводит сервисные topics в Cloud Functions
 ingestServiceControllerHeartbeat, ingestServiceControllerLog,
 ingestServiceControllerStatus и ingestServiceControllerCommandResult.
-Прежний HTTPS POST heartbeat остаётся допустимым резервным путём с тем же
-Bearer device credential.
+Прежний HTTPS POST heartbeat остаётся допустимым резервным путём с отдельным
+Bearer credential сервисного контроллера. Он никогда не использует credential
+обычного telemetry-контроллера.
 
-После публикации функций в существующий VPS env добавляются только URL и
-необязательный идентификатор:
+После публикации функций в существующий VPS env добавляются URL, отдельный
+service credential и необязательный идентификатор. Значение ключа не должно
+попадать в репозиторий, журнал или эту документацию:
 
 ~~~
 CRM_SERVICE_CONTROLLER_ID=service-001
+CRM_SERVICE_CONTROLLER_KEY=<service-controller-key>
 CRM_SERVICE_HEARTBEAT_URL=<published heartbeat URL>
 CRM_SERVICE_LOG_URL=<published log URL>
 CRM_SERVICE_STATUS_URL=<published status URL>
@@ -111,8 +114,11 @@ CRM_SERVICE_COMMAND_DISPATCH_URL=<published command dispatch URL>
 ~~~
 
 CRM_SERVICE_CONTROLLER_ID по умолчанию равен `service-001`; он не наследует
-CRM_DEVICE_ID и не затрагивает обычную telemetry. Пока любой из шести URL отсутствует, service MQTT subscription на bridge
-отключена, а температура и controller status продолжают работать как раньше.
+CRM_DEVICE_ID и не затрагивает обычную telemetry. Пока отсутствует любой из
+шести URL или `CRM_SERVICE_CONTROLLER_KEY`, service MQTT/HTTPS-контур полностью
+отключён: bridge не подписывается на service topics и оставляет старые
+service-строки в SQLite pending. Температура и controller status продолжают
+работать как раньше через `CRM_DEVICE_KEY`.
 
 Команды создаются callable-функцией только для manager/admin/owner. Bridge
 периодически claim-ит одну команду и публикует её QoS 1. Claim автоматически

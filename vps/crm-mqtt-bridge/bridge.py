@@ -51,11 +51,16 @@ SERVICE_STATUS_URL = os.environ.get("CRM_SERVICE_STATUS_URL", "")
 SERVICE_COMMAND_RESULT_URL = os.environ.get("CRM_SERVICE_COMMAND_RESULT_URL", "")
 SERVICE_COMMAND_CLAIM_URL = os.environ.get("CRM_SERVICE_COMMAND_CLAIM_URL", "")
 SERVICE_COMMAND_DISPATCH_URL = os.environ.get("CRM_SERVICE_COMMAND_DISPATCH_URL", "")
+SERVICE_CONTROLLER_KEY = os.environ.get("CRM_SERVICE_CONTROLLER_KEY", "").strip()
 SERVICE_ENDPOINTS = (
     SERVICE_HEARTBEAT_URL, SERVICE_LOG_URL, SERVICE_STATUS_URL,
     SERVICE_COMMAND_RESULT_URL, SERVICE_COMMAND_CLAIM_URL, SERVICE_COMMAND_DISPATCH_URL,
 )
-SERVICE_MQTT_ENABLED = all(SERVICE_ENDPOINTS)
+# A service controller has its own revocable credential. Never fall back to
+# CRM_DEVICE_KEY: that key belongs only to normal device-001 telemetry/status.
+# Keeping old service rows pending is safer than issuing an unauthenticated
+# request if this key is absent during a bridge restart or partial rollout.
+SERVICE_MQTT_ENABLED = all((*SERVICE_ENDPOINTS, SERVICE_CONTROLLER_KEY))
 SERVICE_HEARTBEAT_TOPIC = "service/+/heartbeat"
 SERVICE_LOG_TOPIC = "service/+/log"
 SERVICE_STATUS_TOPIC = "service/+/status"
@@ -435,6 +440,14 @@ def target_url(message_type: str) -> str:
     return urls[message_type]
 
 
+def delivery_credential(message_type: str) -> str:
+    if message_type in {"telemetry", "status"}:
+        return CRM_DEVICE_KEY
+    if message_type in SERVICE_MESSAGE_TYPES:
+        return SERVICE_CONTROLLER_KEY
+    raise ValueError(f"unknown delivery message type: {message_type}")
+
+
 def telemetry_delivery_result(body: bytes) -> tuple[str, int | None]:
     """Read the public successful telemetry result without exposing the response body."""
     try:
@@ -459,11 +472,20 @@ def count_delivery(outcome: str) -> None:
 def claim_next_delivery() -> tuple[str, str, str, int] | None:
     """Atomically reserve exactly one ready row for one HTTP worker."""
     with DB_LOCK:
-        row = DB.execute(
-            "SELECT message_type, message_id, body, attempts FROM pending "
-            "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
-            "ORDER BY received_at LIMIT 1", (int(time.time()),)
-        ).fetchone()
+        if SERVICE_MQTT_ENABLED:
+            row = DB.execute(
+                "SELECT message_type, message_id, body, attempts FROM pending "
+                "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
+                "ORDER BY received_at LIMIT 1", (int(time.time()),)
+            ).fetchone()
+        else:
+            placeholders = ", ".join("?" for _ in SERVICE_MESSAGE_TYPES)
+            row = DB.execute(
+                "SELECT message_type, message_id, body, attempts FROM pending "
+                "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
+                f"AND message_type NOT IN ({placeholders}) ORDER BY received_at LIMIT 1",
+                (int(time.time()), *SERVICE_MESSAGE_TYPES),
+            ).fetchone()
         if row is None:
             return None
         message_type, message_id, body, attempts = row
@@ -479,9 +501,10 @@ def claim_next_delivery() -> tuple[str, str, str, int] | None:
 
 
 def deliver_claimed(message_type: str, message_id: str, body: str, attempts: int) -> None:
+    credential = delivery_credential(message_type)
     request = urllib.request.Request(
         target_url(message_type), data=body.encode("utf-8"), method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {CRM_DEVICE_KEY}"},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {credential}"},
     )
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
@@ -617,9 +640,11 @@ def stats_reporter() -> None:
 
 
 def service_request(url: str, body: dict[str, Any]) -> tuple[int, bytes]:
+    if not SERVICE_MQTT_ENABLED:
+        raise RuntimeError("service HTTPS is disabled: missing endpoint URL or CRM_SERVICE_CONTROLLER_KEY")
     request = urllib.request.Request(
         url, data=json.dumps(body, separators=(",", ":")).encode("utf-8"), method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {CRM_DEVICE_KEY}"},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {SERVICE_CONTROLLER_KEY}"},
     )
     with urllib.request.urlopen(request, timeout=15) as response:
         return response.status, response.read()
