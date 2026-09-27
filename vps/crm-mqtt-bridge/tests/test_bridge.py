@@ -6,18 +6,31 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 BRIDGE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BRIDGE_DIR))
 
 
-def load_bridge(data_dir: Path):
-    os.environ.update({
+def load_bridge(data_dir: Path, service_key: str | None = "service-test-key"):
+    config = {
         "BRIDGE_DATA_DIR": str(data_dir), "MQTT_HOST": "127.0.0.1", "MQTT_PORT": "1883",
         "MQTT_USERNAME": "test", "MQTT_PASSWORD": "test", "MQTT_TOPIC": "coolmonitor/devices/+/telemetry",
         "CRM_URL": "https://telemetry.example.test", "CRM_STATUS_URL": "https://status.example.test",
-        "CRM_DEVICE_ID": "device-001", "CRM_DEVICE_KEY": "test-key",
-    })
+        "CRM_DEVICE_ID": "device-001", "CRM_DEVICE_KEY": "telemetry-test-key",
+        "CRM_SERVICE_CONTROLLER_ID": "service-001",
+        "CRM_SERVICE_HEARTBEAT_URL": "https://service.example.test/heartbeat",
+        "CRM_SERVICE_LOG_URL": "https://service.example.test/log",
+        "CRM_SERVICE_STATUS_URL": "https://service.example.test/status",
+        "CRM_SERVICE_COMMAND_RESULT_URL": "https://service.example.test/command-result",
+        "CRM_SERVICE_COMMAND_CLAIM_URL": "https://service.example.test/command-claim",
+        "CRM_SERVICE_COMMAND_DISPATCH_URL": "https://service.example.test/command-dispatch",
+    }
+    if service_key is None:
+        os.environ.pop("CRM_SERVICE_CONTROLLER_KEY", None)
+    else:
+        config["CRM_SERVICE_CONTROLLER_KEY"] = service_key
+    os.environ.update(config)
     sys.modules.pop("bridge", None)
     return importlib.import_module("bridge")
 
@@ -32,6 +45,20 @@ def status_payload():
 
 
 class BridgeTests(unittest.TestCase):
+    class Response:
+        def __init__(self, status=202, body=b"{}"):
+            self.status = status
+            self.body = body
+
+        def read(self):
+            return self.body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _type, _value, _traceback):
+            return False
+
     def test_existing_telemetry_contract_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             bridge = load_bridge(Path(directory))
@@ -99,6 +126,79 @@ class BridgeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bridge.status_body(invalid, "coolmonitor/devices/device-001/status")
 
+    def test_service_topics_validate_controller_and_preserve_stable_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            heartbeat_id, heartbeat = bridge.service_heartbeat_body({
+                "controllerId": "service-001", "heartbeatId": "boot-a:heartbeat-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "ip": None, "simSignal": 21,
+                "modemState": "ready", "gprsConnected": True, "firmwareVersion": "1.0.0",
+                "uptimeSeconds": 60, "freeHeapBytes": 1, "flashBytes": 2, "psramBytes": 0,
+                "resetReason": "power_on", "uartConnected": True,
+            }, "service/service-001/heartbeat")
+            self.assertEqual(heartbeat_id, "boot-a:heartbeat-1")
+            self.assertEqual(json.loads(heartbeat)["controllerId"], "service-001")
+            log_id, _ = bridge.service_log_body({
+                "controllerId": "service-001", "logId": "boot-a:log-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "level": "INFO", "message": "TARGET << ready",
+            }, "service/service-001/log")
+            self.assertEqual(log_id, "boot-a:log-1")
+            status_id, _ = bridge.service_status_body({
+                "controllerId": "service-001", "statusId": "boot-a:offline",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "state": "offline",
+            }, "service/service-001/status")
+            self.assertEqual(status_id, "boot-a:offline")
+            result_id, _ = bridge.service_command_result_body({
+                "controllerId": "service-001", "commandId": "command-1",
+                "reportedAt": "2026-09-17T01:23:45.000Z", "result": "ok", "message": "pong",
+            }, "service/service-001/command/result")
+            self.assertEqual(result_id, "command-1")
+            with self.assertRaises(ValueError):
+                bridge.service_log_body({
+                    "controllerId": "service-002", "logId": "boot-a:log-1",
+                    "reportedAt": "2026-09-17T01:23:45.000Z", "level": "INFO", "message": "x",
+                }, "service/service-001/log")
+
+    def test_service_topics_cannot_reuse_telemetry_device_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            with self.assertRaises(ValueError):
+                bridge.service_status_body({
+                    "controllerId": "device-001", "statusId": "boot-a:online",
+                    "reportedAt": "2026-09-17T01:23:45.000Z", "state": "online",
+                }, "service/device-001/status")
+
+    def test_service_requests_use_only_the_service_controller_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory))
+            captured = []
+
+            def open_request(request, timeout):
+                captured.append(request)
+                return self.Response()
+
+            with patch.object(bridge.urllib.request, "urlopen", open_request):
+                bridge.deliver_claimed("service_log", "log-1", "{}", 0)
+                bridge.service_request("https://service.example.test/command-claim", {"controllerId": "service-001"})
+                bridge.deliver_claimed("telemetry", "packet-1", "{}", 0)
+
+            self.assertEqual(captured[0].get_header("Authorization"), "Bearer service-test-key")
+            self.assertEqual(captured[1].get_header("Authorization"), "Bearer service-test-key")
+            self.assertEqual(captured[2].get_header("Authorization"), "Bearer telemetry-test-key")
+            with self.assertRaises(ValueError):
+                bridge.delivery_credential("unknown")
+
+    def test_missing_service_key_disables_service_http_without_blocking_telemetry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = load_bridge(Path(directory), service_key=None)
+            self.assertFalse(bridge.SERVICE_MQTT_ENABLED)
+            bridge.enqueue("service_log", "saved-service-log", "{}")
+            bridge.enqueue("telemetry", "saved-telemetry", "{}")
+            claimed = bridge.claim_next_delivery()
+            self.assertEqual(claimed[0:2], ("telemetry", "saved-telemetry"))
+            with self.assertRaisesRegex(RuntimeError, "service HTTPS is disabled"):
+                bridge.service_request("https://service.example.test/command-claim", {"controllerId": "service-001"})
+
     def test_legacy_queue_migration_keeps_pending_telemetry(self):
         with tempfile.TemporaryDirectory() as directory:
             data_dir = Path(directory)
@@ -117,7 +217,8 @@ class BridgeTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual(row, ("telemetry", "legacy-packet", 2, "pending", None))
             bridge.enqueue("status", "legacy-packet", "{}")
-            self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 2)
+            bridge.enqueue("service_log", "legacy-log", "{}")
+            self.assertEqual(bridge.DB.execute("SELECT count(*) FROM pending").fetchone()[0], 3)
 
     def test_restart_returns_inflight_delivery_to_pending(self):
         with tempfile.TemporaryDirectory() as directory:

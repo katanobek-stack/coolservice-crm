@@ -1,0 +1,45 @@
+.service-monitor-page { max-width: 1280px; margin: 0 auto; display: grid; gap: 18px; }
+.service-monitor-title, .service-controller-card-head, .service-connection-row, .service-command-row, .service-log-filters { display: flex; align-items: center; gap: 10px; }
+.service-monitor-title { justify-content: space-between; }
+.service-monitor-title h2 { margin: 0; color: var(--text); font-size: 24px; }
+.service-monitor-title p, .service-subtitle { color: var(--text3); font-size: 13px; }
+.service-monitor-title p { margin: 6px 0 0; }
+.service-controller-section { overflow: hidden; }
+.service-controller-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 14px 18px 18px; }
+.service-controller-card { display: grid; gap: 7px; padding: 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; text-align: left; color: var(--text); cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.service-controller-card:hover, .service-controller-card.is-selected { transform: translateY(-1px); border-color: #93c5fd; box-shadow: 0 6px 16px rgba(37,99,235,.1); }
+.service-controller-card > span, .service-controller-card small { color: var(--text2); font-size: 12px; }
+.service-status-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+.service-status, .service-status-dot.is-online { background: #dcfce7; color: #15803d; }
+.service-status-dot.is-online { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.14); }
+.service-status.is-offline { background: #fee2e2; color: #b91c1c; }
+.service-status-dot.is-offline { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+.service-status { margin-left: auto; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.service-controller-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--text3); font-size: 11px; }
+.service-controller-meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.service-main-card, .service-commands { padding: 16px 18px; }
+.service-connection-row { flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--bg3); color: var(--text2); font-size: 12px; }
+.service-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+.service-facts div { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; padding: 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg3); }
+.service-facts i { grid-row: span 2; color: var(--accent2); font-size: 17px; }
+.service-facts span { color: var(--text3); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.service-facts strong { color: var(--text); font: 700 13px 'JetBrains Mono', monospace; overflow-wrap: anywhere; }
+.service-commands { display: grid; gap: 12px; }
+.service-command-row { flex-wrap: wrap; }
+.service-command-row .btn-primary { padding: 8px 12px; font-size: 12px; }
+.service-command-row--blocked { border-top: 1px solid var(--border); padding-top: 11px; color: var(--text3); font-size: 12px; }
+.service-command-row--blocked button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text3); background: var(--bg3); }
+.service-command-message, .service-role-note, .service-monitor-error { padding: 10px 12px; border-radius: 9px; font-size: 13px; }
+.service-command-message { background: #eff6ff; color: #1d4ed8; }
+.service-role-note { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; }
+.service-monitor-error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+.service-live-log { overflow: hidden; }
+.service-live-log .section-header { padding: 16px 18px 12px; }
+.service-log-filters { flex-wrap: wrap; }
+.service-log-filters button { border: 1px solid var(--border); background: var(--bg3); border-radius: 7px; padding: 5px 8px; color: var(--text2); font-size: 11px; font-weight: 800; cursor: pointer; }
+.service-log-filters button.is-active { color: #1d4ed8; border-color: #93c5fd; background: #eff6ff; }
+.service-log-window { max-height: 360px; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); background: #0f172a; }
+.service-log-line { display: grid; grid-template-columns: 142px 55px minmax(0,1fr); gap: 10px; align-items: baseline; padding: 8px 14px; border-bottom: 1px solid rgba(148,163,184,.14); color: #cbd5e1; font: 12px 'JetBrains Mono', monospace; }
+.service-log-line time { color: #94a3b8; }.service-log-line strong { font-size: 11px; }.service-log-line code { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }.service-log-line--error strong { color: #f87171; }.service-log-line--warn strong { color: #fbbf24; }.service-log-line--info strong { color: #60a5fa; }
+.service-log-empty, .service-monitor-empty { padding: 22px; color: var(--text3); text-align: center; font-size: 13px; }
+@media (max-width: 760px) { .service-monitor-title { align-items: flex-start; flex-direction: column; }.service-controller-list { grid-template-columns: 1fr; padding: 12px; }.service-facts { grid-template-columns: 1fr 1fr; }.service-live-log .section-header { align-items: flex-start; flex-direction: column; gap: 10px; }.service-log-line { grid-template-columns: 1fr auto; gap: 5px 8px; }.service-log-line code { grid-column: 1 / -1; }.service-connection-row { align-items: flex-start; flex-direction: column; } }

@@ -39,6 +39,39 @@ CRM_DEVICE_KEY = os.environ["CRM_DEVICE_KEY"]
 CRM_STATUS_URL = os.environ["CRM_STATUS_URL"]
 STATUS_TOPIC = "coolmonitor/devices/+/status"
 
+# Service Monitor uses the same Mosquitto client, broker credentials and
+# SQLite queue. It is deliberately disabled until every non-secret endpoint
+# URL has been configured, so installing this file cannot interrupt telemetry.
+# Service monitoring is isolated from the normal telemetry controller. Keep
+# the explicit env override for installations with another service controller.
+SERVICE_CONTROLLER_ID = os.environ.get("CRM_SERVICE_CONTROLLER_ID", "service-001")
+SERVICE_HEARTBEAT_URL = os.environ.get("CRM_SERVICE_HEARTBEAT_URL", "")
+SERVICE_LOG_URL = os.environ.get("CRM_SERVICE_LOG_URL", "")
+SERVICE_STATUS_URL = os.environ.get("CRM_SERVICE_STATUS_URL", "")
+SERVICE_COMMAND_RESULT_URL = os.environ.get("CRM_SERVICE_COMMAND_RESULT_URL", "")
+SERVICE_COMMAND_CLAIM_URL = os.environ.get("CRM_SERVICE_COMMAND_CLAIM_URL", "")
+SERVICE_COMMAND_DISPATCH_URL = os.environ.get("CRM_SERVICE_COMMAND_DISPATCH_URL", "")
+SERVICE_CONTROLLER_KEY = os.environ.get("CRM_SERVICE_CONTROLLER_KEY", "").strip()
+SERVICE_ENDPOINTS = (
+    SERVICE_HEARTBEAT_URL, SERVICE_LOG_URL, SERVICE_STATUS_URL,
+    SERVICE_COMMAND_RESULT_URL, SERVICE_COMMAND_CLAIM_URL, SERVICE_COMMAND_DISPATCH_URL,
+)
+# A service controller has its own revocable credential. Never fall back to
+# CRM_DEVICE_KEY: that key belongs only to normal device-001 telemetry/status.
+# Keeping old service rows pending is safer than issuing an unauthenticated
+# request if this key is absent during a bridge restart or partial rollout.
+SERVICE_MQTT_ENABLED = all((*SERVICE_ENDPOINTS, SERVICE_CONTROLLER_KEY))
+SERVICE_HEARTBEAT_TOPIC = "service/+/heartbeat"
+SERVICE_LOG_TOPIC = "service/+/log"
+SERVICE_STATUS_TOPIC = "service/+/status"
+SERVICE_COMMAND_RESULT_TOPIC = "service/+/command/result"
+SERVICE_COMMAND_TOPIC = f"service/{SERVICE_CONTROLLER_ID}/command"
+SERVICE_COMMAND_POLL_SECONDS = max(2, min(60, int(os.environ.get("CRM_SERVICE_COMMAND_POLL_SECONDS", "5"))))
+SERVICE_MESSAGE_TYPES = {
+    "service_heartbeat", "service_log", "service_status", "service_command_result",
+}
+SERVICE_COMMANDS = {"SERVICE PING", "SERVICE STATUS", "SERVICE INFO"}
+
 # HTTPS is the slow part of the pipeline, not MQTT or SQLite. Thirty-two
 # independent workers keep recovery traffic from blocking fresh telemetry.
 # It can be lowered on the VPS through CRM_DELIVERY_WORKERS without a code edit.
@@ -105,13 +138,54 @@ def migrate_queue_schema(db: sqlite3.Connection) -> None:
             raise
     else:
         create_queue_tables(db)
+    migrate_queue_message_types(db)
 
 
-def create_queue_tables(db: sqlite3.Connection) -> None:
+def migrate_queue_message_types(db: sqlite3.Connection) -> None:
+    """Widen the old SQLite CHECK without discarding pending telemetry/status."""
+    pending_sql = (db.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'pending'"
+    ).fetchone() or [""])[0] or ""
+    if "service_heartbeat" in pending_sql:
+        return
+    columns = table_columns(db, "pending")
+    rejected_columns = table_columns(db, "rejected")
+    # Ensure these fields exist before copying an older post-status queue.
+    if "delivery_state" not in columns:
+        db.execute("ALTER TABLE pending ADD COLUMN delivery_state TEXT NOT NULL DEFAULT 'pending'")
+    if "claimed_at" not in columns:
+        db.execute("ALTER TABLE pending ADD COLUMN claimed_at INTEGER")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute("ALTER TABLE pending RENAME TO pending_before_service")
+        if rejected_columns:
+            db.execute("ALTER TABLE rejected RENAME TO rejected_before_service")
+        create_queue_tables(db, commit=False)
+        db.execute(
+            """INSERT INTO pending(message_type, message_id, body, received_at, attempts, next_attempt_at, last_error, delivery_state, claimed_at)
+               SELECT message_type, message_id, body, received_at, attempts, next_attempt_at, last_error,
+                      COALESCE(delivery_state, 'pending'), claimed_at
+               FROM pending_before_service"""
+        )
+        if rejected_columns:
+            db.execute(
+                """INSERT INTO rejected(message_type, message_id, body, rejected_at, reason)
+                   SELECT message_type, message_id, body, rejected_at, reason FROM rejected_before_service"""
+            )
+            db.execute("DROP TABLE rejected_before_service")
+        db.execute("DROP TABLE pending_before_service")
+        db.commit()
+        LOG.info("SQLite queue migrated; pending telemetry/status retained for service topics")
+    except Exception:
+        db.rollback()
+        raise
+
+
+def create_queue_tables(db: sqlite3.Connection, commit: bool = True) -> None:
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS pending (
-          message_type TEXT NOT NULL CHECK(message_type IN ('telemetry', 'status')),
+          message_type TEXT NOT NULL,
           message_id TEXT NOT NULL,
           body TEXT NOT NULL,
           received_at INTEGER NOT NULL,
@@ -127,7 +201,7 @@ def create_queue_tables(db: sqlite3.Connection) -> None:
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS rejected (
-          message_type TEXT NOT NULL CHECK(message_type IN ('telemetry', 'status')),
+          message_type TEXT NOT NULL,
           message_id TEXT NOT NULL,
           body TEXT NOT NULL,
           rejected_at INTEGER NOT NULL,
@@ -136,7 +210,8 @@ def create_queue_tables(db: sqlite3.Connection) -> None:
         )
         """
     )
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def prepare_delivery_claims(db: sqlite3.Connection) -> None:
@@ -248,6 +323,102 @@ def status_body(payload: Any, topic: str) -> tuple[str, str]:
     return status_id, json.dumps(payload, separators=(",", ":"))
 
 
+def service_topic_controller_id(topic: str, suffix: str) -> str:
+    parts = topic.split("/")
+    expected = ["service", SERVICE_CONTROLLER_ID, *suffix.split("/")]
+    if parts != expected:
+        raise ValueError("unexpected service MQTT topic")
+    return SERVICE_CONTROLLER_ID
+
+
+def service_heartbeat_body(payload: Any, topic: str) -> tuple[str, str]:
+    service_topic_controller_id(topic, "heartbeat")
+    required = {
+        "controllerId", "heartbeatId", "reportedAt", "ip", "simSignal", "modemState",
+        "gprsConnected", "firmwareVersion", "uptimeSeconds", "freeHeapBytes", "flashBytes",
+        "psramBytes", "resetReason", "uartConnected",
+    }
+    optional = {"logs"}
+    if not isinstance(payload, dict) or not required.issubset(payload) or not set(payload).issubset(required | optional):
+        raise ValueError("invalid service heartbeat fields")
+    if payload["controllerId"] != SERVICE_CONTROLLER_ID:
+        raise ValueError("unexpected service controllerId")
+    heartbeat_id = payload["heartbeatId"]
+    if not isinstance(heartbeat_id, str) or not STATUS_ID_RE.fullmatch(heartbeat_id):
+        raise ValueError("invalid heartbeatId")
+    if not isinstance(payload["reportedAt"], str) or not UTC_ISO_RE.fullmatch(payload["reportedAt"]):
+        raise ValueError("invalid reportedAt")
+    if payload["ip"] is not None and (not isinstance(payload["ip"], str) or len(payload["ip"]) > 64):
+        raise ValueError("invalid ip")
+    signal = payload["simSignal"]
+    if signal is not None and (type(signal) is not int or not 0 <= signal <= 31):
+        raise ValueError("invalid simSignal")
+    if not isinstance(payload["modemState"], str) or not payload["modemState"] or len(payload["modemState"]) > 80:
+        raise ValueError("invalid modemState")
+    if not isinstance(payload["firmwareVersion"], str) or not payload["firmwareVersion"] or len(payload["firmwareVersion"]) > 120:
+        raise ValueError("invalid firmwareVersion")
+    if not isinstance(payload["gprsConnected"], bool) or not isinstance(payload["uartConnected"], bool):
+        raise ValueError("invalid service connection state")
+    for field in ("uptimeSeconds", "freeHeapBytes", "flashBytes", "psramBytes"):
+        if type(payload[field]) is not int or payload[field] < 0:
+            raise ValueError(f"invalid {field}")
+    if not isinstance(payload["resetReason"], str) or not payload["resetReason"] or len(payload["resetReason"]) > 120:
+        raise ValueError("invalid resetReason")
+    logs = payload.get("logs", [])
+    if not isinstance(logs, list) or len(logs) > 40:
+        raise ValueError("invalid logs")
+    return heartbeat_id, json.dumps(payload, separators=(",", ":"))
+
+
+def service_log_body(payload: Any, topic: str) -> tuple[str, str]:
+    service_topic_controller_id(topic, "log")
+    required = {"controllerId", "logId", "reportedAt", "level", "message"}
+    if not isinstance(payload, dict) or set(payload) != required or payload["controllerId"] != SERVICE_CONTROLLER_ID:
+        raise ValueError("invalid service log fields")
+    log_id = payload["logId"]
+    if not isinstance(log_id, str) or not STATUS_ID_RE.fullmatch(log_id):
+        raise ValueError("invalid logId")
+    if not isinstance(payload["reportedAt"], str) or not UTC_ISO_RE.fullmatch(payload["reportedAt"]):
+        raise ValueError("invalid reportedAt")
+    if payload["level"] not in {"ERROR", "WARN", "INFO"}:
+        raise ValueError("invalid log level")
+    if not isinstance(payload["message"], str) or not payload["message"].strip() or len(payload["message"]) > 600:
+        raise ValueError("invalid log message")
+    return log_id, json.dumps(payload, separators=(",", ":"))
+
+
+def service_status_body(payload: Any, topic: str) -> tuple[str, str]:
+    service_topic_controller_id(topic, "status")
+    required = {"controllerId", "statusId", "reportedAt", "state"}
+    if not isinstance(payload, dict) or set(payload) != required or payload["controllerId"] != SERVICE_CONTROLLER_ID:
+        raise ValueError("invalid service status fields")
+    status_id = payload["statusId"]
+    if not isinstance(status_id, str) or not STATUS_ID_RE.fullmatch(status_id):
+        raise ValueError("invalid service statusId")
+    if not isinstance(payload["reportedAt"], str) or not UTC_ISO_RE.fullmatch(payload["reportedAt"]):
+        raise ValueError("invalid reportedAt")
+    if payload["state"] not in {"online", "offline"}:
+        raise ValueError("invalid service state")
+    return status_id, json.dumps(payload, separators=(",", ":"))
+
+
+def service_command_result_body(payload: Any, topic: str) -> tuple[str, str]:
+    service_topic_controller_id(topic, "command/result")
+    required = {"controllerId", "commandId", "reportedAt", "result", "message"}
+    if not isinstance(payload, dict) or set(payload) != required or payload["controllerId"] != SERVICE_CONTROLLER_ID:
+        raise ValueError("invalid service command result fields")
+    command_id = payload["commandId"]
+    if not isinstance(command_id, str) or not STATUS_ID_RE.fullmatch(command_id):
+        raise ValueError("invalid commandId")
+    if not isinstance(payload["reportedAt"], str) or not UTC_ISO_RE.fullmatch(payload["reportedAt"]):
+        raise ValueError("invalid reportedAt")
+    if payload["result"] not in {"ok", "error"}:
+        raise ValueError("invalid command result")
+    if not isinstance(payload["message"], str) or not payload["message"].strip() or len(payload["message"]) > 600:
+        raise ValueError("invalid command message")
+    return command_id, json.dumps(payload, separators=(",", ":"))
+
+
 def enqueue(message_type: str, message_id: str, body: str) -> None:
     with DB_LOCK:
         DB.execute(
@@ -258,7 +429,23 @@ def enqueue(message_type: str, message_id: str, body: str) -> None:
 
 
 def target_url(message_type: str) -> str:
-    return CRM_URL if message_type == "telemetry" else CRM_STATUS_URL
+    urls = {
+        "telemetry": CRM_URL,
+        "status": CRM_STATUS_URL,
+        "service_heartbeat": SERVICE_HEARTBEAT_URL,
+        "service_log": SERVICE_LOG_URL,
+        "service_status": SERVICE_STATUS_URL,
+        "service_command_result": SERVICE_COMMAND_RESULT_URL,
+    }
+    return urls[message_type]
+
+
+def delivery_credential(message_type: str) -> str:
+    if message_type in {"telemetry", "status"}:
+        return CRM_DEVICE_KEY
+    if message_type in SERVICE_MESSAGE_TYPES:
+        return SERVICE_CONTROLLER_KEY
+    raise ValueError(f"unknown delivery message type: {message_type}")
 
 
 def telemetry_delivery_result(body: bytes) -> tuple[str, int | None]:
@@ -285,11 +472,20 @@ def count_delivery(outcome: str) -> None:
 def claim_next_delivery() -> tuple[str, str, str, int] | None:
     """Atomically reserve exactly one ready row for one HTTP worker."""
     with DB_LOCK:
-        row = DB.execute(
-            "SELECT message_type, message_id, body, attempts FROM pending "
-            "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
-            "ORDER BY received_at LIMIT 1", (int(time.time()),)
-        ).fetchone()
+        if SERVICE_MQTT_ENABLED:
+            row = DB.execute(
+                "SELECT message_type, message_id, body, attempts FROM pending "
+                "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
+                "ORDER BY received_at LIMIT 1", (int(time.time()),)
+            ).fetchone()
+        else:
+            placeholders = ", ".join("?" for _ in SERVICE_MESSAGE_TYPES)
+            row = DB.execute(
+                "SELECT message_type, message_id, body, attempts FROM pending "
+                "WHERE delivery_state = 'pending' AND next_attempt_at <= ? "
+                f"AND message_type NOT IN ({placeholders}) ORDER BY received_at LIMIT 1",
+                (int(time.time()), *SERVICE_MESSAGE_TYPES),
+            ).fetchone()
         if row is None:
             return None
         message_type, message_id, body, attempts = row
@@ -305,9 +501,10 @@ def claim_next_delivery() -> tuple[str, str, str, int] | None:
 
 
 def deliver_claimed(message_type: str, message_id: str, body: str, attempts: int) -> None:
+    credential = delivery_credential(message_type)
     request = urllib.request.Request(
         target_url(message_type), data=body.encode("utf-8"), method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {CRM_DEVICE_KEY}"},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {credential}"},
     )
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
@@ -346,6 +543,9 @@ def log_delivery(
 ) -> None:
     if message_type == "status":
         LOG.log(level, "CRM %s controllerId=%s statusId=%s HTTP=%s", outcome, CRM_DEVICE_ID, message_id, status)
+    elif message_type in SERVICE_MESSAGE_TYPES:
+        LOG.log(level, "CRM %s serviceControllerId=%s messageType=%s messageId=%s HTTP=%s",
+                outcome, SERVICE_CONTROLLER_ID, message_type, message_id, status)
     else:
         if telemetry_outcome in {"stored", "duplicate"} and created is not None:
             LOG.log(
@@ -385,6 +585,11 @@ def retry(message_type: str, message_id: str, attempts: int, reason: str) -> Non
     count_delivery("deferred")
     if message_type == "status":
         LOG.warning("CRM delivery deferred controllerId=%s statusId=%s in %ss", CRM_DEVICE_ID, message_id, delay)
+    elif message_type in SERVICE_MESSAGE_TYPES:
+        LOG.warning(
+            "CRM service delivery deferred controllerId=%s messageType=%s messageId=%s in %ss",
+            SERVICE_CONTROLLER_ID, message_type, message_id, delay,
+        )
     else:
         LOG.warning("CRM delivery deferred packetId=%s in %ss", message_id, delay)
 
@@ -434,29 +639,119 @@ def stats_reporter() -> None:
         )
 
 
+def service_request(url: str, body: dict[str, Any]) -> tuple[int, bytes]:
+    if not SERVICE_MQTT_ENABLED:
+        raise RuntimeError("service HTTPS is disabled: missing endpoint URL or CRM_SERVICE_CONTROLLER_KEY")
+    request = urllib.request.Request(
+        url, data=json.dumps(body, separators=(",", ":")).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {SERVICE_CONTROLLER_KEY}"},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return response.status, response.read()
+
+
+def service_command_poller(client: mqtt.Client) -> None:
+    """Pull one server-validated command and publish it with MQTT QoS 1."""
+    while True:
+        time.sleep(SERVICE_COMMAND_POLL_SECONDS)
+        try:
+            status, body = service_request(SERVICE_COMMAND_CLAIM_URL, {"controllerId": SERVICE_CONTROLLER_ID})
+            if status == 204:
+                continue
+            if status != 200:
+                LOG.warning("CRM service command claim HTTP=%s", status)
+                continue
+            command = json.loads(body.decode("utf-8"))
+            if (
+                not isinstance(command, dict)
+                or not isinstance(command.get("commandId"), str)
+                or command.get("command") not in SERVICE_COMMANDS
+                or command.get("controllerId") != SERVICE_CONTROLLER_ID
+            ):
+                LOG.error("CRM service command claim rejected: invalid response")
+                continue
+            payload = {
+                "controllerId": SERVICE_CONTROLLER_ID,
+                "commandId": command["commandId"],
+                "command": command["command"],
+                "requestedAt": command.get("requestedAt"),
+            }
+            info = client.publish(SERVICE_COMMAND_TOPIC, json.dumps(payload, separators=(",", ":")), qos=1, retain=False)
+            if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                LOG.warning("MQTT service command deferred commandId=%s rc=%s", command["commandId"], info.rc)
+                continue
+            info.wait_for_publish(timeout=15)
+            if not info.is_published():
+                LOG.warning("MQTT service command PUBACK timeout commandId=%s", command["commandId"])
+                continue
+            dispatched_status, _ = service_request(
+                SERVICE_COMMAND_DISPATCH_URL,
+                {"controllerId": SERVICE_CONTROLLER_ID, "commandId": command["commandId"]},
+            )
+            if dispatched_status not in (200, 202):
+                LOG.warning("CRM service command dispatch acknowledgement HTTP=%s commandId=%s", dispatched_status, command["commandId"])
+                continue
+            LOG.info("MQTT service command published controllerId=%s commandId=%s command=%s",
+                     SERVICE_CONTROLLER_ID, command["commandId"], command["command"])
+        except urllib.error.HTTPError as error:
+            if error.code != 204:
+                LOG.warning("CRM service command poll HTTP=%s", error.code)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            LOG.warning("CRM service command poll rejected: %s", error)
+        except Exception as error:
+            LOG.warning("CRM service command poll deferred: %s", error)
+
+
 def on_connect(client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any = None) -> None:
     if int(reason_code) != 0:
         LOG.error("MQTT connection refused: %s", reason_code)
         return
     client.subscribe(MQTT_TOPIC, qos=1)
     client.subscribe(STATUS_TOPIC, qos=1)
-    LOG.info("MQTT connected; subscribed to %s and %s", MQTT_TOPIC, STATUS_TOPIC)
+    if SERVICE_MQTT_ENABLED:
+        for topic in (SERVICE_HEARTBEAT_TOPIC, SERVICE_LOG_TOPIC, SERVICE_STATUS_TOPIC, SERVICE_COMMAND_RESULT_TOPIC):
+            client.subscribe(topic, qos=1)
+        LOG.info(
+            "MQTT connected; subscribed to %s, %s and service topics for controllerId=%s",
+            MQTT_TOPIC, STATUS_TOPIC, SERVICE_CONTROLLER_ID,
+        )
+    else:
+        LOG.warning("MQTT connected; service monitor disabled until CRM_SERVICE_*_URL values are configured")
 
 
 def on_message(_client: mqtt.Client, _userdata: Any, message: mqtt.MQTTMessage) -> None:
     try:
         payload = json.loads(message.payload.decode("utf-8"))
+        if message.topic.startswith("service/") and message.qos != 1:
+            raise ValueError("service MQTT messages must use QoS 1")
         if message.topic == f"coolmonitor/devices/{CRM_DEVICE_ID}/telemetry":
             message_id, body = telemetry_body(payload, message.topic)
             message_type = "telemetry"
         elif message.topic == f"coolmonitor/devices/{CRM_DEVICE_ID}/status":
             message_id, body = status_body(payload, message.topic)
             message_type = "status"
+        elif SERVICE_MQTT_ENABLED and message.topic == f"service/{SERVICE_CONTROLLER_ID}/heartbeat":
+            message_id, body = service_heartbeat_body(payload, message.topic)
+            message_type = "service_heartbeat"
+        elif SERVICE_MQTT_ENABLED and message.topic == f"service/{SERVICE_CONTROLLER_ID}/log":
+            message_id, body = service_log_body(payload, message.topic)
+            message_type = "service_log"
+        elif SERVICE_MQTT_ENABLED and message.topic == f"service/{SERVICE_CONTROLLER_ID}/status":
+            if not message.retain:
+                raise ValueError("service status must be retained")
+            message_id, body = service_status_body(payload, message.topic)
+            message_type = "service_status"
+        elif SERVICE_MQTT_ENABLED and message.topic == f"service/{SERVICE_CONTROLLER_ID}/command/result":
+            message_id, body = service_command_result_body(payload, message.topic)
+            message_type = "service_command_result"
         else:
             raise ValueError("unexpected MQTT topic")
         enqueue(message_type, message_id, body)
         if message_type == "status":
             LOG.info("MQTT queued controllerId=%s statusId=%s", CRM_DEVICE_ID, message_id)
+        elif message_type in SERVICE_MESSAGE_TYPES:
+            LOG.info("MQTT queued serviceControllerId=%s messageType=%s messageId=%s",
+                     SERVICE_CONTROLLER_ID, message_type, message_id)
         else:
             LOG.info("MQTT queued packetId=%s", message_id)
     except Exception as error:
@@ -477,6 +772,8 @@ def main() -> None:
             target=delivery_worker, args=(worker_number,), name=f"crm-delivery-{worker_number}", daemon=True
         ).start()
     threading.Thread(target=stats_reporter, name="crm-delivery-stats", daemon=True).start()
+    if SERVICE_MQTT_ENABLED:
+        threading.Thread(target=service_command_poller, args=(client,), name="crm-service-command-poller", daemon=True).start()
     LOG.info("CRM delivery workers started count=%d", DELIVERY_WORKERS)
     while True:
         time.sleep(60)
