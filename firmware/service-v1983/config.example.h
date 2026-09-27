@@ -12,5 +12,11 @@
 #define MQTT_USERNAME "replace-with-existing-mqtt-username"
 #define MQTT_PASSWORD "replace-with-existing-mqtt-password"
 
+// Beeline settings used by the existing service-controller baseline.
+#define GPRS_APN "internet.beeline.ru"
+#define GPRS_USERNAME ""
+#define GPRS_PASSWORD ""
+#define NTP_SERVER "pool.ntp.org"
+
 // This is the service controller identity. It is not a credential.
 #define SERVICE_CONTROLLER_ID "service-001"

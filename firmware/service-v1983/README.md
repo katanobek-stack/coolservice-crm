@@ -1,11 +1,12 @@
 # Service V1983
 
-This directory is reserved for service-controller firmware for service-001.
-It must be created by applying the MQTT adapter to the known-working V9 source,
-not by deriving behavior from the diagnostic SIM900A sketch.
+This directory contains the `service_controller_v10_mqtt` firmware for
+service-controller `service-001`.
 
-The V9 source is not present in this repository. Before implementation, provide
-its local path or attach the source tree. The resulting firmware will use:
+The current workspace does not contain a source file labelled V9. V10 is based
+on the available, working V1983 baseline
+`C:\\Users\\Admin\\Downloads\\service_controller_v5_target_uart.ino`, preserving its
+SIM800L pins, SH1106 OLED, encoder/back button and TARGET UART. It uses:
 
 - controllerId: service-001;
 - service/service-001/heartbeat;
@@ -22,22 +23,19 @@ never commit it. Its broker values must be copied from the existing VPS bridge
 environment by an authorized operator, never guessed or substituted with a new
 MQTT system.
 
-## Flashing after V9 is supplied
+## Build and flashing
 
-1. Copy the actual V9 source tree into this directory and apply the reviewed
-   MQTT adapter; do not overwrite the known-working source in `Downloads`.
-2. Copy `config.example.h` to `config.h` locally and fill the existing broker
+1. Copy `config.example.h` to `config.h` locally and fill the existing broker
    host, username and password. Keep the file outside Git.
-3. Select the already confirmed V1983 ESP32 board and the same serial port used
-   for the working V9 build. Do not change SIM800L, OLED, or target-UART pin
-   assignments without the V9 source and a hardware check.
-4. Compile, upload manually, and observe the serial monitor at the V9 baud
-   rate. Confirm retained `online` status, then heartbeat/log/status traffic;
-   only the three whitelisted commands may be tested.
-
-No flashable V1983 MQTT sketch is committed yet because the requested V9
-baseline is not present in the workspace. This avoids replacing working UART,
-OLED, SIM800L or command behavior with an inferred implementation.
+2. In Arduino IDE select the confirmed V1983 ESP32 target and install the
+   existing dependencies: TinyGSM and Adafruit GFX/SH110X. No MQTT credential
+   belongs in the sketch itself.
+3. Open `service_controller_v10_mqtt.ino`, compile and upload manually. Do not
+   change SIM800L, OLED, or TARGET-UART pin assignments without a hardware
+   check.
+4. Observe the serial monitor at 115200. Confirm retained `online` status,
+   then heartbeat/log/status traffic; only the three whitelisted commands may
+   be tested.
 
 The service controller's MQTT client needs only the existing Mosquitto broker
 credentials in `config.h`. Its Firestore credential is held by the VPS bridge,
