@@ -37,7 +37,7 @@ coolmonitor/devices/+/status topics.
 быть retained QoS 1 сообщением в service/{controllerId}/status:
 
 ~~~json
-{"controllerId":"device-001","statusId":"boot-17:offline","reportedAt":"2026-09-27T00:00:00Z","state":"offline"}
+{"controllerId":"service-001","statusId":"boot-17:offline","reportedAt":"2026-09-27T00:00:00Z","state":"offline"}
 ~~~
 
 После успешного MQTT-подключения он публикует retained QoS 1 state: online.
@@ -50,7 +50,7 @@ Heartbeat (поле logs необязательно; основной live-ло�
 
 ~~~json
 {
-  "controllerId":"device-001",
+  "controllerId":"service-001",
   "heartbeatId":"boot-17:42",
   "reportedAt":"2026-09-27T00:00:00Z",
   "ip":"10.0.0.24",
@@ -70,20 +70,20 @@ Heartbeat (поле logs необязательно; основной live-ло�
 Live-лог:
 
 ~~~json
-{"controllerId":"device-001","logId":"boot-17:43","reportedAt":"2026-09-27T00:00:02Z","level":"INFO","message":"TARGET << GPRS connected"}
+{"controllerId":"service-001","logId":"boot-17:43","reportedAt":"2026-09-27T00:00:02Z","level":"INFO","message":"TARGET << GPRS connected"}
 ~~~
 
 Команда от bridge:
 
 ~~~json
-{"controllerId":"device-001","commandId":"<server-id>","command":"SERVICE STATUS","requestedAt":"2026-09-27T00:00:04.000Z"}
+{"controllerId":"service-001","commandId":"<server-id>","command":"SERVICE STATUS","requestedAt":"2026-09-27T00:00:04.000Z"}
 ~~~
 
 Разрешены только SERVICE PING, SERVICE STATUS, SERVICE INFO. ESP32 обязан
 дедуплицировать commandId и публиковать один result:
 
 ~~~json
-{"controllerId":"device-001","commandId":"<server-id>","reportedAt":"2026-09-27T00:00:05Z","result":"ok","message":"status queued"}
+{"controllerId":"service-001","commandId":"<server-id>","reportedAt":"2026-09-27T00:00:05Z","result":"ok","message":"status queued"}
 ~~~
 
 RESET, GPIO0 и любые AT-команды не имеют MQTT-контракта и не принимаются
@@ -101,7 +101,7 @@ Bearer device credential.
 необязательный идентификатор:
 
 ~~~
-CRM_SERVICE_CONTROLLER_ID=device-001
+CRM_SERVICE_CONTROLLER_ID=service-001
 CRM_SERVICE_HEARTBEAT_URL=<published heartbeat URL>
 CRM_SERVICE_LOG_URL=<published log URL>
 CRM_SERVICE_STATUS_URL=<published status URL>
@@ -110,8 +110,8 @@ CRM_SERVICE_COMMAND_CLAIM_URL=<published command claim URL>
 CRM_SERVICE_COMMAND_DISPATCH_URL=<published command dispatch URL>
 ~~~
 
-CRM_SERVICE_CONTROLLER_ID по умолчанию равен уже существующему CRM_DEVICE_ID.
-Пока любой из шести URL отсутствует, service MQTT subscription на bridge
+CRM_SERVICE_CONTROLLER_ID по умолчанию равен `service-001`; он не наследует
+CRM_DEVICE_ID и не затрагивает обычную telemetry. Пока любой из шести URL отсутствует, service MQTT subscription на bridge
 отключена, а температура и controller status продолжают работать как раньше.
 
 Команды создаются callable-функцией только для manager/admin/owner. Bridge

@@ -42,7 +42,9 @@ STATUS_TOPIC = "coolmonitor/devices/+/status"
 # Service Monitor uses the same Mosquitto client, broker credentials and
 # SQLite queue. It is deliberately disabled until every non-secret endpoint
 # URL has been configured, so installing this file cannot interrupt telemetry.
-SERVICE_CONTROLLER_ID = os.environ.get("CRM_SERVICE_CONTROLLER_ID", CRM_DEVICE_ID)
+# Service monitoring is isolated from the normal telemetry controller. Keep
+# the explicit env override for installations with another service controller.
+SERVICE_CONTROLLER_ID = os.environ.get("CRM_SERVICE_CONTROLLER_ID", "service-001")
 SERVICE_HEARTBEAT_URL = os.environ.get("CRM_SERVICE_HEARTBEAT_URL", "")
 SERVICE_LOG_URL = os.environ.get("CRM_SERVICE_LOG_URL", "")
 SERVICE_STATUS_URL = os.environ.get("CRM_SERVICE_STATUS_URL", "")
