@@ -40,6 +40,19 @@ export interface MonitoringDeviceState {
   activeAlertIds: Record<string, string>;
 }
 
+/** A stable, technical sensor identifier registered under a controller. */
+export interface MonitoringSensor {
+  sensorId: string;
+  /** Optional operator-facing name. The sensorId is never derived from it. */
+  name?: string;
+  lastSeenAt: Date | null;
+}
+
+/** Current reading for one sensor. It is server-owned, like the legacy parent state. */
+export interface MonitoringSensorState extends MonitoringDeviceState {
+  sensorId: string;
+}
+
 export interface MonitoringControllerStatus {
   controllerId: string;
   statusId: string;
@@ -58,22 +71,13 @@ export interface MonitoringControllerStatus {
 export interface TemperaturePoint {
   measuredAt: Date;
   temperatureC: number;
-  /** Missing is accepted only for legacy in-memory callers and means exact. "unplaced" appears only after approximate placement on the chart. */
-  timeQuality?: "exact" | "estimated" | "unplaced";
+  sensorId?: string;
+  /** Missing is accepted only for legacy in-memory callers and means exact. */
+  timeQuality?: "exact" | "estimated";
   /** Missing is accepted only for legacy data and means realtime delivery. */
   deliveryQuality?: MonitoringDeliveryQuality;
-  /** Server receive time of the source packet; used to place unplaced points near their delivery flush. */
+  /** Server receive time of the source packet, retained for a delivery audit. */
   receivedAt?: Date | null;
-}
-
-export interface UnplacedTemperaturePoint {
-  packetId: string;
-  sensorId: string | null;
-  temperatureC: number;
-  receivedAt: Date | null;
-  deliveryQuality?: MonitoringDeliveryQuality;
-  /** Order of the measurement inside its packet; preserves sequence for approximate placement. */
-  measurementIndex: number;
 }
 
 export interface MonitoringHistoryResult {

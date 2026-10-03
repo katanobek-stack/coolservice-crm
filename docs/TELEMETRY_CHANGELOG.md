@@ -1,5 +1,48 @@
 # История изменений телеметрии
 
+## 2026-10-03 — прекращение `unplaced` telemetry (локально, без deploy)
+
+**Причина.** Контроллер с исправным RTC должен отправлять только измерения с
+достоверным UTC. Старые точки `unplaced` не являются полезной историей для
+графика, а их сохранение создаёт лишние Firestore-операции.
+
+**Изменено.** `ingestTelemetry` принимает только `timeQuality: exact|estimated`
+и требует `measuredAt`; старый `unplaced` отклоняется HTTP 400 до чтения или
+записи Firestore. CRM больше не запрашивает, не размещает на графике и не
+показывает список таких точек. Удалены связанные client-side history-запросы и
+подготавливаемые composite indexes. Добавлен ручной tool
+`purge:unplaced-telemetry`: dry-run по умолчанию, явный scope/confirmation для
+execute, checkpoint и отказ при смешанных пакетах, чтобы не удалить timed data.
+
+**Что требуется отдельно.** Прошивка должна локально отбросить queue head с
+неопределённым UTC без MQTT publish и без блокировки следующих точек. Затем
+нужно отдельно опубликовать `functions:ingestTelemetry`, Firestore Rules и web.
+Production-пакеты, `unplacedPoints`, indexes, VPS, firmware, ключи и env в этом
+изменении не менялись.
+
+## 2026-10-03 — несколько датчиков на одном контроллере (локально, без deploy)
+
+**Изменено.** `ingestTelemetry` создаёт отдельные server-owned состояния
+`monitoringDeviceState/{deviceId}/sensors/{sensorId}` и автоматически ведёт
+реестр `monitoringDevices/{deviceId}/sensors/{sensorId}`. Новое состояние
+продвигается только по более новому `measuredAt` данного датчика; packetId
+по-прежнему дедуплицируется до любых записей read-model. Один sampling cycle
+может содержать одинаковый `measuredAt` у разных sensorId.
+
+**CRM и доступ.** В карточке контроллера добавлен список датчиков, отдельные
+последние показания и отдельный одновременно видимый график для каждого
+sensorId. Каждый history-query фильтруется по своему sensorId, поэтому серии
+никогда не смешиваются. Имя хранится
+в registry-документе отдельно от технического ID: manager/admin/owner могут
+менять `name`, mechanic имеет read-only доступ. Старый контроллер без
+per-sensor state показывается как один совместимый `default` датчик.
+
+**Намеренно не менялось.** Existing packet paths, packetId, telemetry keys,
+alert contract, production data, rules/indexes deploy, VPS, firmware,
+Mosquitto и env-файлы. Реальная многодатчиковая прошивка в этой ветке не
+обнаружена и не менялась; UI/ingest принимают согласованные opaque IDs,
+включая суффиксы `_2`…`_8`.
+
 ## 2026-09-21 — полный dry-run backfill `device-001` (без 2026-09-19 UTC)
 
 **Режим и граница.** Выполнен только read-only dry-run всей legacy-истории

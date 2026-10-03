@@ -324,6 +324,36 @@ describe("ingestTelemetry emulator integration", () => {
     assert.deepEqual(JSON.parse(JSON.stringify((await rollupRef.get()).data())), snapshotBeforeDuplicate);
   });
 
+  test("keeps two sensors separate while accepting one shared sampling timestamp", async () => {
+    const measuredAt = new Date(Date.now() - 15_000).toISOString();
+    const body = packet({
+      packetId: "multi-sensor:000001",
+      measurements: [
+        { measuredAt, temperatureC: -18.5, sensorId: "temperature-1" },
+        { measuredAt, temperatureC: -7.25, sensorId: "temperature-1_2" },
+      ],
+    });
+    const first = await postTelemetry(body);
+    assert.equal(first.status, 202);
+    assert.deepEqual(await first.json(), {
+      packetId: body.packetId, outcome: "stored", measurementsReceived: 2, measurementsCreated: 2,
+    });
+    const [firstSensor, secondSensor, firstRegistry, secondRegistry] = await Promise.all([
+      firestore.doc(`monitoringDeviceState/${DEVICE_ID}/sensors/temperature-1`).get(),
+      firestore.doc(`monitoringDeviceState/${DEVICE_ID}/sensors/temperature-1_2`).get(),
+      firestore.doc(`monitoringDevices/${DEVICE_ID}/sensors/temperature-1`).get(),
+      firestore.doc(`monitoringDevices/${DEVICE_ID}/sensors/temperature-1_2`).get(),
+    ]);
+    assert.equal(firstSensor.data().temperatureC, -18.5);
+    assert.equal(secondSensor.data().temperatureC, -7.25);
+    assert.equal(firstRegistry.data().sensorId, "temperature-1");
+    assert.equal(secondRegistry.data().sensorId, "temperature-1_2");
+
+    const duplicate = await postTelemetry(body);
+    assert.equal(duplicate.status, 200);
+    assert.equal((await firestore.collection(`monitoringTelemetry/${DEVICE_ID}/points`).get()).size, 2);
+  });
+
   test("defaults legacy delivery to realtime and preserves delayed delivery independently from time quality", async () => {
     const body = packet({
       packetId: "boot-a:time-quality",
@@ -360,61 +390,26 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal((await firestore.collectionGroup("packets").get()).size, 1);
   });
 
-  test("stores unplaced telemetry idempotently without changing the current temperature", async () => {
+  test("rejects telemetry without a reliable measuredAt before any Firestore write", async () => {
     const body = packet({
       packetId: "previous-boot:unplaced-1",
       measurements: [{ temperatureC: -18.5, sensorId: "temperature-1", timeQuality: "unplaced" }],
     });
-    const first = await postTelemetry(body);
-    assert.equal(first.status, 202);
-    assert.deepEqual(await first.json(), {
-      packetId: body.packetId,
-      outcome: "stored",
-      measurementsReceived: 1,
-      measurementsCreated: 1,
+    const response = await postTelemetry(body);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      error: "invalid_packet",
+      message: "measurements[0].timeQuality unplaced is not supported",
     });
-    const [history, state] = await Promise.all([
-      firestore.doc(`monitoringTelemetry/${DEVICE_ID}/packets/${body.packetId}`).get(),
-      firestore.doc(`monitoringDeviceState/${DEVICE_ID}`).get(),
-    ]);
-    assert.equal(history.data().hasUnplaced, true);
-    assert.equal(history.data().unplacedCount, 1);
-    assert.equal(history.data().measurements[0].timeQuality, "unplaced");
-    assert.equal(history.data().measurements[0].deliveryQuality, "realtime");
-    assert.equal(history.data().measurements[0].sensorId, "temperature-1");
-    assert.equal(history.data().measurements[0].measuredAt, undefined);
-    assert.ok(history.data().receivedAt instanceof Timestamp);
-    assert.equal(state.data().temperatureC, undefined);
-    assert.equal(state.data().measuredAt, undefined);
-
-    const unplacedPoint = await firestore.doc(
-      `monitoringTelemetry/${DEVICE_ID}/unplacedPoints/${stableMeasurementId(body.packetId, 0)}`,
-    ).get();
-    assert.equal(unplacedPoint.exists, true);
-    assert.equal(unplacedPoint.data().measuredAt, undefined);
-
-    const duplicate = await postTelemetry(body);
-    assert.equal(duplicate.status, 200);
-    assert.deepEqual(await duplicate.json(), {
-      packetId: body.packetId,
-      outcome: "duplicate",
-      measurementsReceived: 1,
-      measurementsCreated: 0,
-    });
-    assert.equal((await firestore.collectionGroup("packets").get()).size, 1);
+    assert.equal((await firestore.collectionGroup("packets").get()).size, 0);
   });
 
-  test("requires measuredAt for exact and estimated telemetry and forbids it for unplaced", async () => {
+  test("requires measuredAt for exact and estimated telemetry", async () => {
     const exactWithoutTime = await postTelemetry(packet({
       packetId: "invalid:exact-no-time",
       measurements: [{ temperatureC: -18.5, sensorId: "temperature-1", timeQuality: "exact" }],
     }));
     assert.equal(exactWithoutTime.status, 400);
-    const unplacedWithTime = await postTelemetry(packet({
-      packetId: "invalid:unplaced-time",
-      measurements: [{ measuredAt: new Date().toISOString(), temperatureC: -18.5, sensorId: "temperature-1", timeQuality: "unplaced" }],
-    }));
-    assert.equal(unplacedWithTime.status, 400);
     assert.equal((await firestore.collectionGroup("packets").get()).size, 0);
   });
 

@@ -379,11 +379,9 @@
 .monitor-chart-line { fill: none; stroke: #2563eb; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
 .monitor-chart-line--delayed { stroke: #ea580c; }
 .monitor-chart-line--estimated { stroke-dasharray: 8 6; }
-.monitor-chart-line--unplaced { stroke: #7c3aed; }
 .monitor-chart-point { fill: #fff; stroke: #2563eb; stroke-width: 2.5; }
 .monitor-chart-point--delayed { stroke: #ea580c; fill: #fff7ed; }
 .monitor-chart-point--estimated { stroke-dasharray: 3 2; }
-.monitor-chart-point--unplaced { stroke: #7c3aed; fill: #f5f3ff; }
 .monitor-chart-point { cursor: pointer; }
 .monitor-chart-point:focus { outline: none; stroke: #0f172a; stroke-width: 4; }
 .monitor-chart-limit { stroke: #dc2626; stroke-width: 2; stroke-dasharray: 8 5; }
@@ -418,7 +416,6 @@
 .monitor-legend-line { width: 18px; height: 3px; border-radius: 2px; background: #2563eb; }
 .monitor-legend-line--delayed { background: #ea580c; }
 .monitor-legend-line--estimated { background: repeating-linear-gradient(to right, #2563eb 0 7px, transparent 7px 11px); }
-.monitor-legend-line--unplaced { background: #7c3aed; }
 .monitor-legend-limit { width: 18px; border-top: 2px dashed #dc2626; }
 .monitor-limit-warning {
   margin-bottom: 12px;
@@ -631,20 +628,24 @@
 .monitor-diagnostics-grid span, .monitor-diagnostics-grid small { color: var(--text3); font-size: 12px; }
 .monitor-diagnostics-grid strong { color: var(--text); font-size: 14px; overflow-wrap: anywhere; }
 
-.monitor-unplaced {
-  margin-top: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg2);
-  padding: 12px;
-}
-.monitor-unplaced-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--text); }
-.monitor-unplaced-head span { min-width: 26px; padding: 2px 8px; border-radius: 999px; background: #fef3f2; color: #b42318; font-weight: 700; text-align: center; }
-.monitor-unplaced > p, .monitor-unplaced-empty { margin: 5px 0 0; color: var(--text3); font-size: 12px; }
-.monitor-unplaced-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
-.monitor-unplaced-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding-top: 7px; border-top: 1px solid var(--border); color: var(--text3); font-size: 12px; }
-.monitor-unplaced-list strong { color: var(--text); font-size: 13px; }
-.monitor-unplaced-list span, .monitor-unplaced-list time { overflow-wrap: anywhere; }
+.monitor-sensors { margin-bottom: 16px; }
+.monitor-sensor-count { min-width: 28px; padding: 3px 9px; border-radius: 999px; background: var(--bg3); color: var(--text2); font-size: 13px; font-weight: 800; text-align: center; }
+.monitor-sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr)); gap: 10px; }
+.monitor-sensor-card { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); overflow: hidden; }
+.monitor-sensor-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 12px 12px 0; }
+.monitor-sensor-title { min-width: 0; display: grid; gap: 4px; color: var(--text); font-size: 14px; }
+.monitor-sensor-title strong { overflow-wrap: anywhere; }
+.monitor-sensor-edit { width: max-content; padding: 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11px; font-weight: 700; }
+.monitor-sensor-name-form { display: flex; flex-wrap: wrap; gap: 5px; }
+.monitor-sensor-name-form input { min-width: 120px; flex: 1; padding: 6px 7px; border: 1px solid var(--border2); border-radius: 6px; background: #fff; color: var(--text); font-size: 12px; }
+.monitor-sensor-name-form button { padding: 6px 7px; border: 1px solid var(--border2); border-radius: 6px; background: #fff; color: var(--text2); cursor: pointer; font-size: 11px; }
+.monitor-sensor-name-form .btn-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.monitor-sensor-name-form span { width: 100%; color: #b42318; font-size: 11px; }
+.monitor-sensor-select { width: 100%; padding: 12px; color: inherit; text-align: left; display: grid; gap: 4px; }
+.monitor-sensor-temperature { color: var(--text); font: 800 24px 'JetBrains Mono', monospace; }
+.monitor-sensor-meta, .monitor-sensor-id { color: var(--text3); font-size: 12px; }
+.monitor-sensor-history-list { display: grid; gap: 16px; }
+.monitor-sensor-history { margin: 0; }
 
 @media (max-width: 767px) {
   .monitor-alert-center { top: 12px; right: 12px; }
@@ -652,8 +653,7 @@
   .monitor-alert-panel { position: fixed; top: 62px; right: 12px; max-height: calc(100vh - 148px); }
   .monitor-alert-event-main { font-size: 13px; }
   .monitor-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .monitor-unplaced-list li { grid-template-columns: auto 1fr; }
-  .monitor-unplaced-list time { grid-column: 1 / -1; }
+  .monitor-sensor-grid { grid-template-columns: 1fr; }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
@@ -666,7 +666,6 @@
 .monitor-navigator-line { fill: none; stroke: #2563eb; stroke-width: 2; stroke-linecap: round; }
 .monitor-navigator-line--delayed { stroke: #ea580c; }
 .monitor-navigator-line--estimated { stroke-dasharray: 6 4; }
-.monitor-navigator-line--unplaced { stroke: #7c3aed; }
 .monitor-navigator-shade { fill: rgba(15, 23, 42, 0.40); pointer-events: none; }
 .monitor-navigator-window { fill: rgba(255, 255, 255, 0.06); stroke: #2563eb; stroke-width: 2; cursor: grab; touch-action: none; }
 .monitor-navigator-window:active { cursor: grabbing; }

@@ -55,6 +55,16 @@ service cloud.firestore {
       return !(field in data) || data[field] is string;
     }
 
+    function validSensorRegistry(data, sensorId) {
+      return data.keys().hasOnly(["deviceId", "sensorId", "name", "lastSeenAt", "updatedAt"])
+        && data.sensorId == sensorId
+        && sensorId.matches('^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$')
+        && (!("deviceId" in data) || data.deviceId is string)
+        && (!("name" in data) || (data.name is string && data.name.size() <= 80))
+        && (!("lastSeenAt" in data) || data.lastSeenAt is timestamp)
+        && (!("updatedAt" in data) || data.updatedAt is timestamp);
+    }
+
     function validSafeStaffFields(data) {
       return validOptionalString(data, "name")
         && validOptionalString(data, "email")
@@ -230,11 +240,31 @@ service cloud.firestore {
         allow read: if isAuth();
         allow write: if false;
       }
+
+      // A name is CRM metadata only. The immutable technical sensorId is the
+      // document id and is also written by ingestTelemetry through Admin SDK.
+      match /sensors/{sensorId} {
+        allow read: if isAuth();
+        allow create: if isAuth() && isManagerOrAbove()
+          && request.resource.data.keys().hasOnly(["sensorId", "name", "updatedAt"])
+          && validSensorRegistry(request.resource.data, sensorId);
+        allow update: if isAuth() && isManagerOrAbove()
+          && request.resource.data.sensorId == resource.data.sensorId
+          && request.resource.data.deviceId == resource.data.deviceId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "updatedAt"])
+          && validSensorRegistry(request.resource.data, sensorId);
+        allow delete: if false;
+      }
     }
 
     match /monitoringDeviceState/{deviceId} {
       allow read: if isAuth();
       allow write: if false;
+
+      match /sensors/{sensorId} {
+        allow read: if isAuth();
+        allow write: if false;
+      }
     }
 
     // Controller diagnostics have their own current document and event history.
@@ -264,10 +294,6 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      match /unplacedPoints/{pointId} {
-        allow read: if isAuth();
-        allow write: if false;
-      }
 
       match /rollups/{rollupId} {
         allow read: if isAuth();

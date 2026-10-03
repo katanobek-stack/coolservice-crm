@@ -24,12 +24,13 @@ import type {
   MonitoringDevice,
   MonitoringControllerStatus,
   MonitoringDeviceState,
+  MonitoringSensor,
+  MonitoringSensorState,
   MonitoringHistoryResult,
   MonitoringPeriod,
   MonitoringTemperatureRule,
   MonitoringTemperatureRuleInput,
   TemperaturePoint,
-  UnplacedTemperaturePoint,
 } from "../types/monitoring";
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
@@ -87,6 +88,19 @@ function mapState(id: string, data: DocumentData): MonitoringDeviceState {
       )) as Record<string, string>
       : {},
   };
+}
+function mapSensor(id: string, data: DocumentData): MonitoringSensor | null {
+  if (typeof data.sensorId !== "string" || data.sensorId !== id) return null;
+  return {
+    sensorId: id,
+    name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : undefined,
+    lastSeenAt: asDate(data.lastSeenAt),
+  };
+}
+
+function mapSensorState(id: string, data: DocumentData): MonitoringSensorState | null {
+  if (typeof data.sensorId !== "string" || data.sensorId !== id) return null;
+  return { ...mapState(typeof data.deviceId === "string" ? data.deviceId : "", data), sensorId: id };
 }
 
 function mapControllerStatus(id: string, data: DocumentData): MonitoringControllerStatus | null {
@@ -232,6 +246,50 @@ export function listenMonitoringStates(
   }, onError);
 }
 
+/** Sensor registry is read only while a controller card is open. */
+export function listenMonitoringDeviceSensors(
+  deviceId: string,
+  onData: (sensors: MonitoringSensor[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(collection(getFirebaseDb(), "monitoringDevices", deviceId, "sensors"), (snapshot) => {
+    onData(snapshot.docs
+      .map((item) => mapSensor(item.id, item.data()))
+      .filter((sensor): sensor is MonitoringSensor => sensor !== null)
+      .sort((left, right) => left.sensorId.localeCompare(right.sensorId, "en")));
+  }, onError);
+}
+// Samples without reliable time intentionally have no browser listener.
+// Samples without a reliable measuredAt are rejected by ingestTelemetry and
+// intentionally have no browser history listener.
+/** Per-sensor state is deliberately not part of the CRM-wide state subscription. */
+export function listenMonitoringSensorStates(
+  deviceId: string,
+  onData: (states: Map<string, MonitoringSensorState>) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(collection(getFirebaseDb(), "monitoringDeviceState", deviceId, "sensors"), (snapshot) => {
+    onData(new Map(snapshot.docs.flatMap((item) => {
+      const state = mapSensorState(item.id, item.data());
+      return state ? [[item.id, state] as const] : [];
+    })));
+  }, onError);
+}
+
+/** Only the friendly label is client-editable; the stable sensorId remains the document id. */
+export function saveMonitoringSensorName(
+  deviceId: string,
+  sensorId: string,
+  name: string,
+): Promise<void> {
+  const trimmed = name.trim();
+  return setDoc(doc(getFirebaseDb(), "monitoringDevices", deviceId, "sensors", sensorId), {
+    sensorId,
+    ...(trimmed ? { name: trimmed } : { name: "" }),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
 export function listenMonitoringControllerStatuses(
   onData: (statuses: Map<string, MonitoringControllerStatus>) => void,
   onError: (error: Error) => void,
@@ -328,6 +386,7 @@ export function markMonitoringAlertViewed(eventId: string, uid: string): Promise
 
 export function listenDeviceHistory(
   deviceId: string,
+  sensorId: string,
   period: MonitoringPeriod,
   onData: (result: MonitoringHistoryResult) => void,
   onError: (error: Error) => void,
@@ -335,15 +394,20 @@ export function listenDeviceHistory(
 ): Unsubscribe {
   if (monitoringPeriodMs(period) > 24 * 60 * 60_000) {
     const cutover = Timestamp.fromMillis(Math.max(MONITORING_OVERVIEW_CUTOVER_MS, nowMs - monitoringPeriodMs(period)));
-    const rollups = query(collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "rollups"), where("hourStart", ">=", cutover), orderBy("hourStart", "asc"));
+    const rollups = query(
+      collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "rollups"),
+      where("sensorId", "==", sensorId),
+      where("hourStart", ">=", cutover),
+      orderBy("hourStart", "asc"),
+    );
     return onSnapshot(rollups, (snapshot) => {
       const points: TemperaturePoint[] = [];
       snapshot.docs.forEach((item) => Object.values(item.data().buckets5m ?? {}).forEach((bucket: any) => Object.entries(bucket.aggregates ?? {}).forEach(([quality, aggregate]: [string, any]) => {
         if (!Number.isFinite(aggregate.minTemperatureC) || !Number.isFinite(aggregate.maxTemperatureC)) return;
         const measuredAt = asDate(bucket.bucketStart); if (!measuredAt) return;
         const [timeQuality, deliveryQuality] = quality.split("_");
-        points.push({ measuredAt, temperatureC: aggregate.minTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
-        if (aggregate.maxTemperatureC !== aggregate.minTemperatureC) points.push({ measuredAt: new Date(measuredAt.getTime() + 1), temperatureC: aggregate.maxTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
+        points.push({ sensorId, measuredAt, temperatureC: aggregate.minTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
+        if (aggregate.maxTemperatureC !== aggregate.minTemperatureC) points.push({ sensorId, measuredAt: new Date(measuredAt.getTime() + 1), temperatureC: aggregate.maxTemperatureC, timeQuality: timeQuality === "estimated" ? "estimated" : "exact", deliveryQuality: deliveryQuality === "delayed" ? "delayed" : "realtime" });
       })));
       onData({ points, packetCount: snapshot.size, limitReached: false });
     }, onError);
@@ -354,6 +418,7 @@ export function listenDeviceHistory(
   // at the old 1000-packet cap (which made the chart look incomplete).
   const pointsQuery = query(
     collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "points"),
+    where("sensorId", "==", sensorId),
     where("measuredAt", ">", startedAt),
     orderBy("measuredAt", "asc"),
   );
@@ -366,6 +431,7 @@ export function listenDeviceHistory(
       if (!measuredAt || typeof temperatureC !== "number" || !Number.isFinite(temperatureC)) return [];
       if (!isChartTimeQuality(data.timeQuality)) return [];
       return [{
+        sensorId: typeof data.sensorId === "string" ? data.sensorId : undefined,
         measuredAt,
         temperatureC,
         timeQuality: data.timeQuality === "estimated" ? "estimated" : "exact",
@@ -380,42 +446,4 @@ export function listenDeviceHistory(
     });
   }, onError);
 }
-
-/**
- * Unplaced samples deliberately have no measuredAt, so they are read separately
- * from the time-window query and can never enter the chart/statistics pipeline.
- */
-export function listenDeviceUnplacedHistory(
-  deviceId: string,
-  onData: (points: UnplacedTemperaturePoint[]) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
-  const packets = query(
-    collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
-    where("hasUnplaced", "==", true),
-    orderBy("receivedAt", "desc"),
-    limit(50),
-  );
-  return onSnapshot(packets, (snapshot) => {
-    const points: UnplacedTemperaturePoint[] = [];
-    snapshot.docs.forEach((packet) => {
-      const receivedAt = asDate(packet.data().receivedAt);
-      const measurements = packet.data().measurements;
-      if (!Array.isArray(measurements)) return;
-      measurements.forEach((measurement, measurementIndex) => {
-        if (typeof measurement !== "object" || measurement === null) return;
-        if (measurement.timeQuality !== "unplaced") return;
-        if (typeof measurement.temperatureC !== "number" || !Number.isFinite(measurement.temperatureC)) return;
-        points.push({
-          packetId: packet.id,
-          sensorId: typeof measurement.sensorId === "string" ? measurement.sensorId : null,
-          temperatureC: measurement.temperatureC,
-          receivedAt,
-          measurementIndex,
-          deliveryQuality: measurement.deliveryQuality === "delayed" ? "delayed" : "realtime",
-        });
-      });
-    });
-    onData(points);
-  }, onError);
-}
+// No listener exists for rejected unplaced telemetry.

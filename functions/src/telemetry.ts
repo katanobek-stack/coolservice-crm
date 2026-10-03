@@ -12,7 +12,6 @@ import {
   type TemperatureRuleVersion,
 } from "./telemetryAlerts";
 import {
-  isTimedReadModelMeasurement,
   nextRollupData,
   normalizedSensorId,
   pointDocumentData,
@@ -41,14 +40,7 @@ interface TimedMeasurement {
   sensorId?: string;
 }
 
-interface UnplacedMeasurement {
-  temperatureC: number;
-  timeQuality: "unplaced";
-  deliveryQuality: "realtime" | "delayed";
-  sensorId: string;
-}
-
-type ValidMeasurement = TimedMeasurement | UnplacedMeasurement;
+type ValidMeasurement = TimedMeasurement;
 
 interface ValidPacket {
   deviceId: string;
@@ -105,10 +97,6 @@ function parseMeasuredAt(value: unknown, nowMs: number): Date {
   return measuredAt;
 }
 
-function hasMeasuredTime(measurement: ValidMeasurement): measurement is TimedMeasurement {
-  return measurement.timeQuality !== "unplaced";
-}
-
 function parsePacket(body: unknown, nowMs: number): ValidPacket {
   if (!isRecord(body) || !hasOnlyKeys(body, ["deviceId", "packetId", "measurements"])) {
     throw new RequestValidationError("body must contain only deviceId, packetId and measurements");
@@ -130,6 +118,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
   }
 
   let previousTime = Number.NEGATIVE_INFINITY;
+  const sensorTimeKeys = new Set<string>();
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
     if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "deliveryQuality", "sensorId"])) {
       throw new RequestValidationError(`measurements[${index}] has unknown fields`);
@@ -143,7 +132,14 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
       throw new RequestValidationError(`measurements[${index}].temperatureC is outside DS18B20 range`);
     }
     const timeQuality = measurement.timeQuality ?? "exact";
-    if (timeQuality !== "exact" && timeQuality !== "estimated" && timeQuality !== "unplaced") {
+    if (timeQuality === "unplaced") {
+      // The controller now drops samples for which its RTC cannot provide a
+      // reliable UTC timestamp. Refuse old firmware defensively: accepting
+      // these values would create Firestore data which CRM cannot truthfully
+      // place on a time axis.
+      throw new RequestValidationError(`measurements[${index}].timeQuality unplaced is not supported`);
+    }
+    if (timeQuality !== "exact" && timeQuality !== "estimated") {
       throw new RequestValidationError(`measurements[${index}].timeQuality is invalid`);
     }
     const deliveryQuality = measurement.deliveryQuality ?? "realtime";
@@ -154,19 +150,18 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     if (sensorId !== undefined && (typeof sensorId !== "string" || !SENSOR_ID_PATTERN.test(sensorId))) {
       throw new RequestValidationError(`measurements[${index}].sensorId is invalid`);
     }
-    if (timeQuality === "unplaced") {
-      if (Object.prototype.hasOwnProperty.call(measurement, "measuredAt")) {
-        throw new RequestValidationError(`measurements[${index}].measuredAt must be omitted for unplaced time`);
-      }
-      if (typeof sensorId !== "string") {
-        throw new RequestValidationError(`measurements[${index}].sensorId is required for unplaced time`);
-      }
-      return { temperatureC: measurement.temperatureC, timeQuality, deliveryQuality, sensorId };
-    }
     const measuredAt = parseMeasuredAt(measurement.measuredAt, nowMs);
-    if (measuredAt.getTime() <= previousTime) {
-      throw new RequestValidationError("measurements must be ordered by unique measuredAt values");
+    // Multiple DS18B20 sensors are sampled during the same controller cycle,
+    // so adjacent sensors may legitimately have the same measuredAt. Packet
+    // order remains deterministic and stableMeasurementId still uses its index.
+    if (measuredAt.getTime() < previousTime) {
+      throw new RequestValidationError("measurements must be ordered by measuredAt values");
     }
+    const sensorTimeKey = `${sensorId ?? "default"}\u0000${measuredAt.getTime()}`;
+    if (sensorTimeKeys.has(sensorTimeKey)) {
+      throw new RequestValidationError("one sensor cannot have duplicate measuredAt values in a packet");
+    }
+    sensorTimeKeys.add(sensorTimeKey);
     previousTime = measuredAt.getTime();
     return {
       measuredAt,
@@ -232,8 +227,7 @@ export const ingestTelemetry = onRequest(
 
     try {
       const receivedAt = Timestamp.now();
-      const timedMeasurements = packet.measurements.filter(hasMeasuredTime);
-      const latest = timedMeasurements[timedMeasurements.length - 1];
+      const latest = packet.measurements.at(-1);
 
       const ingestOutcome = await firestore.runTransaction<IngestOutcome>(async (transaction) => {
         const [currentDevice, currentCredential, existingPacket, currentState, currentRules] = await Promise.all([
@@ -261,19 +255,28 @@ export const ingestTelemetry = onRequest(
         // Packets remain the immutable delivery audit. These deterministic
         // documents are a separate read model for bounded history queries and
         // overview rollups; they are created only after packet de-duplication.
-        const readModelMeasurements: ReadModelMeasurement[] = packet.measurements.map((measurement, measurementIndex) => ({
+        const readModelMeasurements: Array<ReadModelMeasurement & { measuredAt: Date }> = packet.measurements.map((measurement, measurementIndex) => ({
           packetId: packet.packetId,
           measurementIndex,
           sensorId: measurement.sensorId,
           temperatureC: measurement.temperatureC,
           timeQuality: measurement.timeQuality,
           deliveryQuality: measurement.deliveryQuality,
-          ...(hasMeasuredTime(measurement) ? { measuredAt: measurement.measuredAt } : {}),
+          measuredAt: measurement.measuredAt,
         }));
         const rollupRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        const sensorStateRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        const sensorRegistryRefs = new Map<string, FirebaseFirestore.DocumentReference>();
         for (const measurement of readModelMeasurements) {
-          if (!isTimedReadModelMeasurement(measurement)) continue;
           const sensorId = normalizedSensorId(measurement.sensorId);
+          sensorStateRefs.set(
+            sensorId,
+            firestore.doc(`monitoringDeviceState/${packet.deviceId}/sensors/${sensorId}`),
+          );
+          sensorRegistryRefs.set(
+            sensorId,
+            firestore.doc(`monitoringDevices/${packet.deviceId}/sensors/${sensorId}`),
+          );
           const ref = firestore.doc(
             `monitoringTelemetry/${packet.deviceId}/rollups/${rollupDocumentId(sensorId, measurement.measuredAt.getTime())}`,
           );
@@ -285,6 +288,14 @@ export const ingestTelemetry = onRequest(
         const rollupDataByPath = new Map<string, Record<string, unknown> | undefined>();
         rollupSnapshots.forEach((snapshot) => rollupDataByPath.set(
           snapshot.ref.path,
+          snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
+        ));
+        const sensorStateSnapshots = sensorStateRefs.size
+          ? await transaction.getAll(...sensorStateRefs.values())
+          : [];
+        const sensorStateById = new Map<string, Record<string, unknown> | undefined>();
+        sensorStateSnapshots.forEach((snapshot) => sensorStateById.set(
+          snapshot.id,
           snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
         ));
 
@@ -336,7 +347,7 @@ export const ingestTelemetry = onRequest(
           : fallbackCursor instanceof Timestamp ? fallbackCursor.toMillis() : Number.NEGATIVE_INFINITY;
         const processedThroughMs = Math.max(
           initialCursorMs,
-          ...timedMeasurements.map((measurement) => measurement.measuredAt.getTime()),
+          ...packet.measurements.map((measurement) => measurement.measuredAt.getTime()),
         );
         const peak = (
           event: Record<string, unknown>,
@@ -396,7 +407,6 @@ export const ingestTelemetry = onRequest(
           };
 
           for (const [measurementIndex, measurement] of packet.measurements.entries()) {
-            if (!hasMeasuredTime(measurement)) continue;
             const measurementMs = measurement.measuredAt.getTime();
             const version = ruleVersionAt(rule, measurementMs);
             const violated = version
@@ -531,33 +541,34 @@ export const ingestTelemetry = onRequest(
           timeQuality: measurement.timeQuality,
           deliveryQuality: measurement.deliveryQuality,
           ...(measurement.sensorId ? { sensorId: measurement.sensorId } : {}),
-          ...(hasMeasuredTime(measurement) ? { measuredAt: Timestamp.fromDate(measurement.measuredAt) } : {}),
+          measuredAt: Timestamp.fromDate(measurement.measuredAt),
         }));
-        const timedStoredMeasurements = storedMeasurements.filter((measurement) => measurement.measuredAt instanceof Timestamp);
-        const unplacedCount = storedMeasurements.length - timedStoredMeasurements.length;
         transaction.create(packetRef, {
           deviceId: packet.deviceId,
           packetId: packet.packetId,
           measurements: storedMeasurements,
           sampleCount: storedMeasurements.length,
-          ...(timedStoredMeasurements.length ? {
-            firstMeasuredAt: timedStoredMeasurements[0].measuredAt,
-            lastMeasuredAt: timedStoredMeasurements[timedStoredMeasurements.length - 1].measuredAt,
-          } : {}),
-          hasUnplaced: unplacedCount > 0,
-          unplacedCount,
+          firstMeasuredAt: storedMeasurements[0].measuredAt,
+          lastMeasuredAt: storedMeasurements[storedMeasurements.length - 1].measuredAt,
           receivedAt,
         });
         for (const measurement of readModelMeasurements) {
           const measurementId = stableMeasurementId(packet.packetId, measurement.measurementIndex);
-          const collection = isTimedReadModelMeasurement(measurement) ? "points" : "unplacedPoints";
           transaction.create(
-            firestore.doc(`monitoringTelemetry/${packet.deviceId}/${collection}/${measurementId}`),
+            firestore.doc(`monitoringTelemetry/${packet.deviceId}/points/${measurementId}`),
             pointDocumentData(packet.deviceId, measurement, receivedAt),
           );
         }
+        // Sensor registry stores only stable IDs and optional CRM-facing names.
+        // merge preserves a name entered by staff when later telemetry arrives.
+        sensorRegistryRefs.forEach((ref, sensorId) => {
+          transaction.set(ref, {
+            deviceId: packet.deviceId,
+            sensorId,
+            lastSeenAt: receivedAt,
+          }, { merge: true });
+        });
         for (const measurement of readModelMeasurements) {
-          if (!isTimedReadModelMeasurement(measurement)) continue;
           const sensorId = normalizedSensorId(measurement.sensorId);
           const ref = firestore.doc(
             `monitoringTelemetry/${packet.deviceId}/rollups/${rollupDocumentId(sensorId, measurement.measuredAt.getTime())}`,
@@ -598,6 +609,44 @@ export const ingestTelemetry = onRequest(
           });
         }
         transaction.set(stateRef, stateUpdate, { mergeFields: Object.keys(stateUpdate) });
+
+        // The legacy parent state remains the controller-wide compatibility
+        // summary. Per-sensor state is advanced independently by measuredAt so
+        // an old delayed sample cannot make an individual sensor look current.
+        const measurementsBySensor = new Map<string, Array<{ measurement: ValidMeasurement; measurementIndex: number }>>();
+        packet.measurements.forEach((measurement, measurementIndex) => {
+          const sensorId = normalizedSensorId(measurement.sensorId);
+          const items = measurementsBySensor.get(sensorId) ?? [];
+          items.push({ measurement, measurementIndex });
+          measurementsBySensor.set(sensorId, items);
+        });
+        measurementsBySensor.forEach((items, sensorId) => {
+          const latestForSensor = items.at(-1);
+          const currentSensorState = sensorStateById.get(sensorId) ?? {};
+          const currentSensorMeasuredAt = currentSensorState.measuredAt;
+          const shouldAdvance = latestForSensor !== undefined && (
+            !(currentSensorMeasuredAt instanceof Timestamp)
+            || latestForSensor.measurement.measuredAt.getTime() > currentSensorMeasuredAt.toMillis()
+          );
+          const update: Record<string, unknown> = {
+            deviceId: packet.deviceId,
+            sensorId,
+            lastPacketId: packet.packetId,
+            lastReceivedAt: receivedAt,
+            sampleCount: items.length,
+          };
+          if (shouldAdvance && latestForSensor) {
+            Object.assign(update, {
+              packetId: packet.packetId,
+              temperatureC: latestForSensor.measurement.temperatureC,
+              timeQuality: latestForSensor.measurement.timeQuality,
+              deliveryQuality: latestForSensor.measurement.deliveryQuality,
+              measuredAt: Timestamp.fromDate(latestForSensor.measurement.measuredAt),
+              receivedAt,
+            });
+          }
+          transaction.set(sensorStateRefs.get(sensorId)!, update, { mergeFields: Object.keys(update) });
+        });
         eventWrites.forEach((pending, eventId) => {
           const eventRef = firestore.doc(`monitoringAlertEvents/${eventId}`);
           if (pending.isNew) transaction.create(eventRef, pending.data);

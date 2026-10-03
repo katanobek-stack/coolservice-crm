@@ -3,8 +3,8 @@ import type {
   MonitoringControllerStatus,
   MonitoringPeriod,
   MonitoringTemperatureRule,
-  MonitoringDeliveryQuality,
   MonitoringTargetType,
+  MonitoringSensor,
   TemperaturePoint,
 } from "../types/monitoring";
 import type { Client } from "../types/client";
@@ -13,6 +13,14 @@ export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 export const MIN_CHART_WINDOW_MS = 60_000;
+
+/** CRM-facing name is intentionally separate from the stable sensorId. */
+export function sensorDisplayName(
+  sensor: Pick<MonitoringSensor, "name"> | undefined,
+  index: number,
+): string {
+  return sensor?.name?.trim() || `Датчик ${index + 1}`;
+}
 
 export interface ChartWindow {
   start: number;
@@ -91,7 +99,7 @@ export function zoomChartWindow(
 export function isChartTimeQuality(
   timeQuality: unknown,
 ): timeQuality is "exact" | "estimated" | undefined {
-  return timeQuality !== "unplaced";
+  return timeQuality === undefined || timeQuality === "exact" || timeQuality === "estimated";
 }
 
 export interface MonitoringStatus {
@@ -133,7 +141,7 @@ export function sortAndDedupePoints(points: TemperaturePoint[]): TemperaturePoin
   points.forEach((point) => {
     const normalized: TemperaturePoint = {
       ...point,
-      timeQuality: point.timeQuality === "estimated" ? "estimated" : point.timeQuality === "unplaced" ? "unplaced" : "exact",
+      timeQuality: point.timeQuality === "estimated" ? "estimated" : "exact",
       deliveryQuality: point.deliveryQuality === "delayed" ? "delayed" : "realtime",
     };
     const timestamp = normalized.measuredAt.getTime();
@@ -212,7 +220,7 @@ export function downsampleTemperaturePoints(
 }
 
 export interface TemperatureChartSegment {
-  timeQuality: "exact" | "estimated" | "unplaced";
+  timeQuality: "exact" | "estimated";
   deliveryQuality: "realtime" | "delayed";
   from: TemperaturePoint;
   to: TemperaturePoint;
@@ -220,7 +228,7 @@ export interface TemperatureChartSegment {
 
 /**
  * Neighbouring samples always connect into one continuous line. A segment is
- * styled by its "weaker" endpoint (unplaced over estimated over exact; delayed
+ * styled by its "weaker" endpoint (estimated over exact; delayed
  * over realtime), so a transition between online and offline runs is drawn in
  * the offline colour without breaking the chart.
  */
@@ -233,9 +241,7 @@ export function temperatureChartSegments(points: TemperaturePoint[]): Temperatur
     const fromQuality = from.timeQuality ?? "exact";
     const toQuality = to.timeQuality ?? "exact";
     segments.push({
-      timeQuality: fromQuality === "unplaced" || toQuality === "unplaced"
-        ? "unplaced"
-        : fromQuality === "estimated" || toQuality === "estimated"
+      timeQuality: fromQuality === "estimated" || toQuality === "estimated"
           ? "estimated"
           : "exact",
       deliveryQuality: from.deliveryQuality === "delayed" || to.deliveryQuality === "delayed"
@@ -265,108 +271,6 @@ export function violatesTemperatureRule(
   return rule.direction === "above"
     ? temperatureC > rule.thresholdC
     : temperatureC < rule.thresholdC;
-}
-
-export interface UnplacedCandidate {
-  packetId: string;
-  receivedAt: Date | null;
-  measurementIndex: number;
-  temperatureC: number;
-  deliveryQuality?: MonitoringDeliveryQuality;
-}
-
-/** Flush packets of one reconnect arrive within seconds of each other. */
-const FLUSH_PACKET_WINDOW_MS = 10_000;
-/** Timed points delivered around the flush bracket an unplaced-only packet. */
-const FLUSH_BRACKET_WINDOW_MS = 120_000;
-const DEFAULT_SAMPLING_INTERVAL_MS = 60_000;
-
-/**
- * Approximately places controller samples that have no reliable time on the
- * chart timeline: evenly distributed inside the timed span of their own
- * delivery flush, or between the last timed point before the outage and the
- * first timed point after it. The result is render-only — points keep
- * timeQuality "unplaced" so statistics and tooltips can distinguish them.
- */
-export function placeUnplacedPoints(
-  timedPoints: TemperaturePoint[],
-  unplaced: UnplacedCandidate[],
-  nowMs = Date.now(),
-): TemperaturePoint[] {
-  if (unplaced.length === 0) return [];
-  const timed = sortAndDedupePoints(timedPoints);
-  const ordered = [...unplaced].sort((left, right) => {
-    const leftMs = left.receivedAt?.getTime() ?? Number.POSITIVE_INFINITY;
-    const rightMs = right.receivedAt?.getTime() ?? Number.POSITIVE_INFINITY;
-    if (leftMs !== rightMs) return leftMs - rightMs;
-    if (left.packetId !== right.packetId) return left.packetId.localeCompare(right.packetId);
-    return left.measurementIndex - right.measurementIndex;
-  });
-  const groups = new Map<number, UnplacedCandidate[]>();
-  ordered.forEach((candidate) => {
-    const key = candidate.receivedAt?.getTime() ?? -1;
-    groups.set(key, [...(groups.get(key) ?? []), candidate]);
-  });
-  const gaps: number[] = [];
-  for (let index = 1; index < timed.length; index += 1) {
-    const gap = timed[index].measuredAt.getTime() - timed[index - 1].measuredAt.getTime();
-    if (gap > 0) gaps.push(gap);
-  }
-  gaps.sort((left, right) => left - right);
-  const medianGap = gaps.length > 0 ? gaps[Math.floor(gaps.length / 2)] : DEFAULT_SAMPLING_INTERVAL_MS;
-
-  const placed: TemperaturePoint[] = [];
-  [...groups.entries()].sort((left, right) => left[0] - right[0]).forEach(([receivedMs, group]) => {
-    let windowStart: number;
-    let windowEnd: number;
-    const flushTimed = receivedMs >= 0
-      ? timed.filter((point) => {
-        const pointReceivedMs = point.receivedAt?.getTime();
-        return pointReceivedMs !== undefined
-          && Math.abs(pointReceivedMs - receivedMs) <= FLUSH_PACKET_WINDOW_MS;
-      })
-      : [];
-    if (flushTimed.length > 0) {
-      const times = flushTimed.map((point) => point.measuredAt.getTime());
-      windowStart = Math.min(...times);
-      windowEnd = Math.max(...times);
-    } else {
-      const following = receivedMs >= 0
-        ? timed.filter((point) => (
-          point.receivedAt?.getTime() ?? Number.NEGATIVE_INFINITY
-        ) >= receivedMs - FLUSH_BRACKET_WINDOW_MS)
-        : [];
-      const next = following.length > 0
-        ? following.reduce((best, point) => (
-          point.measuredAt.getTime() < best.measuredAt.getTime() ? point : best
-        ))
-        : undefined;
-      if (next) {
-        windowEnd = next.measuredAt.getTime();
-        const previous = [...timed].reverse().find((point) => point.measuredAt.getTime() < windowEnd);
-        windowStart = previous
-          ? previous.measuredAt.getTime()
-          : windowEnd - medianGap * (group.length + 1);
-      } else {
-        const last = timed[timed.length - 1];
-        windowStart = last
-          ? last.measuredAt.getTime()
-          : nowMs - medianGap * (group.length + 1);
-        windowEnd = windowStart + medianGap * (group.length + 1);
-      }
-    }
-    const step = (windowEnd - windowStart) / (group.length + 1);
-    group.forEach((candidate, index) => {
-      placed.push({
-        measuredAt: new Date(windowStart + step * (index + 1)),
-        temperatureC: candidate.temperatureC,
-        timeQuality: "unplaced",
-        deliveryQuality: candidate.deliveryQuality === "delayed" ? "delayed" : "realtime",
-        receivedAt: candidate.receivedAt,
-      });
-    });
-  });
-  return placed;
 }
 
 /** Human-readable "client · object" label for a monitoring target (device or alert event). */

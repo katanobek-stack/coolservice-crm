@@ -402,6 +402,13 @@ describe("equipment monitoring access", () => {
       measuredAt: "2026-09-13T00:00:00.000Z",
       receivedAt: "2026-09-13T00:00:01.000Z",
     });
+    await seed("monitoringDeviceState/device-001/sensors/temperature-1", {
+      deviceId: "device-001", sensorId: "temperature-1", temperatureC: -18.5,
+      measuredAt: "2026-09-13T00:00:00.000Z", receivedAt: "2026-09-13T00:00:01.000Z",
+    });
+    await seed("monitoringDevices/device-001/sensors/temperature-1", {
+      deviceId: "device-001", sensorId: "temperature-1", name: "Кузов",
+    });
     await seed("monitoringControllerStatus/device-001", {
       statusId: "status-001",
       reportedAt: "2026-09-13T00:00:00.000Z",
@@ -419,16 +426,6 @@ describe("equipment monitoring access", () => {
       statusId: "status-001", lastFailureCode: "none",
     });
     await seed("monitoringTelemetry/device-001/packets/packet-001", {
-      measurements: [],
-    });
-    await seed("monitoringTelemetry/device-001/packets/unplaced-old", {
-      hasUnplaced: true,
-      receivedAt: "2026-09-13T00:00:01.000Z",
-      measurements: [],
-    });
-    await seed("monitoringTelemetry/device-001/packets/unplaced-new", {
-      hasUnplaced: true,
-      receivedAt: "2026-09-13T00:00:02.000Z",
       measurements: [],
     });
     await seed("monitoringDeviceCredentials/device-001", {
@@ -452,21 +449,11 @@ describe("equipment monitoring access", () => {
     const db = dbFor("mechanic-1");
     await assertSucceeds(getDoc(doc(db, "monitoringDevices/device-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringDeviceState/device-001")));
+    await assertSucceeds(getDoc(doc(db, "monitoringDeviceState/device-001/sensors/temperature-1")));
+    await assertSucceeds(getDoc(doc(db, "monitoringDevices/device-001/sensors/temperature-1")));
     await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/status-001")));
     await assertSucceeds(getDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
-  });
-
-  test("workers can query unplaced packets by received time", async () => {
-    const db = dbFor("mechanic-1");
-    const packets = query(
-      collection(db, "monitoringTelemetry", "device-001", "packets"),
-      where("hasUnplaced", "==", true),
-      orderBy("receivedAt", "desc"),
-      limit(50),
-    );
-    const result = await assertSucceeds(getDocs(packets));
-    assert.deepEqual(result.docs.map((item) => item.id), ["unplaced-new", "unplaced-old"]);
   });
 
   test("mechanics cannot administer devices or forge telemetry", async () => {
@@ -474,6 +461,7 @@ describe("equipment monitoring access", () => {
     await assertFails(setDoc(doc(db, "monitoringDevices/device-002"), { enabled: true }));
     await assertFails(updateDoc(doc(db, "monitoringDevices/device-001"), { enabled: false }));
     await assertFails(setDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    await assertFails(updateDoc(doc(db, "monitoringDevices/device-001/sensors/temperature-1"), { name: "Подделка" }));
     await assertFails(setDoc(doc(db, "monitoringControllerStatus/device-001"), { mqttConnected: true }));
     await assertFails(setDoc(doc(db, "monitoringControllerStatus/device-001/statusEvents/forged"), { statusId: "forged" }));
     await assertFails(setDoc(
@@ -489,6 +477,9 @@ describe("equipment monitoring access", () => {
     await assertSucceeds(updateDoc(deviceRef, { enabled: false }));
     await assertSucceeds(deleteDoc(deviceRef));
     await assertFails(updateDoc(doc(db, "monitoringDeviceState/device-001"), { temperatureC: 10 }));
+    const sensorRef = doc(db, "monitoringDevices/device-001/sensors/temperature-1");
+    await assertSucceeds(updateDoc(sensorRef, { name: "Температура кузова" }));
+    await assertFails(updateDoc(sensorRef, { sensorId: "temperature-1_2" }));
     await assertFails(updateDoc(doc(db, "monitoringControllerStatus/device-001"), { mqttConnected: false }));
     await assertFails(deleteDoc(doc(db, "monitoringTelemetry/device-001/packets/packet-001")));
     await assertFails(getDoc(doc(db, "monitoringDeviceCredentials/device-001")));
