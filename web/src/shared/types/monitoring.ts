@@ -72,22 +72,12 @@ export interface TemperaturePoint {
   measuredAt: Date;
   temperatureC: number;
   sensorId?: string;
-  /** Missing is accepted only for legacy in-memory callers and means exact. "unplaced" appears only after approximate placement on the chart. */
-  timeQuality?: "exact" | "estimated" | "unplaced";
+  /** Missing is accepted only for legacy in-memory callers and means exact. */
+  timeQuality?: "exact" | "estimated";
   /** Missing is accepted only for legacy data and means realtime delivery. */
   deliveryQuality?: MonitoringDeliveryQuality;
-  /** Server receive time of the source packet; used to place unplaced points near their delivery flush. */
+  /** Server receive time of the source packet, retained for a delivery audit. */
   receivedAt?: Date | null;
-}
-
-export interface UnplacedTemperaturePoint {
-  packetId: string;
-  sensorId: string | null;
-  temperatureC: number;
-  receivedAt: Date | null;
-  deliveryQuality?: MonitoringDeliveryQuality;
-  /** Order of the measurement inside its packet; preserves sequence for approximate placement. */
-  measurementIndex: number;
 }
 
 export interface MonitoringHistoryResult {

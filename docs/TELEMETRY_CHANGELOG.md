@@ -1,5 +1,25 @@
 # История изменений телеметрии
 
+## 2026-10-03 — прекращение `unplaced` telemetry (локально, без deploy)
+
+**Причина.** Контроллер с исправным RTC должен отправлять только измерения с
+достоверным UTC. Старые точки `unplaced` не являются полезной историей для
+графика, а их сохранение создаёт лишние Firestore-операции.
+
+**Изменено.** `ingestTelemetry` принимает только `timeQuality: exact|estimated`
+и требует `measuredAt`; старый `unplaced` отклоняется HTTP 400 до чтения или
+записи Firestore. CRM больше не запрашивает, не размещает на графике и не
+показывает список таких точек. Удалены связанные client-side history-запросы и
+подготавливаемые composite indexes. Добавлен ручной tool
+`purge:unplaced-telemetry`: dry-run по умолчанию, явный scope/confirmation для
+execute, checkpoint и отказ при смешанных пакетах, чтобы не удалить timed data.
+
+**Что требуется отдельно.** Прошивка должна локально отбросить queue head с
+неопределённым UTC без MQTT publish и без блокировки следующих точек. Затем
+нужно отдельно опубликовать `functions:ingestTelemetry`, Firestore Rules и web.
+Production-пакеты, `unplacedPoints`, indexes, VPS, firmware, ключи и env в этом
+изменении не менялись.
+
 ## 2026-10-03 — несколько датчиков на одном контроллере (локально, без deploy)
 
 **Изменено.** `ingestTelemetry` создаёт отдельные server-owned состояния

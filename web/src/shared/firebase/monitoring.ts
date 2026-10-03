@@ -31,7 +31,6 @@ import type {
   MonitoringTemperatureRule,
   MonitoringTemperatureRuleInput,
   TemperaturePoint,
-  UnplacedTemperaturePoint,
 } from "../types/monitoring";
 
 export const DEFAULT_OFFLINE_THRESHOLD_MINUTES = 5;
@@ -90,7 +89,6 @@ function mapState(id: string, data: DocumentData): MonitoringDeviceState {
       : {},
   };
 }
-
 function mapSensor(id: string, data: DocumentData): MonitoringSensor | null {
   if (typeof data.sensorId !== "string" || data.sensorId !== id) return null;
   return {
@@ -261,7 +259,9 @@ export function listenMonitoringDeviceSensors(
       .sort((left, right) => left.sensorId.localeCompare(right.sensorId, "en")));
   }, onError);
 }
-
+// Samples without reliable time intentionally have no browser listener.
+// Samples without a reliable measuredAt are rejected by ingestTelemetry and
+// intentionally have no browser history listener.
 /** Per-sensor state is deliberately not part of the CRM-wide state subscription. */
 export function listenMonitoringSensorStates(
   deviceId: string,
@@ -446,47 +446,4 @@ export function listenDeviceHistory(
     });
   }, onError);
 }
-
-/**
- * Unplaced samples deliberately have no measuredAt, so they are read separately
- * from the time-window query and can never enter the chart/statistics pipeline.
- */
-export function listenDeviceUnplacedHistory(
-  deviceId: string,
-  sensorId: string,
-  onData: (points: UnplacedTemperaturePoint[]) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
-  const packets = query(
-    // Keep the legacy packet audit as the source here: some older unplaced
-    // samples predate the projection, while new packets have both forms.
-    collection(getFirebaseDb(), "monitoringTelemetry", deviceId, "packets"),
-    where("hasUnplaced", "==", true),
-    orderBy("receivedAt", "desc"),
-    limit(50),
-  );
-  return onSnapshot(packets, (snapshot) => {
-    const points: UnplacedTemperaturePoint[] = [];
-    snapshot.docs.forEach((packet) => {
-      const data = packet.data();
-      const measurements = data.measurements;
-      if (!Array.isArray(measurements)) return;
-      measurements.forEach((measurement, measurementIndex) => {
-        if (typeof measurement !== "object" || measurement === null) return;
-        if (measurement.timeQuality !== "unplaced") return;
-        const measurementSensorId = typeof measurement.sensorId === "string" ? measurement.sensorId : "default";
-        if (measurementSensorId !== sensorId) return;
-        if (typeof measurement.temperatureC !== "number" || !Number.isFinite(measurement.temperatureC)) return;
-        points.push({
-          packetId: typeof data.packetId === "string" ? data.packetId : packet.id,
-          sensorId: measurementSensorId,
-          temperatureC: measurement.temperatureC,
-          receivedAt: asDate(data.receivedAt),
-          measurementIndex,
-          deliveryQuality: measurement.deliveryQuality === "delayed" ? "delayed" : "realtime",
-        });
-      });
-    });
-    onData(points);
-  }, onError);
-}
+// No listener exists for rejected unplaced telemetry.

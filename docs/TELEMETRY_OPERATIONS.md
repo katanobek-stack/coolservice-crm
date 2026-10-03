@@ -43,7 +43,7 @@ Bridge проверяет topic и `controllerId`, затем преобразу
 датчиков одного цикла допускается, а порядок элементов в packet остаётся
 детерминированным для stable measurement ID.
 
-`timeQuality` допускает `exact`, `estimated` и `unplaced`. Поле необязательно для
+`timeQuality` допускает `exact` и `estimated`. Поле необязательно для
 старых MQTT- и HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry`
 трактуется как `exact`. `estimated` означает, что контроллер восстановил время
 после отсутствия UTC; температура остаётся реальной, оценочным является только
@@ -58,26 +58,11 @@ MQTT-связи и доставлена позже». В CRM цвет показ
 `timeQuality: estimated`; поэтому оценочная отложенная точка остаётся оранжевой
 и пунктирной. Линия не соединяет участки при изменении любого из двух качеств.
 
-Для `exact` и `estimated` `measuredAt` обязателен. `unplaced` означает реальную
-сохранённую ESP32 точку от предыдущего включения без достоверного времени:
-`measuredAt` в ней **должен отсутствовать**, а `sensorId` обязателен. Bridge
-передаёт её как обычный идемпотентный packet, но `ingestTelemetry` сохраняет
-только температуру, `sensorId`, оба качества, `packetId` и серверный
-`receivedAt`. Такая точка не обновляет последнюю температуру, не участвует в
-авариях, min/avg/max и графике; в карточке есть отдельный компактный список
-«Без достоверного времени».
-
-Пример MQTT payload для `unplaced`:
-
-```json
-{
-  "controllerId": "device-001",
-  "packetId": "previous-boot-queue-17",
-  "sensorId": "temperature-1",
-  "value": -18.5,
-  "timeQuality": "unplaced"
-}
-```
+Для обоих значений `measuredAt` обязателен. Точка без достоверного UTC не
+является telemetry-контрактом CRM: контроллер обязан отбросить её локально и
+не публиковать в MQTT. `ingestTelemetry` дополнительно отклоняет старый
+`timeQuality: "unplaced"` с HTTP 400 до любых Firestore-операций. Это защита от
+случайной отправки старой прошивкой, а не сигнал к повторной доставке.
 
 Status приходит независимо по `coolmonitor/devices/{controllerId}/status`:
 
@@ -106,8 +91,7 @@ Status приходит независимо по `coolmonitor/devices/{controll
 - Credentials: `monitoringDeviceCredentials/{deviceId}`; браузер их не читает.
 - История температуры: `monitoringTelemetry/{deviceId}/packets/{packetId}`.
   Один документ содержит массив принятых измерений, время получения и границы
-  измерений, включая оба качества. Документы с `unplaced` дополнительно
-  отмечаются `hasUnplaced` и `unplacedCount`; у точки нет `measuredAt`.
+  измерений. У каждого нового измерения есть `measuredAt`.
 - Последняя температура: `monitoringDeviceState/{deviceId}`.
 - Последняя температура каждого физического датчика:
   `monitoringDeviceState/{deviceId}/sensors/{sensorId}`. Это server-owned
@@ -133,9 +117,6 @@ PR A добавляет backend-only read-модель; текущий CRM-гр�
 
 - `monitoringTelemetry/{deviceId}/points/{stableMeasurementId}` — размещённая
   точка с `measuredAt`, `receivedAt`, `sensorId`, temperature и двумя quality.
-- `monitoringTelemetry/{deviceId}/unplacedPoints/{stableMeasurementId}` —
-  точка без достоверного времени; не участвует в rollup или температурной
-  статистике.
 - `monitoringTelemetry/{deviceId}/rollups/{sensorId}__{hourStartMs}` — один
   часовой документ с раздельными `exact_realtime`, `exact_delayed`,
   `estimated_realtime`, `estimated_delayed` агрегатами и 5-минутными корзинами
@@ -147,8 +128,8 @@ quality series не объединяются. Окно до 24 часов буд
 более 24 часов — только overview. Для overview-статистики полные корзины будут
 дополняться raw точками только двух неполных границ диапазона.
 
-`expireAt` уже записывается для будущей retention-политики (points и unplaced
-35 дней, rollups 13 месяцев), но TTL не включён этой задачей и требует отдельной
+`expireAt` уже записывается для будущей retention-политики (points 35 дней,
+rollups 13 месяцев), но TTL не включён этой задачей и требует отдельной
 настройки/подтверждения в Firestore Console.
 
 При одном измерении раз в 30 секунд один датчик создаёт около 2 880 raw points
@@ -195,6 +176,26 @@ read-only сверку и лишь после неё продолжить `--res
 Повторный `packetId` или `statusId` не создаёт повторную запись. Отложенное
 измерение попадает в историю, но не заменяет текущую температуру, если его
 `measuredAt` старее уже известного показания.
+
+### Удаление исторических `unplaced`
+
+`functions/scripts/purge-unplaced-telemetry.js` — отдельный ручной Admin-tool.
+Он **только читает** Firestore по умолчанию и строит manifest: число старых
+all-unplaced packet-документов, проекций и ожидаемых writes. Инструмент намеренно
+отказывается от execute при смешанном пакете (timed + unplaced): такой пакет
+нельзя удалить без риска затронуть корректную историю.
+
+Dry-run для одного устройства:
+
+```powershell
+npm --prefix functions run purge:unplaced-telemetry -- --project coolservice-crm --device-id device-001
+```
+
+Execute допустим только после проверки manifest и отдельного подтверждения
+точного scope. Он требует `--execute --confirm-device device-001`, удаляет
+только целиком unplaced packet и его deterministic `unplacedPoints`, а checkpoint
+пишет в `monitoringMaintenance/unplacedTelemetryPurge/{deviceId}`. Эта операция
+не запускается при deploy и не предназначена для браузера.
 
 ## Подтверждения и журналы
 
