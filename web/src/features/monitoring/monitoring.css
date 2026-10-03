@@ -631,6 +631,25 @@
 .monitor-diagnostics-grid span, .monitor-diagnostics-grid small { color: var(--text3); font-size: 12px; }
 .monitor-diagnostics-grid strong { color: var(--text); font-size: 14px; overflow-wrap: anywhere; }
 
+.monitor-sensors { margin-bottom: 16px; }
+.monitor-sensor-count { min-width: 28px; padding: 3px 9px; border-radius: 999px; background: var(--bg3); color: var(--text2); font-size: 13px; font-weight: 800; text-align: center; }
+.monitor-sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr)); gap: 10px; }
+.monitor-sensor-card { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); overflow: hidden; }
+.monitor-sensor-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 12px 12px 0; }
+.monitor-sensor-title { min-width: 0; display: grid; gap: 4px; color: var(--text); font-size: 14px; }
+.monitor-sensor-title strong { overflow-wrap: anywhere; }
+.monitor-sensor-edit { width: max-content; padding: 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11px; font-weight: 700; }
+.monitor-sensor-name-form { display: flex; flex-wrap: wrap; gap: 5px; }
+.monitor-sensor-name-form input { min-width: 120px; flex: 1; padding: 6px 7px; border: 1px solid var(--border2); border-radius: 6px; background: #fff; color: var(--text); font-size: 12px; }
+.monitor-sensor-name-form button { padding: 6px 7px; border: 1px solid var(--border2); border-radius: 6px; background: #fff; color: var(--text2); cursor: pointer; font-size: 11px; }
+.monitor-sensor-name-form .btn-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.monitor-sensor-name-form span { width: 100%; color: #b42318; font-size: 11px; }
+.monitor-sensor-select { width: 100%; padding: 12px; color: inherit; text-align: left; display: grid; gap: 4px; }
+.monitor-sensor-temperature { color: var(--text); font: 800 24px 'JetBrains Mono', monospace; }
+.monitor-sensor-meta, .monitor-sensor-id { color: var(--text3); font-size: 12px; }
+.monitor-sensor-history-list { display: grid; gap: 16px; }
+.monitor-sensor-history { margin: 0; }
+
 .monitor-unplaced {
   margin-top: 16px;
   border: 1px solid var(--border);
@@ -652,6 +671,7 @@
   .monitor-alert-panel { position: fixed; top: 62px; right: 12px; max-height: calc(100vh - 148px); }
   .monitor-alert-event-main { font-size: 13px; }
   .monitor-diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .monitor-sensor-grid { grid-template-columns: 1fr; }
   .monitor-unplaced-list li { grid-template-columns: auto 1fr; }
   .monitor-unplaced-list time { grid-column: 1 / -1; }
 }

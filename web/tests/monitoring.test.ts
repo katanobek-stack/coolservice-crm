@@ -15,6 +15,7 @@ import {
   zoomChartWindow,
   placeUnplacedPoints,
   violatesTemperatureRule,
+  sensorDisplayName,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
@@ -42,6 +43,12 @@ function controllerStatus(overrides: Partial<MonitoringControllerStatus> = {}): 
 }
 
 describe("monitoring statuses", () => {
+  test("keeps a stable sensor ID separate from an editable friendly name", () => {
+    assert.equal(sensorDisplayName({ name: "Температура кузова" }, 0), "Температура кузова");
+    assert.equal(sensorDisplayName({ name: "   " }, 1), "Датчик 2");
+    assert.equal(sensorDisplayName(undefined, 0), "Датчик 1");
+  });
+
   test("distinguishes missing measurements from an unknown connection", () => {
     assert.deepEqual(monitoringStatus(undefined, NOW, 5), {
       reading: "missing",

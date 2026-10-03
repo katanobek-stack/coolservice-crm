@@ -36,6 +36,13 @@ Bridge проверяет topic и `controllerId`, затем преобразу
 контракт `ingestTelemetry`: `deviceId`, `packetId` и массив
 `measurements[{ measuredAt?, temperatureC, sensorId?, timeQuality, deliveryQuality }]`.
 
+`sensorId` — технический постоянный ID физического датчика. В согласованном
+контракте многодатчиковой прошивки первый DS18B20 сохраняет прежний ID, следующие имеют
+суффиксы `_2`, `_3` и далее (не более восьми датчиков); CRM не выводит ID из
+названия и не меняет его при переименовании. Одинаковый `measuredAt` у разных
+датчиков одного цикла допускается, а порядок элементов в packet остаётся
+детерминированным для stable measurement ID.
+
 `timeQuality` допускает `exact`, `estimated` и `unplaced`. Поле необязательно для
 старых MQTT- и HTTP-пакетов: его отсутствие на bridge и в `ingestTelemetry`
 трактуется как `exact`. `estimated` означает, что контроллер восстановил время
@@ -102,6 +109,16 @@ Status приходит независимо по `coolmonitor/devices/{controll
   измерений, включая оба качества. Документы с `unplaced` дополнительно
   отмечаются `hasUnplaced` и `unplacedCount`; у точки нет `measuredAt`.
 - Последняя температура: `monitoringDeviceState/{deviceId}`.
+- Последняя температура каждого физического датчика:
+  `monitoringDeviceState/{deviceId}/sensors/{sensorId}`. Это server-owned
+  состояние; оно обновляется только если `measuredAt` новее сохранённого для
+  этого sensorId, поэтому поздняя доставка не делает старое показание
+  актуальным.
+- Реестр датчиков и понятные названия:
+  `monitoringDevices/{deviceId}/sensors/{sensorId}`. `sensorId` — постоянный
+  технический ID и ключ документа; CRM меняет только `name`. Manager, admin и
+  owner могут назначать имя, mechanic — только читать. Переименование не
+  затрагивает packetId, history, points, rollups или telemetry payload.
 - Последний status: `monitoringControllerStatus/{controllerId}`; события status
   отдельно в `monitoringControllerStatus/{controllerId}/statusEvents/{statusId}`.
 

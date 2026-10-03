@@ -7,11 +7,14 @@ import {
   listenDeviceHistory,
   listenDeviceUnplacedHistory,
   listenMonitoringDevices,
+  listenMonitoringDeviceSensors,
   listenMonitoringControllerStatuses,
   listenMonitoringSettings,
+  listenMonitoringSensorStates,
   listenMonitoringStates,
   listenMonitoringTemperatureRules,
   saveMonitoringTemperatureRule,
+  saveMonitoringSensorName,
   saveOfflineThreshold,
 } from "../../shared/firebase/monitoring";
 import {
@@ -26,6 +29,7 @@ import {
   zoomChartWindow,
   placeUnplacedPoints,
   objectLabel,
+  sensorDisplayName,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -33,6 +37,8 @@ import {
 import type {
   MonitoringDevice,
   MonitoringDeviceState,
+  MonitoringSensor,
+  MonitoringSensorState,
   MonitoringControllerStatus,
   MonitoringHistoryResult,
   MonitoringPeriod,
@@ -225,6 +231,28 @@ function periodLabel(period: MonitoringPeriod): string {
   if (period === "threeDays") return "3 дня";
   if (period === "week") return "7 дней";
   return "30 дней";
+}
+
+function SensorNameEditor({ deviceId, sensor, displayName, canManage }: {
+  deviceId: string;
+  sensor: MonitoringSensor | undefined;
+  displayName: string;
+  canManage: boolean;
+}) {
+  const [value, setValue] = useState(sensor?.name ?? "");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => setValue(sensor?.name ?? ""), [sensor?.name, sensor?.sensorId]);
+  async function save() {
+    setSaving(true); setError("");
+    try { await saveMonitoringSensorName(deviceId, sensor?.sensorId ?? "", value); setEditing(false); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось сохранить название"); }
+    finally { setSaving(false); }
+  }
+  if (!canManage) return <strong>{displayName}</strong>;
+  if (!editing) return <><strong>{displayName}</strong><button type="button" className="monitor-sensor-edit" onClick={() => setEditing(true)}><i className="ti ti-pencil" /> Переименовать</button></>;
+  return <div className="monitor-sensor-name-form"><input value={value} maxLength={80} placeholder={displayName} onChange={(event) => setValue(event.target.value)} disabled={saving} aria-label={`Название ${sensor?.sensorId ?? "датчика"}`} /><button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "…" : "Сохранить"}</button><button type="button" disabled={saving} onClick={() => { setValue(sensor?.name ?? ""); setEditing(false); setError(""); }}>Отмена</button>{error && <span>{error}</span>}</div>;
 }
 
 const DELAYED_DELIVERY_MESSAGE = "Точка измерена при отсутствии подтверждённой MQTT-связи и доставлена позже";
@@ -556,6 +584,54 @@ function UnplacedMeasurements({ points }: { points: UnplacedTemperaturePoint[] }
   );
 }
 
+function SensorHistoryChart({
+  sensorName,
+  sensorId,
+  history,
+  unplacedPoints,
+  loading,
+  error,
+  period,
+  rules,
+}: {
+  sensorName: string;
+  sensorId: string;
+  history: MonitoringHistoryResult;
+  unplacedPoints: UnplacedTemperaturePoint[];
+  loading: boolean;
+  error?: string;
+  period: MonitoringPeriod;
+  rules: MonitoringTemperatureRule[];
+}) {
+  const placedUnplacedPoints = useMemo(
+    () => placeUnplacedPoints(history.points, unplacedPoints),
+    [history.points, unplacedPoints],
+  );
+  const chartPoints = useMemo(
+    () => [...history.points, ...placedUnplacedPoints],
+    [history.points, placedUnplacedPoints],
+  );
+  return (
+    <section className="crm-section monitor-sensor-history">
+      <div className="section-header monitor-history-header">
+        <div>
+          <div className="section-title">{sensorName}</div>
+          <div className="monitor-history-subtitle">Отдельный график датчика · ID: {sensorId}</div>
+        </div>
+      </div>
+      <div className="monitor-chart-body">
+        {loading ? <div className="monitor-loading"><i className="ti ti-loader-2" /> Загружаем историю…</div>
+          : error ? <div className="monitor-error"><i className="ti ti-alert-triangle" /><div><strong>История недоступна</strong><span>{error}</span></div></div>
+          : <>
+            {history.limitReached && <div className="monitor-limit-warning">Показана не вся история за период — достигнут лимит выборки.</div>}
+            <TemperatureChart points={chartPoints} period={period} rules={rules} />
+            <UnplacedMeasurements points={unplacedPoints} />
+          </>}
+      </div>
+    </section>
+  );
+}
+
 function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
   deviceId: string;
   rules: MonitoringTemperatureRule[];
@@ -707,11 +783,14 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [threshold, setThreshold] = useState(DEFAULT_OFFLINE_THRESHOLD_MINUTES);
   const [thresholdSaving, setThresholdSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sensors, setSensors] = useState<MonitoringSensor[]>([]);
+  const [sensorStates, setSensorStates] = useState<Map<string, MonitoringSensorState>>(new Map());
+  const [sensorsLoading, setSensorsLoading] = useState(false);
   const [period, setPeriod] = useState<MonitoringPeriod>("hour");
-  const [history, setHistory] = useState<MonitoringHistoryResult>(EMPTY_HISTORY);
-  const [unplacedPoints, setUnplacedPoints] = useState<UnplacedTemperaturePoint[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState("");
+  const [sensorHistories, setSensorHistories] = useState<Map<string, MonitoringHistoryResult>>(new Map());
+  const [sensorUnplacedPoints, setSensorUnplacedPoints] = useState<Map<string, UnplacedTemperaturePoint[]>>(new Map());
+  const [loadingSensorHistories, setLoadingSensorHistories] = useState<Set<string>>(new Set());
+  const [sensorHistoryErrors, setSensorHistoryErrors] = useState<Map<string, string>>(new Map());
   const [rules, setRules] = useState<MonitoringTemperatureRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesError, setRulesError] = useState("");
@@ -765,7 +844,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
   useEffect(() => {
     if (!devicesLoaded) return undefined;
-    const unsubscribe = devices.map((device) => listenDeviceHistory(device.id, "hour", (result) => {
+    const unsubscribe = devices.map((device) => listenDeviceHistory(device.id, "default", "hour", (result) => {
       setPreviewHistory((current) => new Map(current).set(device.id, result.points));
     }, () => undefined));
     return () => unsubscribe.forEach((stop) => stop());
@@ -773,30 +852,17 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
   useEffect(() => {
     if (!selectedId) {
-      setHistory(EMPTY_HISTORY);
-      setUnplacedPoints([]);
-      setHistoryLoading(false);
-      setHistoryError("");
-      return;
+      setSensors([]); setSensorStates(new Map()); setSensorsLoading(false);
+      return undefined;
     }
-    setHistory(EMPTY_HISTORY);
-    setHistoryLoading(true);
-    setHistoryError("");
-    const unsubscribe = listenDeviceHistory(selectedId, period, (result) => {
-      setHistory(result);
-      setHistoryLoading(false);
-    }, (error) => {
-      setHistoryError(error.message || "Не удалось загрузить историю");
-      setHistoryLoading(false);
+    setSensorsLoading(true);
+    const stopSensors = listenMonitoringDeviceSensors(selectedId, (nextSensors) => {
+      setSensors(nextSensors); setSensorsLoading(false);
+    }, (error) => { setOverviewError(error.message || "Не удалось загрузить датчики"); setSensorsLoading(false); });
+    const stopStates = listenMonitoringSensorStates(selectedId, setSensorStates, (error) => {
+      setOverviewError(error.message || "Не удалось загрузить состояния датчиков");
     });
-    return unsubscribe;
-  }, [selectedId, period]);
-
-  useEffect(() => {
-    if (!selectedId) return undefined;
-    return listenDeviceUnplacedHistory(selectedId, setUnplacedPoints, (error) => {
-      setHistoryError(error.message || "Не удалось загрузить точки без достоверного времени");
-    });
+    return () => { stopSensors(); stopStates(); };
   }, [selectedId]);
 
   useEffect(() => {
@@ -817,15 +883,6 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
       setRulesLoading(false);
     });
   }, [selectedId]);
-
-  const placedUnplacedPoints = useMemo(
-    () => placeUnplacedPoints(history.points, unplacedPoints),
-    [history.points, unplacedPoints],
-  );
-  const chartPoints = useMemo(
-    () => [...history.points, ...placedUnplacedPoints],
-    [history.points, placedUnplacedPoints],
-  );
 
   const selectedDevice = devices.find((device) => device.id === selectedId);
   const role = myProfile?.role ?? "mechanic";
@@ -850,6 +907,64 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     if (monitoringFilter === "alarms" && item.activeAlertCount === 0) return false;
     return true;
   });
+
+  const sensorViews = useMemo(() => {
+    const ids = new Set<string>([
+      ...sensors.map((sensor) => sensor.sensorId),
+      ...sensorStates.keys(),
+    ]);
+    // Controllers recorded before per-sensor state retain one compatible
+    // virtual sensor. Once telemetry has named sensors, no extra default card
+    // is invented alongside them.
+    if (ids.size === 0 && selectedDevice && states.get(selectedDevice.id)?.measuredAt) ids.add("default");
+    return [...ids].sort((left, right) => left.localeCompare(right, "en")).map((sensorId, index) => ({
+      sensorId,
+      sensor: sensors.find((item) => item.sensorId === sensorId) ?? { sensorId, lastSeenAt: null },
+      state: sensorStates.get(sensorId) ?? (sensorId === "default" && selectedDevice ? states.get(selectedDevice.id) : undefined),
+      index,
+    }));
+  }, [selectedDevice, sensorStates, sensors, states]);
+
+  const sensorIdsKey = sensorViews.map((item) => item.sensorId).join("\u0000");
+
+  // Detailed history remains scoped to the open controller. Each sensor uses
+  // its own query, so raw points can never be mixed into another sensor graph.
+  useEffect(() => {
+    if (!selectedId || sensorViews.length === 0) {
+      setSensorHistories(new Map());
+      setSensorUnplacedPoints(new Map());
+      setLoadingSensorHistories(new Set());
+      setSensorHistoryErrors(new Map());
+      return undefined;
+    }
+    const sensorIds = sensorViews.map((item) => item.sensorId);
+    setSensorHistories(new Map());
+    setSensorUnplacedPoints(new Map());
+    setSensorHistoryErrors(new Map());
+    setLoadingSensorHistories(new Set(sensorIds));
+    const stops = sensorIds.flatMap((sensorId) => [
+      listenDeviceHistory(selectedId, sensorId, period, (result) => {
+        setSensorHistories((current) => new Map(current).set(sensorId, result));
+        setLoadingSensorHistories((current) => {
+          const next = new Set(current); next.delete(sensorId); return next;
+        });
+      }, (error) => {
+        setSensorHistoryErrors((current) => new Map(current).set(sensorId, error.message || "Не удалось загрузить историю"));
+        setLoadingSensorHistories((current) => {
+          const next = new Set(current); next.delete(sensorId); return next;
+        });
+      }),
+      listenDeviceUnplacedHistory(selectedId, sensorId, (points) => {
+        setSensorUnplacedPoints((current) => new Map(current).set(sensorId, points));
+      }, (error) => {
+        setSensorHistoryErrors((current) => new Map(current).set(sensorId, error.message || "Не удалось загрузить точки без достоверного времени"));
+      }),
+    ]);
+    return () => stops.forEach((stop) => stop());
+  // sensorIdsKey intentionally ignores state value updates: they must not
+  // recreate all chart listeners after every fresh telemetry packet.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, sensorIdsKey, period]);
 
   async function changeThreshold(value: number) {
     setThresholdSaving(true);
@@ -891,9 +1006,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
         <div className="monitor-detail-kpis">
           <div className="monitor-detail-kpi monitor-detail-kpi--temperature">
-            <span>Последняя температура</span>
+            <span>Последнее показание контроллера</span>
             <strong>{formatTemperature(state?.temperatureC)}</strong>
-            <small>{status.reading === "stale" ? "Данные устарели" : "По времени измерения"}</small>
+            <small>{status.reading === "stale" ? "Данные устарели" : "Сводное значение; датчики ниже"}</small>
           </div>
           <div className="monitor-detail-kpi">
             <span>Измерено</span>
@@ -906,6 +1021,30 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
             <small>{formatDateTime(controllerStatus?.reportedAt)}</small>
           </div>
         </div>
+
+        <section className="crm-section monitor-sensors">
+          <div className="section-header">
+            <div><div className="section-title">Датчики контроллера</div><div className="monitor-history-subtitle">Название можно изменить без смены технического ID и истории.</div></div>
+            <span className="monitor-sensor-count">{sensorViews.length}</span>
+          </div>
+          {sensorsLoading ? <div className="monitor-loading">Загружаем датчики…</div> : sensorViews.length === 0 ? (
+            <div className="monitor-rules-empty">Контроллер ещё не передал измерения.</div>
+          ) : (
+            <div className="monitor-sensor-grid">
+              {sensorViews.map((item) => {
+                const itemStatus = monitoringStatus(item.state, nowMs, threshold);
+                return <div key={item.sensorId} className="monitor-sensor-card">
+                  <div className="monitor-sensor-card-head"><span className="monitor-sensor-title"><SensorNameEditor deviceId={selectedDevice.id} sensor={item.sensor} displayName={sensorDisplayName(item.sensor, item.index)} canManage={canManageSettings} /></span><ReadingBadge status={itemStatus.reading} /></div>
+                  <div className="monitor-sensor-select">
+                    <strong className="monitor-sensor-temperature">{formatTemperature(item.state?.temperatureC)}</strong>
+                    <span className="monitor-sensor-meta">Измерено: {relativeTime(item.state?.measuredAt, nowMs)}</span>
+                    <span className="monitor-sensor-id">ID: {item.sensorId}</span>
+                  </div>
+                </div>;
+              })}
+            </div>
+          )}
+        </section>
 
         <DiagnosticsPanel status={controllerStatus} connection={connection} nowMs={nowMs} />
 
@@ -920,9 +1059,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
         <section className="crm-section monitor-history">
           <div className="section-header monitor-history-header">
             <div>
-              <div className="section-title">История температуры</div>
+              <div className="section-title">Графики температуры</div>
               <div className="monitor-history-subtitle">
-                Загружается только для открытого устройства
+                Каждый график использует только точки своего датчика и не смешивает серии.
               </div>
             </div>
             <div className="monitor-period-tabs" aria-label="Период графика">
@@ -938,30 +1077,21 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               ))}
             </div>
           </div>
-          <div className="monitor-chart-body">
-            {historyLoading ? (
-              <div className="monitor-loading"><i className="ti ti-loader-2" /> Загружаем историю…</div>
-            ) : historyError ? (
-              <div className="monitor-error">
-                <i className="ti ti-alert-triangle" />
-                <div><strong>История недоступна</strong><span>{historyError}</span></div>
-              </div>
-            ) : (
-              <>
-                {history.limitReached && (
-                  <div className="monitor-limit-warning">
-                    Показана не вся история за период — достигнут лимит выборки. Выберите более короткий период.
-                  </div>
-                )}
-                <TemperatureChart
-                  points={chartPoints}
-                  period={period}
-                  rules={rules}
-                />
-                <UnplacedMeasurements points={unplacedPoints} />
-              </>
-            )}
-          </div>
+          {sensorViews.length === 0 ? <div className="monitor-rules-empty">Контроллер ещё не передал датчики.</div> : (
+            <div className="monitor-sensor-history-list">
+              {sensorViews.map((item) => <SensorHistoryChart
+                key={item.sensorId}
+                sensorName={sensorDisplayName(item.sensor, item.index)}
+                sensorId={item.sensorId}
+                history={sensorHistories.get(item.sensorId) ?? EMPTY_HISTORY}
+                unplacedPoints={sensorUnplacedPoints.get(item.sensorId) ?? []}
+                loading={loadingSensorHistories.has(item.sensorId)}
+                error={sensorHistoryErrors.get(item.sensorId)}
+                period={period}
+                rules={rules}
+              />)}
+            </div>
+          )}
         </section>
       </div>
     );

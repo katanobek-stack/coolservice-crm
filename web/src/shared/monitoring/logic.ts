@@ -5,6 +5,7 @@ import type {
   MonitoringTemperatureRule,
   MonitoringDeliveryQuality,
   MonitoringTargetType,
+  MonitoringSensor,
   TemperaturePoint,
 } from "../types/monitoring";
 import type { Client } from "../types/client";
@@ -13,6 +14,14 @@ export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 export const MIN_CHART_WINDOW_MS = 60_000;
+
+/** CRM-facing name is intentionally separate from the stable sensorId. */
+export function sensorDisplayName(
+  sensor: Pick<MonitoringSensor, "name"> | undefined,
+  index: number,
+): string {
+  return sensor?.name?.trim() || `Датчик ${index + 1}`;
+}
 
 export interface ChartWindow {
   start: number;

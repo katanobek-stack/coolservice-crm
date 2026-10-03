@@ -1,5 +1,28 @@
 # История изменений телеметрии
 
+## 2026-10-03 — несколько датчиков на одном контроллере (локально, без deploy)
+
+**Изменено.** `ingestTelemetry` создаёт отдельные server-owned состояния
+`monitoringDeviceState/{deviceId}/sensors/{sensorId}` и автоматически ведёт
+реестр `monitoringDevices/{deviceId}/sensors/{sensorId}`. Новое состояние
+продвигается только по более новому `measuredAt` данного датчика; packetId
+по-прежнему дедуплицируется до любых записей read-model. Один sampling cycle
+может содержать одинаковый `measuredAt` у разных sensorId.
+
+**CRM и доступ.** В карточке контроллера добавлен список датчиков, отдельные
+последние показания и отдельный одновременно видимый график для каждого
+sensorId. Каждый history-query фильтруется по своему sensorId, поэтому серии
+никогда не смешиваются. Имя хранится
+в registry-документе отдельно от технического ID: manager/admin/owner могут
+менять `name`, mechanic имеет read-only доступ. Старый контроллер без
+per-sensor state показывается как один совместимый `default` датчик.
+
+**Намеренно не менялось.** Existing packet paths, packetId, telemetry keys,
+alert contract, production data, rules/indexes deploy, VPS, firmware,
+Mosquitto и env-файлы. Реальная многодатчиковая прошивка в этой ветке не
+обнаружена и не менялась; UI/ingest принимают согласованные opaque IDs,
+включая суффиксы `_2`…`_8`.
+
 ## 2026-09-21 — полный dry-run backfill `device-001` (без 2026-09-19 UTC)
 
 **Режим и граница.** Выполнен только read-only dry-run всей legacy-истории

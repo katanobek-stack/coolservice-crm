@@ -130,6 +130,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
   }
 
   let previousTime = Number.NEGATIVE_INFINITY;
+  const sensorTimeKeys = new Set<string>();
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
     if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "deliveryQuality", "sensorId"])) {
       throw new RequestValidationError(`measurements[${index}] has unknown fields`);
@@ -164,9 +165,17 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
       return { temperatureC: measurement.temperatureC, timeQuality, deliveryQuality, sensorId };
     }
     const measuredAt = parseMeasuredAt(measurement.measuredAt, nowMs);
-    if (measuredAt.getTime() <= previousTime) {
-      throw new RequestValidationError("measurements must be ordered by unique measuredAt values");
+    // Multiple DS18B20 sensors are sampled during the same controller cycle,
+    // so adjacent sensors may legitimately have the same measuredAt. Packet
+    // order remains deterministic and stableMeasurementId still uses its index.
+    if (measuredAt.getTime() < previousTime) {
+      throw new RequestValidationError("measurements must be ordered by measuredAt values");
     }
+    const sensorTimeKey = `${sensorId ?? "default"}\u0000${measuredAt.getTime()}`;
+    if (sensorTimeKeys.has(sensorTimeKey)) {
+      throw new RequestValidationError("one sensor cannot have duplicate measuredAt values in a packet");
+    }
+    sensorTimeKeys.add(sensorTimeKey);
     previousTime = measuredAt.getTime();
     return {
       measuredAt,
@@ -271,9 +280,19 @@ export const ingestTelemetry = onRequest(
           ...(hasMeasuredTime(measurement) ? { measuredAt: measurement.measuredAt } : {}),
         }));
         const rollupRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        const sensorStateRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        const sensorRegistryRefs = new Map<string, FirebaseFirestore.DocumentReference>();
         for (const measurement of readModelMeasurements) {
-          if (!isTimedReadModelMeasurement(measurement)) continue;
           const sensorId = normalizedSensorId(measurement.sensorId);
+          sensorStateRefs.set(
+            sensorId,
+            firestore.doc(`monitoringDeviceState/${packet.deviceId}/sensors/${sensorId}`),
+          );
+          sensorRegistryRefs.set(
+            sensorId,
+            firestore.doc(`monitoringDevices/${packet.deviceId}/sensors/${sensorId}`),
+          );
+          if (!isTimedReadModelMeasurement(measurement)) continue;
           const ref = firestore.doc(
             `monitoringTelemetry/${packet.deviceId}/rollups/${rollupDocumentId(sensorId, measurement.measuredAt.getTime())}`,
           );
@@ -285,6 +304,14 @@ export const ingestTelemetry = onRequest(
         const rollupDataByPath = new Map<string, Record<string, unknown> | undefined>();
         rollupSnapshots.forEach((snapshot) => rollupDataByPath.set(
           snapshot.ref.path,
+          snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
+        ));
+        const sensorStateSnapshots = sensorStateRefs.size
+          ? await transaction.getAll(...sensorStateRefs.values())
+          : [];
+        const sensorStateById = new Map<string, Record<string, unknown> | undefined>();
+        sensorStateSnapshots.forEach((snapshot) => sensorStateById.set(
+          snapshot.id,
           snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
         ));
 
@@ -556,6 +583,15 @@ export const ingestTelemetry = onRequest(
             pointDocumentData(packet.deviceId, measurement, receivedAt),
           );
         }
+        // Sensor registry stores only stable IDs and optional CRM-facing names.
+        // merge preserves a name entered by staff when later telemetry arrives.
+        sensorRegistryRefs.forEach((ref, sensorId) => {
+          transaction.set(ref, {
+            deviceId: packet.deviceId,
+            sensorId,
+            lastSeenAt: receivedAt,
+          }, { merge: true });
+        });
         for (const measurement of readModelMeasurements) {
           if (!isTimedReadModelMeasurement(measurement)) continue;
           const sensorId = normalizedSensorId(measurement.sensorId);
@@ -598,6 +634,45 @@ export const ingestTelemetry = onRequest(
           });
         }
         transaction.set(stateRef, stateUpdate, { mergeFields: Object.keys(stateUpdate) });
+
+        // The legacy parent state remains the controller-wide compatibility
+        // summary. Per-sensor state is advanced independently by measuredAt so
+        // an old delayed sample cannot make an individual sensor look current.
+        const measurementsBySensor = new Map<string, Array<{ measurement: ValidMeasurement; measurementIndex: number }>>();
+        packet.measurements.forEach((measurement, measurementIndex) => {
+          const sensorId = normalizedSensorId(measurement.sensorId);
+          const items = measurementsBySensor.get(sensorId) ?? [];
+          items.push({ measurement, measurementIndex });
+          measurementsBySensor.set(sensorId, items);
+        });
+        measurementsBySensor.forEach((items, sensorId) => {
+          const timed = items.filter((item): item is { measurement: TimedMeasurement; measurementIndex: number } => hasMeasuredTime(item.measurement));
+          const latestForSensor = timed.at(-1);
+          const currentSensorState = sensorStateById.get(sensorId) ?? {};
+          const currentSensorMeasuredAt = currentSensorState.measuredAt;
+          const shouldAdvance = latestForSensor !== undefined && (
+            !(currentSensorMeasuredAt instanceof Timestamp)
+            || latestForSensor.measurement.measuredAt.getTime() > currentSensorMeasuredAt.toMillis()
+          );
+          const update: Record<string, unknown> = {
+            deviceId: packet.deviceId,
+            sensorId,
+            lastPacketId: packet.packetId,
+            lastReceivedAt: receivedAt,
+            sampleCount: items.length,
+          };
+          if (shouldAdvance && latestForSensor) {
+            Object.assign(update, {
+              packetId: packet.packetId,
+              temperatureC: latestForSensor.measurement.temperatureC,
+              timeQuality: latestForSensor.measurement.timeQuality,
+              deliveryQuality: latestForSensor.measurement.deliveryQuality,
+              measuredAt: Timestamp.fromDate(latestForSensor.measurement.measuredAt),
+              receivedAt,
+            });
+          }
+          transaction.set(sensorStateRefs.get(sensorId)!, update, { mergeFields: Object.keys(update) });
+        });
         eventWrites.forEach((pending, eventId) => {
           const eventRef = firestore.doc(`monitoringAlertEvents/${eventId}`);
           if (pending.isNew) transaction.create(eventRef, pending.data);
