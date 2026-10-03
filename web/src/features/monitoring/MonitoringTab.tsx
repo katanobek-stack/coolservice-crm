@@ -796,9 +796,34 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
   useEffect(() => {
     if (!devicesLoaded) return undefined;
-    const unsubscribe = devices.map((device) => listenDeviceHistory(device.id, "default", "hour", (result) => {
-      setPreviewHistory((current) => new Map(current).set(device.id, result.points));
-    }, () => undefined));
+    // The compact controller card intentionally represents the primary physical
+    // probe only. Multi-sensor firmware keeps that probe at temperature-1;
+    // detailed controller cards load each sensor separately. A legacy
+    // single-sensor controller has no temperature-1 series, so only then do
+    // we fall back to its compatible `default` series.
+    const unsubscribe = devices.map((device) => {
+      let stopLegacy: (() => void) | null = null;
+      const show = (result: MonitoringHistoryResult) => {
+        setPreviewHistory((current) => new Map(current).set(device.id, result.points));
+      };
+      const startLegacyFallback = () => {
+        if (stopLegacy) return;
+        stopLegacy = listenDeviceHistory(device.id, "default", "hour", show, () => undefined);
+      };
+      const stopPrimary = listenDeviceHistory(device.id, "temperature-1", "hour", (result) => {
+        if (result.points.length === 0) {
+          startLegacyFallback();
+          return;
+        }
+        stopLegacy?.();
+        stopLegacy = null;
+        show(result);
+      }, startLegacyFallback);
+      return () => {
+        stopPrimary();
+        stopLegacy?.();
+      };
+    });
     return () => unsubscribe.forEach((stop) => stop());
   }, [devices, devicesLoaded]);
 
