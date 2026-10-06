@@ -12,6 +12,7 @@ import {
   listenMonitoringSensorStates,
   listenMonitoringStates,
   listenMonitoringTemperatureRules,
+  renameMonitoringDevice,
   saveMonitoringTemperatureRule,
   saveMonitoringSensorName,
   saveOfflineThreshold,
@@ -219,6 +220,26 @@ function MonitoringSummary({ total, online, attention, alarms, filter, onFilter 
     { id: "alarms", label: "Активные аварии", value: alarms, icon: "ti-bell-ringing", tone: "danger" },
   ];
   return <div className="monitor-summary" aria-label="Сводка мониторинга">{items.map((item) => <button type="button" key={item.id} className={`monitor-summary-card monitor-summary-card--${item.tone} ${filter === item.id ? "is-active" : ""}`} onClick={() => onFilter(item.id)}><span className="monitor-summary-icon"><i className={`ti ${item.icon}`} /></span><span className="monitor-summary-copy"><span>{item.label}</span><strong>{item.value}</strong></span><i className="ti ti-chevron-right monitor-summary-arrow" /></button>)}</div>;
+}
+
+function RenameMonitoringDeviceDialog({ device, saving, error, onClose, onSave }: {
+  device: MonitoringDevice;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (name: string) => void;
+}) {
+  const [name, setName] = useState(device.name);
+  return <div className="monitor-rename-backdrop" role="presentation" onMouseDown={onClose}>
+    <form className="monitor-rename-dialog" role="dialog" aria-modal="true" aria-labelledby="monitor-rename-title"
+      onMouseDown={(event) => event.stopPropagation()}
+      onSubmit={(event) => { event.preventDefault(); onSave(name); }}>
+      <div className="monitor-rename-dialog-head"><div><h3 id="monitor-rename-title">Название контроллера</h3><p>ID: {device.id}</p></div><button type="button" className="monitor-rename-close" onClick={onClose} aria-label="Закрыть"><i className="ti ti-x" /></button></div>
+      <label className="monitor-rename-field"><span>Название</span><input autoFocus value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Например, Контроллер камеры №1" /></label>
+      {error && <div className="monitor-rename-error">{error}</div>}
+      <div className="monitor-rename-actions"><button type="button" className="monitor-filter-button" disabled={saving} onClick={onClose}>Отмена</button><button type="submit" className="btn btn-primary" disabled={saving || !name.trim()}>{saving ? "Сохраняем…" : "Сохранить"}</button></div>
+    </form>
+  </div>;
 }
 
 function periodLabel(period: MonitoringPeriod): string {
@@ -750,6 +771,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [search, setSearch] = useState("");
   const [monitoringFilter, setMonitoringFilter] = useState<MonitoringFilter>("all");
   const [previewHistory, setPreviewHistory] = useState<Map<string, TemperaturePoint[]>>(new Map());
+  const [renamingDevice, setRenamingDevice] = useState<MonitoringDevice | null>(null);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState("");
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
@@ -948,6 +972,17 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     }
   }
 
+  async function saveDeviceName(name: string) {
+    if (!renamingDevice) return;
+    setRenameSaving(true); setRenameError("");
+    try {
+      await renameMonitoringDevice(renamingDevice.id, name);
+      setRenamingDevice(null);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "Не удалось сохранить название контроллера");
+    } finally { setRenameSaving(false); }
+  }
+
   if (selectedDevice) {
     const state = states.get(selectedDevice.id);
     const controllerStatus = controllerStatuses.get(selectedDevice.id);
@@ -1118,12 +1153,8 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
             const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
             const tone = temperatureTone(status.reading, connection);
             return (
-              <button
-                type="button"
-                className="monitor-device-card"
-                key={device.id}
-                onClick={() => setSelectedId(device.id)}
-              >
+              <div className="monitor-device-card-wrap" key={device.id}>
+              <button type="button" className="monitor-device-card" onClick={() => setSelectedId(device.id)}>
                 <div className="monitor-card-head">
                   <div className="monitor-device-icon"><i className="ti ti-temperature" /></div>
                   <div className="monitor-device-name">
@@ -1147,12 +1178,15 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
                   <div><span>Обновлено</span><strong>{relativeTime(state?.measuredAt, nowMs)}</strong></div>
                 </div>
               </button>
+              {canManageSettings && <button type="button" className="monitor-device-rename" title="Переименовать контроллер" aria-label={`Переименовать контроллер ${device.name}`} onClick={() => { setRenameError(""); setRenamingDevice(device); }}><i className="ti ti-pencil" /></button>}
+              </div>
             );
           })}
           </div>
           )}
         </>
       )}
+      {renamingDevice && <RenameMonitoringDeviceDialog device={renamingDevice} saving={renameSaving} error={renameError} onClose={() => !renameSaving && setRenamingDevice(null)} onSave={(name) => void saveDeviceName(name)} />}
     </div>
   );
 }
