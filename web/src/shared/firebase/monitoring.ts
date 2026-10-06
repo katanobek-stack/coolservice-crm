@@ -321,6 +321,14 @@ export function saveOfflineThreshold(offlineThresholdMinutes: number): Promise<v
   }, { merge: true });
 }
 
+/** Changes only the human-readable registry label, never a technical device ID or telemetry data. */
+export async function renameMonitoringDevice(deviceId: string, name: string): Promise<void> {
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+  if (!normalizedName) throw new Error("Укажите название контроллера");
+  if (normalizedName.length > 120) throw new Error("Название контроллера не должно быть длиннее 120 символов");
+  await updateDoc(doc(getFirebaseDb(), "monitoringDevices", deviceId), { name: normalizedName });
+}
+
 export function listenMonitoringTemperatureRules(
   deviceId: string,
   onData: (rules: MonitoringTemperatureRule[]) => void,
