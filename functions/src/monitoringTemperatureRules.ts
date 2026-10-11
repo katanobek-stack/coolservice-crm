@@ -10,6 +10,7 @@ interface RuleInput {
   action: "upsert" | "delete";
   deviceId: string;
   ruleId: string;
+  sensorId?: string;
   name?: string;
   enabled?: boolean;
   direction?: TemperatureRuleDirection;
@@ -33,6 +34,8 @@ function parseInput(value: unknown): RuleInput {
     return { action: "delete", deviceId: data.deviceId, ruleId: data.ruleId };
   }
   if (
+    (data.sensorId !== undefined && (typeof data.sensorId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(data.sensorId)))
+    ||
     typeof data.name !== "string"
     || data.name.trim().length < 1
     || data.name.trim().length > 80
@@ -48,6 +51,7 @@ function parseInput(value: unknown): RuleInput {
     action: "upsert",
     deviceId: data.deviceId,
     ruleId: data.ruleId,
+    sensorId: typeof data.sensorId === "string" ? data.sensorId : undefined,
     name: data.name.trim(),
     enabled: data.enabled,
     direction: data.direction,
@@ -106,6 +110,7 @@ export const saveMonitoringTemperatureRule = onCall(
       const previousVersions = Array.isArray(previous?.versions) ? previous.versions : [];
       const isDelete = input.action === "delete";
       const nextName = isDelete ? String(previous?.name ?? input.ruleId) : input.name!;
+      const nextSensorId = isDelete ? previous?.sensorId ?? null : input.sensorId ?? previous?.sensorId ?? null;
       const nextEnabled = isDelete ? false : input.enabled!;
       const nextDirection = isDelete
         ? (previous?.direction === "below" ? "below" : "above")
@@ -117,6 +122,7 @@ export const saveMonitoringTemperatureRule = onCall(
         && previous?.deleted !== true
         && !isDelete
         && previous?.name === nextName
+        && (previous?.sensorId ?? null) === nextSensorId
         && previous?.enabled === nextEnabled
         && previous?.direction === nextDirection
         && previous?.thresholdC === nextThresholdC;
@@ -124,6 +130,7 @@ export const saveMonitoringTemperatureRule = onCall(
 
       const revision = previousRevision + 1;
       const version = {
+        ...(nextSensorId ? { sensorId: nextSensorId } : {}),
         revision,
         name: nextName,
         enabled: nextEnabled,
@@ -132,6 +139,7 @@ export const saveMonitoringTemperatureRule = onCall(
         effectiveFrom: changedAt,
       };
       transaction.set(ruleRef, {
+        ...(nextSensorId ? { sensorId: nextSensorId } : {}),
         id: input.ruleId,
         name: nextName,
         enabled: nextEnabled,

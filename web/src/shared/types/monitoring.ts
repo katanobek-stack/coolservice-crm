@@ -87,6 +87,8 @@ export interface MonitoringHistoryResult {
 }
 
 export interface MonitoringAlertEvent {
+  sensorId?: string;
+  sensorName?: string;
   id: string;
   deviceId: string;
   deviceName: string;
@@ -113,6 +115,7 @@ export interface MonitoringAlertEvent {
 }
 
 export interface MonitoringTemperatureRule {
+  sensorId?: string;
   id: string;
   name: string;
   enabled: boolean;
@@ -122,6 +125,7 @@ export interface MonitoringTemperatureRule {
 }
 
 export interface MonitoringTemperatureRuleInput {
+  sensorId: string;
   id: string;
   name: string;
   enabled: boolean;

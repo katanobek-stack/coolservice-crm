@@ -15,10 +15,21 @@ import {
   zoomChartWindow,
   violatesTemperatureRule,
   sensorDisplayName,
+  temperatureRuleTargetsSensor,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
 const NOW = Date.parse("2026-09-13T02:00:00.000Z");
+
+test("sensor charts show only their own thresholds with primary-only legacy fallback", () => {
+  const rule = { sensorId: "temperature-1_2" };
+  assert.equal(temperatureRuleTargetsSensor(rule, "temperature-1_2"), true);
+  assert.equal(temperatureRuleTargetsSensor(rule, "temperature-1"), false);
+  assert.equal(temperatureRuleTargetsSensor(rule, "temperature-1_3"), false);
+  assert.equal(temperatureRuleTargetsSensor({}, "temperature-1"), true);
+  assert.equal(temperatureRuleTargetsSensor({}, "default"), true);
+  assert.equal(temperatureRuleTargetsSensor({}, "temperature-1_2"), false);
+});
 
 function state(overrides: Partial<MonitoringDeviceState>): MonitoringDeviceState {
   return {

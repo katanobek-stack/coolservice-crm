@@ -87,3 +87,19 @@ jobs:
 
       - name: Build (tsc)
         run: npm run build
+
+      - name: Sensor alert unit tests
+        run: npm run test:sensor-alerts
+
+      - name: Setup Java for sensor alert emulator tests
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools@13
+
+      - name: Sensor alert integration tests (demo project only)
+        working-directory: ${{ github.workspace }}
+        run: firebase emulators:exec --only auth,functions,firestore --project demo-coolservice-crm 'node --test --test-name-pattern="sensor rules|newer unrelated probe|mixed-sensor packet" functions/tests/telemetry.emulator.test.js'

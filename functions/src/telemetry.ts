@@ -7,6 +7,7 @@ import {
   eventUsesRuleVersion,
   parseTemperatureRule,
   ruleVersionAt,
+  ruleMatchesSensor,
   temperatureViolatesRule,
   type TemperatureRule,
   type TemperatureRuleVersion,
@@ -267,6 +268,9 @@ export const ingestTelemetry = onRequest(
         const rollupRefs = new Map<string, FirebaseFirestore.DocumentReference>();
         const sensorStateRefs = new Map<string, FirebaseFirestore.DocumentReference>();
         const sensorRegistryRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+        const rules = currentRules.docs
+          .map((item) => parseTemperatureRule(item.id, item.data()))
+          .filter((rule): rule is TemperatureRule => rule !== null);
         for (const measurement of readModelMeasurements) {
           const sensorId = normalizedSensorId(measurement.sensorId);
           sensorStateRefs.set(
@@ -298,12 +302,19 @@ export const ingestTelemetry = onRequest(
           snapshot.id,
           snapshot.exists ? snapshot.data() as Record<string, unknown> : undefined,
         ));
+        // Read friendly names only for probes that could create an alert. Normal
+        // telemetry without violations requires no extra registry document reads.
+        const alertSensorIds = new Set(packet.measurements.filter((measurement) => rules.some((rule) => {
+          const version = ruleVersionAt(rule, measurement.measuredAt.getTime());
+          return version && ruleMatchesSensor(version, measurement.sensorId)
+            && temperatureViolatesRule(measurement.temperatureC, version);
+        })).map((measurement) => normalizedSensorId(measurement.sensorId)));
+        const alertRegistryRefs = [...alertSensorIds].map((sensorId) => sensorRegistryRefs.get(sensorId)!);
+        const registrySnapshots = alertRegistryRefs.length ? await transaction.getAll(...alertRegistryRefs) : [];
+        const sensorNames = new Map(registrySnapshots.map((snapshot) => [snapshot.id, snapshot.data()?.name]));
 
         const deviceData = currentDevice.data() ?? {};
         const stateData = currentState.data() ?? {};
-        const rules = currentRules.docs
-          .map((item) => parseTemperatureRule(item.id, item.data()))
-          .filter((rule): rule is TemperatureRule => rule !== null);
         const storedActiveAlerts = typeof stateData.activeAlertIds === "object"
           && stateData.activeAlertIds !== null
           && !Array.isArray(stateData.activeAlertIds)
@@ -349,6 +360,15 @@ export const ingestTelemetry = onRequest(
           initialCursorMs,
           ...packet.measurements.map((measurement) => measurement.measuredAt.getTime()),
         );
+        const readingForSensor = (sensorId: string): Record<string, unknown> => {
+          const stored = sensorStateById.get(sensorId);
+          if (stored) return stored;
+          // Pre-multi-sensor state did not store a sensorId. Never use a different
+          // named probe's parent reading as this sensor's watermark/recovery.
+          if (sensorStateSnapshots.every((snapshot) => !snapshot.exists)
+            && normalizedSensorId(stateData.sensorId as string | undefined) === sensorId) return stateData;
+          return {};
+        };
         const peak = (
           event: Record<string, unknown>,
           temperatureC: number,
@@ -377,6 +397,9 @@ export const ingestTelemetry = onRequest(
             isNew: true as const,
             data: {
               ...assignment,
+              sensorId: normalizedSensorId(measurement.sensorId),
+              sensorName: typeof sensorNames.get(normalizedSensorId(measurement.sensorId)) === "string"
+                ? sensorNames.get(normalizedSensorId(measurement.sensorId)) : normalizedSensorId(measurement.sensorId),
               ruleId: rule.id,
               ruleName: version.name,
               ruleRevision: version.revision,
@@ -409,6 +432,11 @@ export const ingestTelemetry = onRequest(
           for (const [measurementIndex, measurement] of packet.measurements.entries()) {
             const measurementMs = measurement.measuredAt.getTime();
             const version = ruleVersionAt(rule, measurementMs);
+            // A reading from any other probe cannot open, extend or recover this rule.
+            if (!version || !ruleMatchesSensor(version, measurement.sensorId)) continue;
+            const sensorReading = readingForSensor(normalizedSensorId(measurement.sensorId));
+            const sensorCursor = sensorReading.measuredAt;
+            const initialCursorMs = sensorCursor instanceof Timestamp ? sensorCursor.toMillis() : Number.NEGATIVE_INFINITY;
             const violated = version
               ? temperatureViolatesRule(measurement.temperatureC, version)
               : false;
@@ -507,8 +535,9 @@ export const ingestTelemetry = onRequest(
           }
 
           if (historicalEvent && !activeEvent) {
-            const currentMeasuredAt = stateData.measuredAt;
-            const currentTemperatureC = stateData.temperatureC;
+            const sensorReading = readingForSensor(String(historicalEvent.data.sensorId));
+            const currentMeasuredAt = sensorReading.measuredAt;
+            const currentTemperatureC = sensorReading.temperatureC;
             const lastExceededAt = historicalEvent.data.lastExceededMeasuredAt;
             const currentVersion = currentMeasuredAt instanceof Timestamp
               ? ruleVersionAt(rule, currentMeasuredAt.toMillis())
@@ -519,12 +548,13 @@ export const ingestTelemetry = onRequest(
               && currentMeasuredAt.toMillis() > lastExceededAt.toMillis()
               && typeof currentTemperatureC === "number"
               && currentVersion
+              && ruleMatchesSensor(currentVersion, String(historicalEvent.data.sensorId))
               && historicalEvent.data.ruleRevision === currentVersion.revision
               && !temperatureViolatesRule(currentTemperatureC, currentVersion)
             ) {
               historicalEvent.data.recoveredMeasuredAt = currentMeasuredAt;
-              historicalEvent.data.recoveryReceivedAt = stateData.receivedAt instanceof Timestamp
-                ? stateData.receivedAt
+              historicalEvent.data.recoveryReceivedAt = sensorReading.receivedAt instanceof Timestamp
+                ? sensorReading.receivedAt
                 : receivedAt;
             }
           }
@@ -561,7 +591,9 @@ export const ingestTelemetry = onRequest(
         }
         // Sensor registry stores only stable IDs and optional CRM-facing names.
         // merge preserves a name entered by staff when later telemetry arrives.
+        const packetSensorIds = new Set(readModelMeasurements.map((measurement) => normalizedSensorId(measurement.sensorId)));
         sensorRegistryRefs.forEach((ref, sensorId) => {
+          if (!packetSensorIds.has(sensorId)) return;
           transaction.set(ref, {
             deviceId: packet.deviceId,
             sensorId,

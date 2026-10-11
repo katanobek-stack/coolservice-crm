@@ -130,6 +130,7 @@ export function MonitoringAlertCenter({ onOpenDevice }: {
                         <em>{stateLabel(event)}</em>
                       </span>
                       <span>Правило: {event.ruleName} · {ruleCondition(event)}</span>
+                      <span>{event.sensorId ? `Датчик: ${event.sensorName || event.sensorId} · ID: ${event.sensorId}` : "Старое событие: датчик не указан"}</span>
                       <span>{objectLabel(event, clients)}</span>
                       <span className="monitor-alert-event-values">
                         {event.temperatureC.toFixed(1)} °C · порог {event.thresholdC.toFixed(1)} °C

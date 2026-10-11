@@ -122,6 +122,7 @@ async function postRule(data, token) {
 }
 
 async function seedTemperatureRule({
+  sensorId,
   id = "high-warning",
   name = "Выше -15",
   enabled = true,
@@ -130,6 +131,7 @@ async function seedTemperatureRule({
   effectiveFrom = Date.now() - 60 * 60_000,
 } = {}) {
   await firestore.doc(`monitoringDevices/${DEVICE_ID}/temperatureRules/${id}`).set({
+    ...(sensorId ? { sensorId } : {}),
     id,
     name,
     enabled,
@@ -138,6 +140,7 @@ async function seedTemperatureRule({
     revision: 1,
     deleted: false,
     versions: [{
+      ...(sensorId ? { sensorId } : {}),
       revision: 1,
       name,
       enabled,
@@ -503,6 +506,55 @@ describe("ingestTelemetry emulator integration", () => {
     assert.equal(state.data().temperatureC, -18.25);
     assert.equal(state.data().packetId, current.packetId);
     assert.equal(state.data().lastPacketId, delayed.packetId);
+  });
+
+  test("sensor rules recover independently and repeat packetIds cannot duplicate alerts", async () => {
+    await seedTemperatureRule({ id: "probe-one", sensorId: "temperature-1" });
+    await seedTemperatureRule({ id: "probe-two", sensorId: "temperature-1_2", direction: "below", thresholdC: -25 });
+    await firestore.doc(`monitoringDevices/${DEVICE_ID}/sensors/temperature-1`).set({ name: "Камера", sensorId: "temperature-1" });
+    const send = (id, samples) => postTelemetry(packet({ packetId: id, measurements: samples }));
+    const start = [
+      { ...measurement(45, -14), sensorId: "temperature-1" },
+      { ...measurement(44, -26), sensorId: "temperature-1_2" },
+      { ...measurement(43, -18), sensorId: "temperature-1_3" },
+    ];
+    assert.equal((await send("sensor:start", start)).status, 202);
+    assert.equal((await send("sensor:start", start)).status, 200);
+    const events = await firestore.collection("monitoringAlertEvents").get();
+    assert.equal(events.size, 2);
+    assert.equal(events.docs.find((doc) => doc.data().sensorId === "temperature-1").data().sensorName, "Камера");
+    assert.ok(events.docs.every((doc) => doc.data().state === "active"));
+    assert.equal((await send("sensor:other", [{ ...measurement(30, -18), sensorId: "temperature-1_3" }])).status, 202);
+    assert.ok((await firestore.collection("monitoringAlertEvents").get()).docs.every((doc) => doc.data().state === "active"));
+    assert.equal((await send("sensor:recover-one", [{ ...measurement(20, -15), sensorId: "temperature-1" }])).status, 202);
+    const recovered = (await firestore.collection("monitoringAlertEvents").get()).docs.map((doc) => doc.data());
+    assert.equal(recovered.find((event) => event.sensorId === "temperature-1").state, "recovered");
+    assert.equal(recovered.find((event) => event.sensorId === "temperature-1_2").state, "active");
+    assert.equal((await send("sensor:recover-two", [{ ...measurement(10, -25), sensorId: "temperature-1_2" }])).status, 202);
+    assert.ok((await firestore.collection("monitoringAlertEvents").get()).docs.every((doc) => doc.data().state === "recovered"));
+  });
+
+  test("a newer unrelated probe does not turn another probe's first violation into history", async () => {
+    await seedTemperatureRule({ sensorId: "temperature-1_2" });
+    await postTelemetry(packet({ packetId: "newer:other", measurements: [{ ...measurement(10, -18), sensorId: "temperature-1" }] }));
+    await postTelemetry(packet({ packetId: "older:target", measurements: [{ ...measurement(30, -14), sensorId: "temperature-1_2" }] }));
+    const events = await firestore.collection("monitoringAlertEvents").get();
+    assert.equal(events.size, 1);
+    assert.equal(events.docs[0].data().state, "active");
+    assert.equal(events.docs[0].data().sensorId, "temperature-1_2");
+  });
+
+  test("only matching samples recover an episode within a mixed-sensor packet", async () => {
+    await seedTemperatureRule({ sensorId: "temperature-1_2" });
+    await postTelemetry(packet({ packetId: "mixed:episode", measurements: [
+      { ...measurement(40, -14), sensorId: "temperature-1_2" },
+      { ...measurement(30, -18), sensorId: "temperature-1" },
+      { ...measurement(20, -15), sensorId: "temperature-1_2" },
+    ] }));
+    const events = await firestore.collection("monitoringAlertEvents").get();
+    assert.equal(events.size, 1);
+    assert.equal(events.docs[0].data().state, "recovered");
+    assert.deepEqual(events.docs[0].data().viewedBy, {});
   });
 
   test("starts once, continues without spam, and recovers at equality", async () => {

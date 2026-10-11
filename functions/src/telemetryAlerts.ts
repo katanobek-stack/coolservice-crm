@@ -9,6 +9,7 @@ export type RuleCloseReason =
   | "device_disabled";
 
 export interface TemperatureRuleVersion {
+  sensorId?: string;
   revision: number;
   name: string;
   enabled: boolean;
@@ -18,6 +19,7 @@ export interface TemperatureRuleVersion {
 }
 
 export interface TemperatureRule {
+  sensorId?: string;
   id: string;
   name: string;
   enabled: boolean;
@@ -36,6 +38,10 @@ function direction(value: unknown): TemperatureRuleDirection | null {
   return value === "above" || value === "below" ? value : null;
 }
 
+function validSensorId(value: unknown): boolean {
+  return value === undefined || (typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(value));
+}
+
 export function parseTemperatureRule(
   id: string,
   data: Record<string, unknown> | undefined,
@@ -47,6 +53,7 @@ export function parseTemperatureRule(
     : null;
   if (
     !data
+    || !validSensorId(data.sensorId)
     || typeof data.name !== "string"
     || !currentDirection
     || thresholdC === null
@@ -62,6 +69,7 @@ export function parseTemperatureRule(
     if (
       !Number.isInteger(candidate.revision)
       || Number(candidate.revision) < 1
+      || !validSensorId(candidate.sensorId)
       || typeof candidate.name !== "string"
       || typeof candidate.enabled !== "boolean"
       || !candidateDirection
@@ -69,6 +77,7 @@ export function parseTemperatureRule(
       || !(candidate.effectiveFrom instanceof Timestamp)
     ) return [];
     return [{
+      ...(typeof candidate.sensorId === "string" ? { sensorId: candidate.sensorId } : {}),
       revision: Number(candidate.revision),
       name: candidate.name,
       enabled: candidate.enabled,
@@ -80,6 +89,7 @@ export function parseTemperatureRule(
 
   if (versions.length === 0) return null;
   return {
+    ...(typeof data.sensorId === "string" ? { sensorId: data.sensorId } : {}),
     id,
     name: data.name,
     enabled: data.enabled === true,
@@ -119,7 +129,14 @@ export function eventUsesRuleVersion(
 ): boolean {
   return event.ruleRevision === rule.revision
     && event.direction === rule.direction
-    && event.thresholdC === rule.thresholdC;
+    && event.thresholdC === rule.thresholdC
+    && (!rule.sensorId || event.sensorId === rule.sensorId);
+}
+
+/** Old single-probe rules target the primary probe, including its unnamed legacy data. */
+export function ruleMatchesSensor(rule: Pick<TemperatureRuleVersion, "sensorId">, sensorId?: string): boolean {
+  if (rule.sensorId) return rule.sensorId === (sensorId ?? "default");
+  return !sensorId || sensorId === "default" || sensorId === "temperature-1";
 }
 
 export function alertEventId(
