@@ -29,6 +29,7 @@ import {
   zoomChartWindow,
   objectLabel,
   sensorDisplayName,
+  temperatureRuleTargetsSensor,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -599,15 +600,16 @@ function SensorHistoryChart({
           : error ? <div className="monitor-error"><i className="ti ti-alert-triangle" /><div><strong>История недоступна</strong><span>{error}</span></div></div>
           : <>
             {history.limitReached && <div className="monitor-limit-warning">Показана не вся история за период — достигнут лимит выборки.</div>}
-            <TemperatureChart points={history.points} period={period} rules={rules} />
+            <TemperatureChart points={history.points} period={period} rules={rules.filter((rule) => temperatureRuleTargetsSensor(rule, sensorId))} />
           </>}
       </div>
     </section>
   );
 }
 
-function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
+function TemperatureRulesPanel({ deviceId, sensors, rules, loading, error, canManage }: {
   deviceId: string;
+  sensors: Array<{ sensorId: string; name: string }>;
   rules: MonitoringTemperatureRule[];
   loading: boolean;
   error: string;
@@ -619,10 +621,12 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
   const [enabled, setEnabled] = useState(true);
   const [direction, setDirection] = useState<"above" | "below">("above");
   const [threshold, setThreshold] = useState("-15");
+  const [sensorId, setSensorId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   function resetForm() {
+    setSensorId(sensors[0]?.sensorId ?? "");
     setEditingId(null);
     setRuleId(`rule-${Date.now().toString(36)}`);
     setName("");
@@ -633,6 +637,7 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
   }
 
   function edit(rule: MonitoringTemperatureRule) {
+    setSensorId(rule.sensorId ?? (sensors.find((sensor) => sensor.sensorId === "temperature-1")?.sensorId ?? "default"));
     setEditingId(rule.id);
     setRuleId(rule.id);
     setName(rule.name);
@@ -644,8 +649,8 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
 
   async function save() {
     const thresholdC = Number(threshold);
-    if (!/^[a-z0-9][a-z0-9_-]{2,63}$/.test(ruleId) || !name.trim() || !Number.isFinite(thresholdC)) {
-      setMessage("Проверьте ID, название и числовой порог правила.");
+    if (!sensorId || !/^[a-z0-9][a-z0-9_-]{2,63}$/.test(ruleId) || !name.trim() || !Number.isFinite(thresholdC)) {
+      setMessage("Выберите датчик и проверьте название и числовой порог правила.");
       return;
     }
     setSaving(true);
@@ -653,6 +658,7 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
     try {
       await saveMonitoringTemperatureRule(deviceId, {
         id: ruleId,
+        sensorId,
         name: name.trim(),
         enabled,
         direction,
@@ -708,6 +714,7 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
               <div>
                 <strong>{rule.name}</strong>
                 <span>ID: {rule.id} · версия {rule.revision}</span>
+                <span>Датчик: {sensors.find((sensor) => sensor.sensorId === rule.sensorId)?.name ?? rule.sensorId ?? "Первый датчик (старое правило)"}</span>
               </div>
               <div className="monitor-rule-threshold">
                 {rule.direction === "above" ? "Выше" : "Ниже"} {rule.thresholdC.toFixed(1)} °C
@@ -728,6 +735,7 @@ function TemperatureRulesPanel({ deviceId, rules, loading, error, canManage }: {
 
       {canManage && (editingId !== null || ruleId !== "") && (
         <div className="monitor-rule-form">
+          <label><span>Датчик</span><select value={sensorId} disabled={saving} onChange={(event) => setSensorId(event.target.value)}><option value="">Выберите датчик</option>{sensorId && !sensors.some((sensor) => sensor.sensorId === sensorId) && <option value={sensorId}>{sensorId}</option>}{sensors.map((sensor) => <option key={sensor.sensorId} value={sensor.sensorId}>{sensor.name} · {sensor.sensorId}</option>)}</select></label>
           <label><span>ID правила</span><input value={ruleId} disabled={editingId !== null || saving} onChange={(event) => setRuleId(event.target.value.toLowerCase())} /></label>
           <label><span>Название</span><input value={name} disabled={saving} onChange={(event) => setName(event.target.value)} /></label>
           <label><span>Направление</span><select value={direction} disabled={saving} onChange={(event) => setDirection(event.target.value as "above" | "below")}><option value="above">Выше порога</option><option value="below">Ниже порога</option></select></label>
@@ -1055,6 +1063,7 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
 
         <TemperatureRulesPanel
           deviceId={selectedDevice.id}
+          sensors={sensorViews.map((item) => ({ sensorId: item.sensorId, name: sensorDisplayName(item.sensor, item.index) }))}
           rules={rules}
           loading={rulesLoading}
           error={rulesError}

@@ -149,6 +149,7 @@ function mapTemperatureRule(id: string, data: DocumentData): MonitoringTemperatu
   ) return null;
   return {
     id,
+    sensorId: typeof data.sensorId === "string" ? data.sensorId : undefined,
     name: data.name,
     enabled: data.enabled,
     direction: data.direction,
@@ -199,6 +200,8 @@ function mapAlertEvent(id: string, data: DocumentData): MonitoringAlertEvent | n
     id,
     deviceId: data.deviceId,
     deviceName: typeof data.deviceName === "string" ? data.deviceName : data.deviceId,
+    sensorId: typeof data.sensorId === "string" ? data.sensorId : undefined,
+    sensorName: typeof data.sensorName === "string" ? data.sensorName : undefined,
     ruleId: data.ruleId,
     ruleName: data.ruleName,
     ruleRevision: data.ruleRevision,
@@ -353,6 +356,7 @@ export async function saveMonitoringTemperatureRule(
     action: "upsert",
     deviceId,
     ruleId: rule.id,
+    sensorId: rule.sensorId,
     name: rule.name,
     enabled: rule.enabled,
     direction: rule.direction,

@@ -263,6 +263,11 @@ export function monitoringPeriodMs(period: MonitoringPeriod): number {
   return 30 * 24 * 60 * 60_000;
 }
 
+/** A legacy controller rule applies to its primary/unnamed probe only. */
+export function temperatureRuleTargetsSensor(rule: { sensorId?: string }, sensorId: string): boolean {
+  return rule.sensorId ? rule.sensorId === sensorId : sensorId === "temperature-1" || sensorId === "default";
+}
+
 export function violatesTemperatureRule(
   temperatureC: number,
   rule: Pick<MonitoringTemperatureRule, "enabled" | "direction" | "thresholdC">,
