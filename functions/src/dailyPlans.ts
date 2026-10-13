@@ -224,7 +224,7 @@ export async function deliverDailyPlanNotification(id: string) {
 export const notifyDailyPlanPublished = onDocumentCreated({ document: "dailyPlanNotifications/{id}", region: REGION, secrets }, async event => {
   await deliverDailyPlanNotification(event.params.id);
 });
-export const retryDailyPlanDeliveries = onSchedule({ schedule: "every 1 minutes", region: REGION, timeZone: "Asia/Vladivostok", secrets }, async () => {
+export const retryDailyPlanDeliveries = onSchedule({ schedule: "every 1 minutes", region: REGION, timeZone: "Asia/Vladivostok", timeoutSeconds: 540, secrets }, async () => {
   const pending = await db().collection("dailyPlanNotifications").where("status", "==", "pending")
     .where("nextAttemptAt", "<=", Timestamp.now()).orderBy("nextAttemptAt").limit(100).get();
   for (let offset = 0; offset < pending.docs.length; offset += 5) {
