@@ -6,6 +6,7 @@ import { repairStatus } from "../shared/utils/repair";
 import { GlobalSearch } from "../shared/ui/GlobalSearch";
 import { StatsTab } from "../features/stats/StatsTab";
 import { MyTasksTab } from "../features/mytasks/MyTasksTab";
+import { DailyPlanTab } from "../features/daily-plan/DailyPlanTab";
 import { IntakeTab } from "../features/intake/IntakeTab";
 import { ClientsTab } from "../features/clients/ClientsTab";
 import { AppointmentsTab } from "../features/appointments/AppointmentsTab";
@@ -24,7 +25,7 @@ import type { StaffMember, StaffRole } from "../shared/types/staff";
 import type { Client } from "../shared/types/client";
 
 export type Tab =
-  | "stats" | "mytasks" | "intake" | "phys" | "legal"
+  | "stats" | "mytasks" | "dailyPlan" | "intake" | "phys" | "legal"
   | "calendar" | "freezers" | "done"
   | "pnl" | "staff" | "backup" | "schedule" | "monitoring" | "serviceMonitor";
 
@@ -40,6 +41,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { id: "dailyPlan", label: "ППЗ", icon: "ti-list-check", emoji: "📋", group: "main" },
   { id: "stats",    label: "Дашборд",   icon: "ti-layout-dashboard", emoji: "📊", group: "main" },
   { id: "mytasks",  label: "Заявки",    icon: "ti-clipboard-list",   emoji: "🔧", group: "main" },
   { id: "intake",   label: "Приёмка",   icon: "ti-car-garage",       emoji: "📥", group: "main" },
@@ -63,6 +65,7 @@ function canSeeTab(t: TabDef, role: StaffRole, hidePnl = false): boolean {
 }
 
 const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
+  dailyPlan: { title: "ППЗ", sub: "персональный план на день" },
   stats:    { title: "Дашборд",   sub: "главные показатели" },
   mytasks:  { title: "Заявки",    sub: "ремонты и задачи" },
   intake:   { title: "Приёмка",   sub: "машины без клиента" },
@@ -245,7 +248,7 @@ function Topbar({ tab, onSearch, onNewRepair }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "done", "pnl"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "dailyPlan", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "done", "pnl"];
 
 function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
   tab:          Tab;
@@ -378,6 +381,7 @@ function Shell() {
     switch (tab) {
       case "stats":    return <StatsTab onNavigate={setTab} />;
       case "mytasks":  return <MyTasksTab onOpenClient={openClientProfile} />;
+      case "dailyPlan": return <DailyPlanTab />;
       case "intake":   return <IntakeTab />;
       case "phys":     return <ClientsTab type="phys"  openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;
       case "legal":    return <ClientsTab type="legal" openClientId={pendingClientId} openVehicleId={pendingVehicleId} onClientOpened={() => { setPendingClientId(null); setPendingVehicleId(null); }} />;

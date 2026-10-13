@@ -71,6 +71,54 @@ after(async () => {
   if (testEnv) await testEnv.cleanup();
 });
 
+describe("daily plans", () => {
+  beforeEach(async () => {
+    await seedRole("mechanic-1", "mechanic");
+    await seedRole("mechanic-2", "mechanic");
+    await seedRole("manager-1", "manager");
+    await seed("dailyPlans/mechanic-1_2026-10-13", { staffId: "mechanic-1", date: "2026-10-13", status: "published" });
+    await seed("dailyPlans/mechanic-1_2026-10-13/items/one", { title: "Published" });
+    await seed("dailyPlans/mechanic-1_2026-10-13/draftItems/one", { title: "Draft" });
+    await seed("dailyPlanNotifications/one", { planId: "mechanic-1_2026-10-13", status: "sent" });
+  });
+  test("workers read own published items and get a missing day without permission errors", async () => {
+    const db = dbFor("mechanic-1");
+    await assertSucceeds(getDoc(doc(db, "dailyPlans/mechanic-1_2026-10-13")));
+    await assertSucceeds(getDoc(doc(db, "dailyPlans/mechanic-1_2026-10-14")));
+    await assertSucceeds(getDocs(collection(db, "dailyPlans/mechanic-1_2026-10-13/items")));
+    await assertFails(getDocs(collection(db, "dailyPlans/mechanic-1_2026-10-13/draftItems")));
+    await assertFails(getDoc(doc(db, "dailyPlanNotifications/one")));
+    await assertFails(getDoc(doc(dbFor("mechanic-2"), "dailyPlans/mechanic-1_2026-10-13")));
+    await assertFails(getDoc(doc(dbFor("mechanic-2"), "dailyPlans/mechanic-1_2026-10-13/items/one")));
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "dailyPlans/mechanic-1_2026-10-13")));
+  });
+  test("draft contents and every client-side write are protected", async () => {
+    await seed("dailyPlans/mechanic-1_2026-10-13", { staffId: "mechanic-1", status: "draft" });
+    await assertFails(getDoc(doc(dbFor("mechanic-1"), "dailyPlans/mechanic-1_2026-10-13/items/one")));
+    const manager = dbFor("manager-1");
+    await assertSucceeds(getDocs(collection(manager, "dailyPlans/mechanic-1_2026-10-13/draftItems")));
+    await assertSucceeds(getDoc(doc(manager, "dailyPlanNotifications/one")));
+    for (const uid of ["mechanic-1", "manager-1"]) {
+      const db = dbFor(uid);
+      await assertFails(updateDoc(doc(db, "dailyPlans/mechanic-1_2026-10-13"), { status: "published" }));
+      await assertFails(setDoc(doc(db, "dailyPlans/mechanic-1_2026-10-13/items/two"), { title: "Forged" }));
+      await assertFails(setDoc(doc(db, "dailyPlans/mechanic-1_2026-10-13/draftItems/two"), { title: "Forged" }));
+      await assertFails(updateDoc(doc(db, "dailyPlanNotifications/one"), { status: "pending" }));
+    }
+  });
+  test("assigned mechanics cannot change service assignment, title or another worker completion", async () => {
+    await seed("servicetasks/joint", { title: "Work", assignees: ["mechanic-1", "mechanic-2"], doneBy: ["mechanic-2"], status: "in_progress" });
+    const ref = doc(dbFor("mechanic-1"), "servicetasks/joint");
+    await assertFails(updateDoc(ref, { assignees: ["mechanic-1"] }));
+    await assertFails(updateDoc(ref, { title: "Changed" }));
+    await assertFails(updateDoc(ref, { status: "done" }));
+    await assertFails(updateDoc(ref, { doneBy: ["mechanic-1"] }));
+    await assertSucceeds(updateDoc(ref, { doneBy: ["mechanic-2", "mechanic-1"], status: "done" }));
+    await assertSucceeds(updateDoc(ref, { workComment: "Ready" }));
+    await assertSucceeds(updateDoc(doc(dbFor("manager-1"), "servicetasks/joint"), { assignees: ["mechanic-1"] }));
+  });
+});
+
 describe("unauthenticated", () => {
   test("cannot read or write protected data", async () => {
     const db = testEnv.unauthenticatedContext().firestore();
@@ -168,7 +216,7 @@ describe("mechanic operational access", () => {
       title: "Other task", status: "open", assignees: ["mechanic-2"],
     });
     const db = dbFor("mechanic-1");
-    await assertSucceeds(updateDoc(doc(db, "servicetasks/task-1"), { status: "done" }));
+    await assertSucceeds(updateDoc(doc(db, "servicetasks/task-1"), { status: "done", doneBy: ["mechanic-1"] }));
     await assertFails(updateDoc(doc(db, "servicetasks/task-2"), { status: "done" }));
     await assertFails(updateDoc(doc(db, "servicetasks/task-2"), {
       assignees: ["mechanic-1"],

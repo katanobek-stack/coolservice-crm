@@ -155,12 +155,45 @@ service cloud.firestore {
 
     // Standalone tasks are created/deleted by manager+, while assigned mechanics
     // update task progress.
+    match /dailyPlans/{planId} {
+      allow read: if isAuth() && (isManagerOrAbove() || resource.data.staffId == request.auth.uid);
+      // A worker opening their first day must receive "no plan", not permission-denied.
+      allow get: if isAuth() && resource == null
+        && planId.matches(request.auth.uid + "_[0-9]{4}-[0-9]{2}-[0-9]{2}");
+      allow write: if false;
+      match /items/{itemId} {
+        allow read: if isAuth() && (isManagerOrAbove()
+          || (get(/databases/$(database)/documents/dailyPlans/$(planId)).data.staffId == request.auth.uid
+            && get(/databases/$(database)/documents/dailyPlans/$(planId)).data.status == "published"));
+        allow write: if false;
+      }
+      match /draftItems/{itemId} {
+        allow read: if isAuth() && isManagerOrAbove();
+        allow write: if false;
+      }
+    }
+    match /dailyPlanNotifications/{notificationId} {
+      allow read: if isAuth() && isManagerOrAbove();
+      allow write: if false;
+    }
+
     match /servicetasks/{taskId} {
       allow read: if isAuth();
       allow update: if isAuth()
         && (isManagerOrAbove()
           || (resource.data.assignees is list
-            && request.auth.uid in resource.data.assignees));
+            && request.auth.uid in resource.data.assignees
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "doneBy", "status", "workComment", "photos", "subtasks"
+            ])
+            && request.resource.data.get("doneBy", []) is list
+            && request.resource.data.get("doneBy", []).removeAll([request.auth.uid])
+              == resource.data.get("doneBy", []).removeAll([request.auth.uid])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["status"])
+              || (request.resource.data.status == "done"
+                && request.resource.data.get("doneBy", []).hasAll(resource.data.assignees))
+              || (request.resource.data.status == "in_progress"
+                && !request.resource.data.get("doneBy", []).hasAll(resource.data.assignees)))));
       allow create, delete: if isAuth() && isManagerOrAbove();
     }
 

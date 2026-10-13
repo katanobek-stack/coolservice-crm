@@ -17,6 +17,7 @@
     "generate:device-key": "npm run build && node scripts/generate-device-key.js",
     "provision:service-controller": "npm run build && node scripts/provision-service-controller.js",
     "seed:monitoring-demo": "node scripts/seed-monitoring-demo.js",
+    "seed:daily-plan-demo": "node scripts/seed-daily-plan-demo.js",
     "backfill:monitoring-read-model": "npm run build && node scripts/backfill-monitoring-read-model.js",
     "verify:monitoring-read-model": "npm run build && node scripts/verify-monitoring-read-model.js",
     "repair:monitoring-sensor-id": "npm run build && node scripts/repair-monitoring-sensor-id.js",
@@ -26,6 +27,8 @@
     "test:sensor-id-repair": "node --test tests/verifyMonitoringSensorIdRepair.test.js",
     "test:service-monitor": "npm run build && node --test tests/serviceMonitor.test.js",
     "test:sensor-alerts": "npm run build && node --test tests/telemetrySensorAlerts.test.js tests/telemetrySensorIngest.test.js",
+    "test:daily-plans": "npm run build && node --test tests/dailyPlans.test.js",
+    "test:daily-plans:emulator": "node --test tests/dailyPlans.emulator.test.js",
     "test:emulator": "node --test tests/telemetry.emulator.test.js"
   },
   "dependencies": {

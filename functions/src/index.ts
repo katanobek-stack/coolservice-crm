@@ -3,6 +3,8 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
+export { saveDailyPlan, publishDailyPlan, updateDailyPlanWork, retryDailyPlanNotification, notifyDailyPlanPublished, retryDailyPlanDeliveries } from "./dailyPlans";
+
 export { parseVoiceCommand } from "./parseVoiceCommand";
 export { ingestTelemetry } from "./telemetry";
 export { ingestControllerStatus } from "./controllerStatus";

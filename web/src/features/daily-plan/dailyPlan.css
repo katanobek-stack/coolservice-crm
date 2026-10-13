@@ -1,0 +1,15 @@
+.ppz { display: grid; gap: 16px; color: var(--text); }
+.ppz-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ppz-controls > input, .ppz-controls > select { width: auto; min-width: 170px; }
+.ppz-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: grid; gap: 12px; overflow-wrap: anywhere; }
+.ppz p, .ppz h3 { margin: 0; }
+.ppz-muted { color: var(--text2); font-size: 13px; }
+.ppz-warning { background: #fff7e0; color: #795200; padding: 14px; border-radius: 10px; }
+.ppz-error { color: #b91c1c; background: #fef2f2; padding: 12px; border-radius: 10px; }
+.ppz-editor { border: 0; margin: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+.ppz-editor > .ppz-row { flex-wrap: nowrap; }
+.ppz-editor .ppz-row > input, .ppz-editor .ppz-row > select { flex: 1; min-width: 0; }
+.ppz-work { display: grid; gap: 10px; }
+.ppz-comment { white-space: pre-wrap; background: #f5f7fa; padding: 12px; border-radius: 8px; }
+.ppz button:disabled { cursor: default; opacity: .5; }
+@media (max-width: 600px) { .ppz-editor > .ppz-row { flex-wrap: wrap; } .ppz-editor > .ppz-row > input, .ppz-editor > .ppz-row > select { flex-basis: 100%; } .ppz-card { padding: 14px; } .ppz-controls > input, .ppz-controls > select { width: 100%; } }

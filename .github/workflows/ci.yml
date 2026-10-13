@@ -65,6 +65,14 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: firebase emulators:exec --only firestore --project demo-coolservice-crm "cd web && npm test"
 
+      - name: Install and build Functions for daily plan integration tests
+        working-directory: ${{ github.workspace }}/functions
+        run: npm ci && npm run test:daily-plans
+
+      - name: Daily plan integration tests
+        working-directory: ${{ github.workspace }}
+        run: firebase emulators:exec --only firestore --project demo-coolservice-crm "npm --prefix functions run test:daily-plans:emulator"
+
   functions:
     name: functions — typecheck / build
     runs-on: ubuntu-latest

@@ -4,6 +4,14 @@ import { test } from "node:test";
 
 const INDEXES_PATH = new URL("../../firestore.indexes.json", import.meta.url);
 
+test("daily plan delivery queue can select due retries without scanning delayed messages", async () => {
+  const config = JSON.parse(await readFile(INDEXES_PATH, "utf8"));
+  assert.ok(config.indexes.some(index => index.collectionGroup === "dailyPlanNotifications"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "status", order: "ASCENDING" }, { fieldPath: "nextAttemptAt", order: "ASCENDING" },
+    ])));
+});
+
 test("prepared history read model has bounded raw and rollup indexes", async () => {
   const config = JSON.parse(await readFile(INDEXES_PATH, "utf8"));
   const expected = [
