@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type CSSProperties } from "react";
 import type { Freezer } from "../../shared/types/freezer";
 import "./freezers.css";
 
@@ -56,15 +56,24 @@ export function FreezerIllustration({ type }: { type?: string }) {
           <path d="M113 217 191 233" stroke="#93aabd" strokeWidth="4" />
         </g>
       )}
-      {/* Compact cooling module, static: no unsupported running/online claim. */}
+      {/* Decorative movement is enabled by rental status, not live equipment readings. */}
       <g transform="matrix(1 .2 0 1 210 151)">
         <rect width="39" height="58" rx="4" fill="#324e64" />
         <rect x="3" y="3" width="33" height="52" rx="3" fill="#f0f5f9" />
         {[17, 39].map((y) => <g key={y}>
           <circle cx="19.5" cy={y} r="9" fill="#49677e" />
-          <path d={`M19.5 ${y - 6}v12M13.5 ${y}h12M15 ${y - 4.5}l9 9M24 ${y - 4.5}l-9 9`} stroke="#c8dbe8" strokeWidth="1.5" />
+          <g transform={`translate(19.5 ${y})`}>
+            <g className={`freezer-fan ${y === 39 ? "freezer-fan--reverse" : ""}`}>
+              {[0, 90, 180, 270].map((angle) => <path key={angle} d="M0 0C-1-3-6-3-6-6C-2-8 2-4 0 0Z" fill="#c8dbe8" transform={`rotate(${angle})`} />)}
+            </g>
+          </g>
           <circle cx="19.5" cy={y} r="2" fill="#8eb4ce" />
         </g>)}
+      </g>
+      <g className="freezer-airflow" fill="none" stroke="#69b8d9" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M248 180C270 166 269 145 292 134S326 123 342 112" />
+        <path d="M248 193C278 178 273 158 297 147S331 135 347 122" />
+        <path d="M248 206C284 192 280 171 303 159S338 147 353 134" />
       </g>
       <path d="M268 132 344 91" stroke="#e9f8ff" strokeWidth="2" />
       <path d="M268 240 344 199" stroke="#8ea7ba" strokeWidth="2" />
@@ -89,7 +98,17 @@ export function FreezerCard({ freezer, onClick }: { freezer: Freezer; onClick: (
       </div>
       <div className="freezer-card-scene">
         <FreezerIllustration type={freezer.type} />
-        <span className="freezer-card-scene-label">Схематичное изображение</span>
+        {rented && <div className="freezer-snow" aria-hidden="true">
+          {Array.from({ length: 12 }, (_, index) => (
+            <span key={index} className="freezer-snowflake" style={{
+              "--snow-x": `${8 + index * 7.5}%`,
+              "--snow-delay": `${-index * 1.3}s`,
+              "--snow-duration": `${6 + (index % 4) * 1.2}s`,
+              "--snow-size": `${8 + (index % 3) * 3}px`,
+            } as CSSProperties}>❄</span>
+          ))}
+        </div>}
+        <span className="freezer-card-scene-label" title="Движение обозначает активную аренду. Фактическая работа оборудования не проверяется.">{rented ? "Анимация аренды · не телеметрия" : "Схематичное изображение"}</span>
       </div>
       <div className="freezer-card-body">
         <div className="freezer-card-title-row"><h3>{name}</h3><span className="freezer-card-open" aria-hidden="true">↗</span></div>

@@ -7,7 +7,7 @@
 .freezer-card-type { font-size: 11px; line-height: 1.5; color: #6d8092; font-weight: 600; }
 .freezer-card-status { display: inline-flex; flex-shrink: 0; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #dce8e9; border-radius: 20px; color: var(--freezer-accent); background: #f5fafb; font-size: 10px; font-weight: 700; }
 .freezer-card-status > span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.freezer-card-scene { position: relative; background: linear-gradient(180deg, #fff, #f4f8fb); border-bottom: 1px solid #e8eef3; }
+.freezer-card-scene { position: relative; overflow: hidden; background: linear-gradient(180deg, #fff, #f4f8fb); border-bottom: 1px solid #e8eef3; }
 .freezer-illustration { display: block; width: 100%; height: auto; max-height: 240px; }
 .freezer-card-scene-label { position: absolute; bottom: 10px; right: 16px; color: #8498aa; font-size: 9px; }
 .freezer-card-body { display: flex; flex: 1; flex-direction: column; gap: 13px; padding: 18px; width: 100%; }
@@ -27,4 +27,28 @@
 .freezer-card-contact span { font-size: 10px; color: #7b8fa1; }
 .freezer-card-contact strong { font-size: 12px; line-height: 1.4; color: #436079; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 767px) { .freezer-grid { padding: 14px; gap: 14px; } .freezer-illustration { max-height: 210px; } }
-@media (prefers-reduced-motion: reduce) { .freezer-card, .freezer-card-open { transition: none; } .freezer-card:hover { transform: none; } }
+.freezer-fan { transform-box: fill-box; transform-origin: center; }
+.is-rented .freezer-fan { animation: freezer-fan-turn 3.2s linear infinite; }
+.is-rented .freezer-fan--reverse { animation-direction: reverse; animation-duration: 4s; }
+.freezer-airflow { opacity: 0; }
+.is-rented .freezer-airflow { opacity: .45; }
+.is-rented .freezer-airflow path { stroke-dasharray: 7 13; animation: freezer-air-drift 3.5s linear infinite; }
+.is-rented .freezer-airflow path:nth-child(2) { animation-delay: -.8s; }
+.is-rented .freezer-airflow path:nth-child(3) { animation-delay: -1.6s; }
+@keyframes freezer-fan-turn { to { transform: rotate(360deg); } }
+@keyframes freezer-air-drift { to { stroke-dashoffset: -60; } }
+.freezer-snow { position: absolute; inset: 0 0 24px; overflow: hidden; pointer-events: none; }
+.freezer-snowflake { position: absolute; left: var(--snow-x); top: -18px; color: #70b4d8; font-size: var(--snow-size); line-height: 1; opacity: 0; animation: freezer-snow-fall var(--snow-duration) linear var(--snow-delay) infinite; }
+@keyframes freezer-snow-fall {
+  0% { transform: translate3d(-5px, 0, 0) rotate(0deg); opacity: 0; }
+  15% { opacity: .5; }
+  75% { opacity: .35; }
+  100% { transform: translate3d(12px, 240px, 0) rotate(100deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .freezer-card, .freezer-card-open { transition: none; }
+  .freezer-card:hover { transform: none; }
+  .is-rented .freezer-fan, .is-rented .freezer-airflow path { animation: none; }
+  .freezer-snow { display: none; }
+  .freezer-snowflake { animation: none; }
+}
