@@ -471,6 +471,7 @@ export async function endFreezerRental(
     const freezer = { id: snapshot.id, ...snapshot.data() } as Freezer;
     const history: RentHistoryEntry = {
       tenant: freezer.tenant ?? "",
+      ...(freezer.tenantPhone ? { tenantPhone: freezer.tenantPhone } : {}),
       rentFrom: freezer.rentFrom ?? "",
       rentTo,
       rentAmount: Number(freezer.rentAmount ?? 0),
@@ -481,6 +482,7 @@ export async function endFreezerRental(
     transaction.update(ref, cleanForFirestore({
       rented: false,
       tenant: "",
+      tenantPhone: "",
       rentFrom: "",
       rentAmount: 0,
       meterStart: null,

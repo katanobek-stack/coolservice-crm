@@ -8,6 +8,7 @@ import {
   addClientRepair,
   addClientRepairWithVehicle,
   addRepairTask,
+  endFreezerRental,
   assertFieldsUnchanged,
   findEntityIndex,
   mutateClientRepair,
@@ -80,6 +81,26 @@ before(async () => {
 
 beforeEach(async () => {
   await testEnv.clearFirestore();
+});
+
+test("ending rental snapshots contact phone and clears it for the next tenant", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    const ref = doc(db, "freezers/contact-test");
+    await setDoc(ref, {
+      name: "Demo", rented: true, status: "rented", tenant: "Demo tenant", tenantPhone: "+7 (000) 000-00-00",
+      rentFrom: "2026-10-01", rentAmount: 100, meterStart: 10, meterCurrent: 15, rentHistory: [],
+    });
+    await endFreezerRental("contact-test", "2026-10-14", db);
+    const result = (await getDoc(ref)).data()!;
+    assert.equal(result.rented, false);
+    assert.equal(result.tenant, "");
+    assert.equal(result.tenantPhone, "");
+    assert.equal(result.rentHistory.length, 1);
+    assert.equal(result.rentHistory[0].tenant, "Demo tenant");
+    assert.equal(result.rentHistory[0].tenantPhone, "+7 (000) 000-00-00");
+    assert.equal(result.rentHistory[0].meterEnd, 15);
+  });
 });
 
 after(async () => {
