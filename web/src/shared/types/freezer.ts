@@ -1,5 +1,6 @@
 export interface RentHistoryEntry {
   tenant:      string;
+  tenantPhone?: string;
   rentFrom:    string;
   rentTo:      string;
   rentAmount:  number;
@@ -20,6 +21,7 @@ export interface Freezer {
   // Old app rental fields (boolean model)
   rented?:      boolean;
   tenant?:      string;
+  tenantPhone?: string;
   rentAmount?:  number;
   rentFrom?:    string;
   paidUntil?:   string;
