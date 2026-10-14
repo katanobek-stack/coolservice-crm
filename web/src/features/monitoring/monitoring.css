@@ -531,10 +531,9 @@
 }
 
 .monitor-alert-center {
-  position: fixed;
+  position: relative;
+  flex-shrink: 0;
   z-index: 120;
-  top: 13px;
-  right: 174px;
 }
 
 .monitor-alert-button {
@@ -665,7 +664,7 @@
 .monitor-sensor-history { margin: 0; }
 
 @media (max-width: 767px) {
-  .monitor-alert-center { top: 12px; right: 12px; }
+  .monitor-alert-center { position: fixed; top: 12px; right: 12px; }
   .monitor-alert-button { width: 42px; height: 42px; background: #fff; box-shadow: 0 4px 14px rgba(16, 24, 40, 0.12); }
   .monitor-alert-panel { position: fixed; top: 62px; right: 12px; max-height: calc(100vh - 148px); }
   .monitor-alert-event-main { font-size: 13px; }

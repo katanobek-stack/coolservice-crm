@@ -235,6 +235,8 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 
 /* ═══ TOPBAR ═══ */
 .topbar {
+  position: relative;
+  z-index: 120;
   height: 56px;
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -248,9 +250,11 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 }
 
 .topbar-title { font-size: 17px; font-weight: 700; color: var(--text); }
+.topbar-heading { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-sub { font-size: 13px; color: var(--text3); margin-left: 4px; }
 
 .topbar-right {
+  flex-shrink: 0;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -587,7 +591,9 @@ input, select, textarea, button { font-family: 'Manrope', sans-serif; }
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 767px) {
   .sidebar { display: none; }
-  .topbar  { display: none; }
+  /* Keep the single alert listener mounted; only its floating button is visible. */
+  .topbar { height: 0; padding: 0; gap: 0; border: 0; background: none; backdrop-filter: none; animation: none; }
+  .topbar-heading, .topbar-right > .topbar-icon, .topbar-right > .btn-primary { display: none; }
   .mobile-nav { display: flex; }
   .crm-content { padding: 16px; padding-bottom: 90px; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }

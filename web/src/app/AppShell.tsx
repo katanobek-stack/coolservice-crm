@@ -220,24 +220,26 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, intakeCount,
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 
-function Topbar({ tab, onSearch, onNewRepair }: {
+function Topbar({ tab, onSearch, onNewRepair, onOpenDevice }: {
   tab:        Tab;
   onSearch:   () => void;
   onNewRepair: () => void;
+  onOpenDevice: (deviceId: string) => void;
 }) {
   const info = TAB_TITLES[tab];
   const today = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 
   return (
     <div className="topbar">
-      <div>
+      <div className="topbar-heading">
         <span className="topbar-title">{info.title}</span>
         <span className="topbar-sub">— {tab === "stats" ? `сегодня, ${today}` : info.sub}</span>
       </div>
       <div className="topbar-right">
-        <div className="topbar-icon" onClick={onSearch} title="Поиск">
+        <button type="button" className="topbar-icon" onClick={onSearch} title="Поиск" aria-label="Поиск">
           <i className="ti ti-search" />
-        </div>
+        </button>
+        <MonitoringAlertCenter onOpenDevice={onOpenDevice} />
         <button type="button" className="btn-primary" onClick={onNewRepair}>
           <i className="ti ti-plus" /> Новая заявка
         </button>
@@ -432,6 +434,7 @@ function Shell() {
             tab={tab}
             onSearch={() => setShowSearch(true)}
             onNewRepair={() => setTab("phys")}
+            onOpenDevice={openMonitoringDevice}
           />
           <div className="crm-content">
             {renderTab()}
@@ -440,7 +443,6 @@ function Shell() {
 
         {/* Mobile bottom nav */}
         <MobileNav tab={tab} onTab={setTab} activeMine={activeRepairs} pendingAppts={pendingAppts} role={role} onSignOut={() => void signOutUser()} hidePnl={hidePnl} />
-        <MonitoringAlertCenter onOpenDevice={openMonitoringDevice} />
       </div>
 
       {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
