@@ -22,12 +22,12 @@ import {
 } from "../../shared/firebase/concurrency";
 import {
   assignIntakeRepairToClient,
-  findPlateMatches,
   type AssignIntakeTarget,
 } from "../../shared/firebase/intake";
 import { RepairTaskWork, intakeRepairEditor } from "../../shared/repair-work";
 import type { Repair, Client, Vehicle, RepairTask } from "../../shared/types/client";
 import { intakeKind, type IntakeRepair } from "../../shared/types/intake";
+import { suggestIntakeVehicles, suggestedVehicleForClient, vehicleMatchesSearch } from "../../shared/utils/clientVehicleSearch";
 import type { ServiceTask } from "../../shared/types/task";
 import type { PhotoData } from "../../shared/utils/photos";
 
@@ -86,14 +86,14 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
   const isChamber = kind === "chamber";
   const plate = intake.vehicle?.plate ?? "";
   const matches = useMemo(
-    () => (isChamber ? [] : findPlateMatches(clients, plate)),
+    () => (isChamber ? [] : suggestIntakeVehicles(clients, plate)),
     [clients, plate, isChamber],
   );
 
   const [sum, setSum] = useState(intake.repair.cost ?? "");
   const [mode, setMode] = useState<"existing" | "new">("existing");
-  const [clientId, setClientId] = useState(matches[0]?.client.id ?? "");
-  const [equipChoice, setEquipChoice] = useState<string>(matches[0]?.vehicle.id ?? "new");
+  const [clientId, setClientId] = useState("");
+  const [equipChoice, setEquipChoice] = useState<string>("new");
   const [search, setSearch] = useState("");
   const [nName, setNName] = useState("");
   const [nType, setNType] = useState<"phys" | "legal">("phys");
@@ -119,13 +119,14 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
     const q = search.trim().toLowerCase();
     if (!q) return clients.slice(0, 8);
     return clients
-      .filter((c) => c.name.toLowerCase().includes(q) || (c.vehicles ?? []).some((v) => v.plate.toLowerCase().includes(q)))
+      .filter((c) => c.name.toLowerCase().includes(q) || (c.vehicles ?? []).some((v) => vehicleMatchesSearch(v, q)))
       .slice(0, 12);
   }, [clients, search]);
 
   async function handleAssign() {
     setError("");
     if (!sum.trim()) { setError("Укажите сумму"); return; }
+    if (mode === "existing" && !equipChoice) { setError("Выберите конкретную машину из совпавших вариантов"); return; }
 
     const equipment: AssignIntakeTarget["equipment"] =
       mode === "new" || equipChoice === "new" ? { create: true } : { existingId: equipChoice };
@@ -188,7 +189,8 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
 
         {matches.length > 0 && (
           <div style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 10, padding: "8px 10px" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#16a34a", marginBottom: 4 }}>Номер уже в базе</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#16a34a", marginBottom: 4 }}>Возможные машины в базе</div>
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>Выберите машину, чтобы сохранить ремонт в её существующей истории. Совпадение цифр не гарантирует совпадение машины.</div>
             {matches.map((m) => (
               <button
                 key={`${m.client.id}-${m.vehicle.id}`}
@@ -202,7 +204,7 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
                   color: "var(--text)",
                 }}
               >
-                {m.client.name} · {[m.vehicle.brand, m.vehicle.plate].filter(Boolean).join(" ")}
+                {m.client.name} · {[m.vehicle.brand, m.vehicle.model, m.vehicle.plate].filter(Boolean).join(" ")} · {m.exact ? "Точный номер" : "Совпадают цифры номера"}
               </button>
             ))}
           </div>
@@ -237,6 +239,7 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
                 <div style={{ marginTop: 6 }}>
                   <FormGroup label={isChamber ? "Камера" : "Машина"}>
                     <Select value={equipChoice} onChange={(e) => setEquipChoice(e.target.value)}>
+                      {!isChamber && <option value="" disabled>Выберите машину — найдено несколько вариантов</option>}
                       {isChamber
                         ? (selectedClient.chambers ?? []).map((ch) => (
                             <option key={ch.id} value={ch.id}>
@@ -261,7 +264,7 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
                       type="button"
                       onClick={() => {
                         setClientId(c.id);
-                        setEquipChoice((isChamber ? c.chambers?.[0]?.id : c.vehicles?.[0]?.id) ?? "new");
+                        setEquipChoice(isChamber ? (c.chambers?.[0]?.id ?? "new") : suggestedVehicleForClient(c, search, plate));
                       }}
                       style={{ textAlign: "left", padding: "7px 10px", borderRadius: 8, fontSize: 13, cursor: "pointer", background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text)" }}
                     >
