@@ -42,6 +42,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /workEvents/{eventId} {
+      allow read: if isAdminOrOwner()
+        || (hasStaffProfile() && request.auth.uid in resource.data.visibleTo);
+      allow write: if false;
+    }
+
     function isManagerOrAbove() {
       return isAdminOrOwner() || isManager();
     }

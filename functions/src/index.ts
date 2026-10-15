@@ -3,6 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 export { savePpzTask } from "./ppzTasks";
+export { auditRepairWork, auditIntakeWork, auditServiceWork } from "./workAccounting";
 
 export { saveDailyPlan, publishDailyPlan, updateDailyPlanWork, retryDailyPlanNotification, notifyDailyPlanPublished, retryDailyPlanDeliveries } from "./dailyPlans";
 

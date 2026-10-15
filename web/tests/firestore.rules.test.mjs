@@ -594,6 +594,23 @@ describe("equipment monitoring access", () => {
 });
 
 describe("default deny", () => {
+  test("work history is immutable and worker visibility is restricted to event participants", async () => {
+    await seedRole("worker", "mechanic"); await seedRole("other", "mechanic"); await seedRole("boss", "admin");
+    await seed("workEvents/event", { visibleTo: ["worker"], type: "completed", actorId: "worker" });
+    await assertSucceeds(getDoc(doc(dbFor("worker"), "workEvents/event")));
+    await assertSucceeds(getDoc(doc(dbFor("boss"), "workEvents/event")));
+    await assertFails(getDoc(doc(dbFor("other"), "workEvents/event")));
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "workEvents/event")));
+    for (const uid of ["worker", "boss"]) {
+      await assertFails(setDoc(doc(dbFor(uid), "workEvents/fake"), { visibleTo: [uid] }));
+      await assertFails(updateDoc(doc(dbFor(uid), "workEvents/event"), { actorId: uid }));
+      await assertFails(deleteDoc(doc(dbFor(uid), "workEvents/event")));
+    }
+    await assertFails(getDocs(collection(dbFor("worker"), "workEvents")));
+    await assertSucceeds(getDocs(query(collection(dbFor("worker"), "workEvents"), where("visibleTo", "array-contains", "worker"))));
+    await seed("ppzTasks/shared/requests/private", { action: "report" });
+    await assertFails(getDoc(doc(dbFor("worker"), "ppzTasks/shared/requests/private")));
+  });
   test("PPZ shared tasks are visible only to assignees and admins, writes require server", async () => {
     for (const [uid, role] of [["a", "mechanic"], ["b", "mechanic"], ["other", "mechanic"], ["boss", "admin"], ["owner", "owner"], ["manager", "manager"]]) await seedRole(uid, role);
     await seed("ppzTasks/shared", { title: "Общая задача", assignees: ["a", "b"], status: "open" });
