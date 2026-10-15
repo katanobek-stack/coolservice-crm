@@ -9,6 +9,7 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Select, Textarea } from "../../shared/ui/Input";
 import { resolveTask, sourceKey, vladivostokDate, workDone } from "./logic";
 import "./dailyPlan.css";
+import { PpzTasks } from "./PpzTasks";
 
 interface Candidate { source: PlanSource; title: string }
 const deliveryLabels = { pending: "Telegram: ожидает отправки", sent: "Telegram: доставлено", failed: "Telegram: ошибка отправки", unknown: "Telegram: результат отправки неизвестен" };
@@ -145,6 +146,7 @@ export function DailyPlanTab() {
   }
   const conflict = dirty && (plan?.revision ?? 0) !== revision;
   return <div className="ppz">
+    <PpzTasks />
     <div className="ppz-row ppz-controls"><div className="ppz-row"><Button variant={mode === "mine" ? "primary" : "ghost"} disabled={busy || dirty} onClick={() => setMode("mine")}>Мой день</Button>
       {manager && <Button variant={mode === "meeting" ? "primary" : "ghost"} disabled={busy || dirty} onClick={() => setMode("meeting")}>Планёрка</Button>}</div>
       <Input aria-label="Дата плана" type="date" value={date} disabled={busy || dirty} onChange={e => { if (e.target.value) setDate(e.target.value); }}/>

@@ -28,7 +28,7 @@
     "test:service-monitor": "npm run build && node --test tests/serviceMonitor.test.js",
     "test:sensor-alerts": "npm run build && node --test tests/telemetrySensorAlerts.test.js tests/telemetrySensorIngest.test.js",
     "test:daily-plans": "npm run build && node --test tests/dailyPlans.test.js",
-    "test:daily-plans:emulator": "node --test tests/dailyPlans.emulator.test.js",
+    "test:daily-plans:emulator": "node --test tests/dailyPlans.emulator.test.js tests/ppzTasks.emulator.test.js",
     "test:emulator": "node --test tests/telemetry.emulator.test.js"
   },
   "dependencies": {
