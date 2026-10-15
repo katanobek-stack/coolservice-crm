@@ -1,4 +1,8 @@
 .ppz { display: grid; gap: 16px; color: var(--text); }
+.ppz-table-scroll { overflow-x: auto; min-width: 0; max-width: 100%; }
+.ppz-accounting { width: 100%; min-width: 850px; border-collapse: collapse; font-size: 13px; }
+.ppz-accounting th, .ppz-accounting td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); overflow-wrap: normal; word-break: normal; }
+.ppz-accounting th:first-child, .ppz-accounting td:first-child { min-width: 130px; }
 .ppz-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ppz-controls > input, .ppz-controls > select { width: auto; min-width: 170px; }
 .ppz-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: grid; gap: 12px; overflow-wrap: anywhere; }

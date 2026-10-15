@@ -1,43 +1,79 @@
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { randomUUID } from "node:crypto";
 import { safeId } from "./dailyPlanLogic";
+import { auditId } from "./workAccountingLogic";
 
-// One document per shared task. All transitions are serialized by a transaction.
+// A shared closure and an employee's own work report are separate facts.
 export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Войдите в CRM");
-  const uid = request.auth.uid;
-  const data = request.data;
-  if (!data || !["create", "start", "complete"].includes(data.action)) {
-    throw new HttpsError("invalid-argument", "Некорректное действие");
-  }
-  const id = safeId(data.id);
+  const uid = request.auth.uid, data = request.data;
+  if (!data || !["create", "start", "report", "complete"].includes(data.action)) throw new HttpsError("invalid-argument", "Некорректное действие");
+  const id = safeId(data.id), requestId = safeId(data.requestId ?? randomUUID());
+  if (data.report !== undefined && (typeof data.report !== "string" || data.report.length > 2000)) throw new HttpsError("invalid-argument", "Отчёт — до 2000 символов");
+  const report = (data.report ?? "").trim();
+  const signature = auditId(data.action, report, String(data.title ?? ""), JSON.stringify(data.assignees ?? []), String(data.reportRevision ?? ""));
   const db = getFirestore();
   return db.runTransaction(async tx => {
     const profile = (await tx.get(db.doc(`staff/${uid}`))).data();
     if (!profile) throw new HttpsError("permission-denied", "Профиль сотрудника не найден");
     const administrator = request.auth!.token.role === "owner" || ["owner", "admin"].includes(profile.role);
-    const ref = db.doc(`ppzTasks/${id}`);
-    const existing = (await tx.get(ref)).data();
+    const ref = db.doc(`ppzTasks/${id}`), existing = (await tx.get(ref)).data();
+    const receipt = ref.collection("requests").doc(auditId(uid, requestId));
+    const prior = (await tx.get(receipt)).data();
+    if (prior) {
+      if (prior.signature !== signature) throw new HttpsError("already-exists", "Идентификатор запроса уже использован");
+      return { id };
+    }
+    const stamp = () => FieldValue.serverTimestamp();
+    const name = String(profile.name || "Сотрудник");
+    const events: DocumentData[] = [];
+    let task: DocumentData;
     if (data.action === "create") {
       if (!administrator) throw new HttpsError("permission-denied", "Задачи назначает администратор или владелец");
       if (existing) throw new HttpsError("already-exists", "Задача уже существует");
-      if (typeof data.title !== "string" || !data.title.trim() || data.title.length > 200
-        || !Array.isArray(data.assignees) || !data.assignees.length || data.assignees.length > 50) {
-        throw new HttpsError("invalid-argument", "Укажите название и исполнителей");
-      }
+      if (typeof data.title !== "string" || !data.title.trim() || data.title.length > 200 || !Array.isArray(data.assignees) || !data.assignees.length || data.assignees.length > 50) throw new HttpsError("invalid-argument", "Укажите название и исполнителей");
       const assignees = [...new Set<string>(data.assignees.map(safeId))];
-      for (const assignee of assignees) {
-        if (!(await tx.get(db.doc(`staff/${assignee}`))).exists) throw new HttpsError("not-found", "Исполнитель не найден");
-      }
-      tx.create(ref, { title: data.title.trim(), assignees, status: "open", createdBy: uid, createdAt: FieldValue.serverTimestamp() });
+      for (const assignee of assignees) if (!(await tx.get(db.doc(`staff/${assignee}`))).exists) throw new HttpsError("not-found", "Исполнитель не найден");
+      task = { title: data.title.trim(), assignees, status: "open", createdBy: uid, createdAt: stamp() };
+      tx.create(ref, task);
+      events.push({ type: "task_created", staffId: uid, selfReported: false, text: "" });
     } else {
       if (!existing) throw new HttpsError("not-found", "Задача не найдена");
       if (!existing.assignees.includes(uid)) throw new HttpsError("permission-denied", "Вы не назначены на эту задачу");
-      // Retrying or concurrent completion preserves the first author and time.
-      if (existing.status === "done") return { id };
-      if (data.action === "complete") tx.update(ref, { status: "done", completedBy: uid, completedByName: String(profile.name || "Сотрудник"), completedAt: FieldValue.serverTimestamp() });
-      else if (existing.status === "open") tx.update(ref, { status: "in_progress", startedBy: uid, startedAt: FieldValue.serverTimestamp() });
+      task = existing;
+      const participants = { ...(existing.participants ?? {}) };
+      const own = { ...(participants[uid] ?? {}) };
+      const patch: DocumentData = {};
+      if (data.action === "start" && existing.status !== "done" && !own.startedAt) {
+        own.name = name; own.startedAt = stamp();
+        participants[uid] = own; patch.participants = participants;
+        if (existing.status === "open") Object.assign(patch, { status: "in_progress", startedBy: uid, startedAt: stamp() });
+        events.push({ type: "started", staffId: uid, selfReported: true, text: "" });
+      }
+      if (data.action === "report" || (data.action === "complete" && report)) {
+        if (!report) throw new HttpsError("invalid-argument", "Опишите, что вы выполнили");
+        if (!Number.isSafeInteger(data.reportRevision) || data.reportRevision !== (own.revision ?? 0)) throw new HttpsError("aborted", "Ваш отчёт уже изменён. Обновите задачу.");
+        const first = !own.reportedAt;
+        Object.assign(own, { name, result: report, revision: (own.revision ?? 0) + 1, updatedAt: stamp(), ...(first ? { reportedAt: stamp() } : {}) });
+        participants[uid] = own; patch.participants = participants;
+        events.push({ type: first ? "completed" : "report_updated", staffId: uid, selfReported: true, text: report });
+      }
+      if (data.action === "complete" && existing.status !== "done") {
+        // Old open browser tabs can still close a task, but receive no personal
+        // completion credit without a report. Updated clients require a report.
+        if (!own.result && data.reportRevision !== undefined) throw new HttpsError("failed-precondition", "Сначала опишите свою выполненную работу");
+        Object.assign(patch, { status: "done", completedBy: uid, completedByName: name, completedAt: stamp() });
+        events.push({ type: "task_closed", staffId: uid, selfReported: false, text: own.result || "" });
+      }
+      if (Object.keys(patch).length) tx.update(ref, patch);
     }
+    events.forEach((event, index) => tx.create(db.doc(`workEvents/${auditId("ppz", id, uid, requestId, String(index))}`), {
+      ...event, workKey: `ppz/${id}`, sourceKind: "ppz", sourcePath: ref.path, title: task.title,
+      actorId: uid, actorName: name, visibleTo: [...new Set<string>([...task.assignees, uid])],
+      occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
+    }));
+    if (events.length) tx.create(receipt, { signature, createdAt: stamp() });
     return { id };
   });
 });
