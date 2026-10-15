@@ -594,6 +594,22 @@ describe("equipment monitoring access", () => {
 });
 
 describe("default deny", () => {
+  test("PPZ shared tasks are visible only to assignees and admins, writes require server", async () => {
+    for (const [uid, role] of [["a", "mechanic"], ["b", "mechanic"], ["other", "mechanic"], ["boss", "admin"], ["owner", "owner"], ["manager", "manager"]]) await seedRole(uid, role);
+    await seed("ppzTasks/shared", { title: "Общая задача", assignees: ["a", "b"], status: "open" });
+    for (const uid of ["a", "b", "boss", "owner"]) await assertSucceeds(getDoc(doc(dbFor(uid), "ppzTasks/shared")));
+    for (const uid of ["other", "manager"]) await assertFails(getDoc(doc(dbFor(uid), "ppzTasks/shared")));
+    await assertSucceeds(getDocs(query(collection(dbFor("a"), "ppzTasks"), where("assignees", "array-contains", "a"))));
+    await assertFails(getDocs(collection(dbFor("a"), "ppzTasks")));
+    await assertSucceeds(getDocs(collection(dbFor("boss"), "ppzTasks")));
+    for (const uid of ["a", "boss", "owner"]) {
+      await assertFails(updateDoc(doc(dbFor(uid), "ppzTasks/shared"), { status: "done", completedBy: uid }));
+      await assertFails(setDoc(doc(dbFor(uid), "ppzTasks/new"), { assignees: [uid] }));
+      await assertFails(deleteDoc(doc(dbFor(uid), "ppzTasks/shared")));
+    }
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "ppzTasks/shared")));
+  });
+
   test("authenticated users cannot access unknown collections", async () => {
     await seedRole("admin-1", "admin");
     const db = dbFor("admin-1");

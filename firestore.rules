@@ -36,6 +36,12 @@ service cloud.firestore {
       return isOwner() || isAdmin();
     }
 
+    match /ppzTasks/{taskId} {
+      allow read: if isAdminOrOwner()
+        || (hasStaffProfile() && request.auth.uid in resource.data.assignees);
+      allow write: if false;
+    }
+
     function isManagerOrAbove() {
       return isAdminOrOwner() || isManager();
     }

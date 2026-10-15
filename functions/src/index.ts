@@ -2,6 +2,7 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
+export { savePpzTask } from "./ppzTasks";
 
 export { saveDailyPlan, publishDailyPlan, updateDailyPlanWork, retryDailyPlanNotification, notifyDailyPlanPublished, retryDailyPlanDeliveries } from "./dailyPlans";
 

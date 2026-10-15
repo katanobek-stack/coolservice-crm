@@ -1,0 +1,40 @@
+const { test, beforeEach, after } = require("node:test");
+const assert = require("node:assert/strict");
+const admin = require("firebase-admin");
+if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error("Firestore emulator required");
+admin.initializeApp({ projectId: "demo-ppz-tasks" });
+const db = admin.firestore();
+const api = require("../lib/ppzTasks").savePpzTask;
+const request = (action, uid = "admin", extra = {}) => ({ auth: { uid, token: {} }, data: { action, id: "shared", ...extra } });
+const create = (extra = {}) => api.run(request("create", "admin", { title: "Общая работа", assignees: ["a", "b"], ...extra }));
+beforeEach(async () => {
+  for (const c of ["staff", "ppzTasks"]) for (const d of (await db.collection(c).get()).docs) await d.ref.delete();
+  for (const [id, role] of [["admin", "admin"], ["owner", "owner"], ["manager", "manager"], ["a", "mechanic"], ["b", "mechanic"]]) await db.doc(`staff/${id}`).set({ role, name: id });
+});
+after(() => admin.app().delete());
+test("only administrators create; all assignees must exist; no deadline is stored", async () => {
+  for (const uid of ["a", "manager"]) await assert.rejects(api.run(request("create", uid)), { code: "permission-denied" });
+  await assert.rejects(create({ assignees: ["missing"] }), { code: "not-found" });
+  await assert.rejects(create({ assignees: [] }), { code: "invalid-argument" });
+  assert.equal((await db.doc("ppzTasks/shared").get()).exists, false);
+  await create();
+  const data = (await db.doc("ppzTasks/shared").get()).data();
+  assert.deepEqual(data.assignees, ["a", "b"]);
+  assert.equal(data.deadline, undefined);
+  await assert.rejects(create(), { code: "already-exists" });
+});
+test("unassigned users cannot change work; first completion wins for everyone", async () => {
+  await create();
+  await assert.rejects(api.run(request("start", "admin")), { code: "permission-denied" });
+  await api.run(request("start", "a"));
+  assert.equal((await db.doc("ppzTasks/shared").get()).data().status, "in_progress");
+  await Promise.all([api.run(request("complete", "a")), api.run(request("complete", "b"))]);
+  const done = (await db.doc("ppzTasks/shared").get()).data();
+  assert.equal(done.status, "done");
+  assert.ok(["a", "b"].includes(done.completedBy));
+  assert.equal(done.completedByName, done.completedBy);
+  assert.ok(done.completedAt.toMillis() > 0);
+  await api.run(request("complete", done.completedBy === "a" ? "b" : "a"));
+  await api.run(request("start", "a"));
+  assert.deepEqual((await db.doc("ppzTasks/shared").get()).data(), done);
+});
