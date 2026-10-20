@@ -7,6 +7,7 @@ const db = admin.firestore();
 const api = require("../lib/ppzTasks").savePpzTask;
 const request = (action, uid = "admin", extra = {}) => ({ auth: { uid, token: {} }, data: { action, id: "shared", ...extra } });
 const create = (extra = {}) => api.run(request("create", "admin", { title: "Общая работа", assignees: ["a", "b"], ...extra }));
+const photo = (uid = "a", id = "p1") => { const path = `work-reports/${uid}/ppz/shared/${id}.jpg`; return { id, path, url: `https://firebasestorage.googleapis.com/v0/b/demo-ppz-tasks.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media&token=demo` }; };
 beforeEach(async () => {
   for (const c of ["staff", "ppzTasks", "workEvents"]) for (const d of (await db.collection(c).get()).docs) await db.recursiveDelete(d.ref);
   for (const [id, role] of [["admin", "admin"], ["owner", "owner"], ["manager", "manager"], ["a", "mechanic"], ["b", "mechanic"]]) await db.doc(`staff/${id}`).set({ role, name: id });
@@ -76,4 +77,30 @@ test("legacy browser closure remains compatible without inventing personal compl
   assert.equal((await db.doc("ppzTasks/shared").get()).data().status, "done");
   assert.equal((await db.collection("workEvents").where("type", "==", "completed").get()).size, 0);
   assert.equal((await db.collection("workEvents").where("type", "==", "task_closed").get()).size, 1);
+});
+
+test("photo report survives retries, closure and text-only edits without crediting other assignees", async () => {
+  await create();
+  const data = { report: "Собрал корпус", reportRevision: 0, photos: [photo()], requestId: "photo-report" };
+  await Promise.all([api.run(request("complete", "a", data)), api.run(request("complete", "a", data))]);
+  let task = (await db.doc("ppzTasks/shared").get()).data();
+  assert.deepEqual(task.participants.a.photos, [photo()]);
+  assert.equal(task.participants.b, undefined);
+  assert.equal((await db.collection("workEvents").where("type", "==", "completed").get()).size, 1);
+  const first = (await db.collection("workEvents").where("type", "==", "completed").get()).docs[0].data();
+  assert.deepEqual(first.photos, [photo()]); assert.equal(first.staffId, "a");
+  await assert.rejects(api.run(request("complete", "a", { ...data, photos: [photo("a", "different")] })), { code: "already-exists" });
+  await api.run(request("report", "a", { report: "Уточнил результат", reportRevision: 1, requestId: "text-edit" }));
+  await api.run(request("report", "a", { report: "", photos: [photo("a", "p2")], reportRevision: 2, requestId: "more-photos" }));
+  task = (await db.doc("ppzTasks/shared").get()).data();
+  assert.equal(task.participants.a.photos.length, 2);
+  assert.deepEqual(first.photos, [photo()]); // Immutable old event snapshot.
+  assert.equal((await db.collection("workEvents").where("type", "==", "completed").get()).size, 1);
+});
+
+test("cross-employee photos and unassigned uploads are rejected without writes", async () => {
+  await create();
+  await assert.rejects(api.run(request("report", "a", { report: "X", photos: [photo("b")], reportRevision: 0 })), { code: "invalid-argument" });
+  await assert.rejects(api.run(request("report", "admin", { report: "X", photos: [photo("admin")], reportRevision: 0 })), { code: "permission-denied" });
+  assert.equal((await db.doc("ppzTasks/shared").get()).data().participants, undefined);
 });

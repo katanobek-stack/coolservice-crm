@@ -4,6 +4,9 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { randomUUID } from "node:crypto";
+import { getApp } from "firebase-admin/app";
+import { auditId } from "./workAccountingLogic";
+import { appendWorkPhotos, parseWorkPhotos } from "./workPhotos";
 import { parsePlanItems, planDate, safeId, planMessage, splitMessage, taskComplete, telegramGroupIds, type PlanSource, type PlanItem } from "./dailyPlanLogic";
 
 const REGION = "europe-west1";
@@ -120,23 +123,30 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
   const by = await actor(request, false);
   const data = request.data;
   if (!data || typeof data !== "object" || (data.done !== undefined && typeof data.done !== "boolean") || typeof data.comment !== "string" || data.comment.length > 1000
-    || (data.done === undefined && !data.comment.trim())) {
+    || (data.done === undefined && !data.comment.trim() && !data.photos?.length)) {
     throw new HttpsError("invalid-argument", "Некорректная отметка выполнения");
   }
   const planId = safeId(data.planId), itemId = safeId(data.itemId);
+  const photos = parseWorkPhotos(data.photos, `work-reports/${by.uid}/plan/${planId}/${itemId}`, getApp().options.projectId || process.env.GCLOUD_PROJECT || "");
   await db().runTransaction(async tx => {
     const ref = db().doc(`dailyPlans/${planId}`);
     const plan = (await tx.get(ref)).data();
     if (plan?.staffId !== by.uid || plan.status !== "published") throw new HttpsError("permission-denied", "Можно отмечать только свой опубликованный план");
     const item = (await tx.get(ref.collection("items").doc(itemId))).data() as PlanItem | undefined;
     if (!item) throw new HttpsError("not-found", "Пункт плана не найден");
+    const receipt = photos.length ? ref.collection("photoRequests").doc(auditId(by.uid, itemId, String(data.done), data.comment, ...photos.map(p => p.path))) : null;
+    if (receipt && (await tx.get(receipt)).exists) return;
     const source = await readSource(tx, item.source);
     assertAssigned(source.task, by.uid);
     if (source.repair?.closedByManager || source.repair?.status === "cancelled") throw new HttpsError("failed-precondition", "Заявка уже закрыта");
     const task = source.task!;
+    const existingPhotos = task.photos ?? [];
+    const added = photos.filter(p => !existingPhotos.some((old: DocumentData) => old.path === p.path));
+    const nextPhotos = photos.length ? appendWorkPhotos(existingPhotos, photos) : existingPhotos;
     const doneBy = [...new Set<string>(task.doneBy ?? [])].filter(uid => uid !== by.uid);
     if (data.done) doneBy.push(by.uid);
     const updated = { ...task,
+      ...(photos.length ? { photos: nextPhotos } : {}),
       ...(data.done === undefined ? {} : { doneBy, status: taskComplete({ assignees: task.assignees, doneBy }) ? "done" : "in_progress" }),
       ...(data.comment.trim() ? { workComment: [task.workComment, `${by.name}: ${data.comment.trim()}`].filter(Boolean).join("\n") } : {}) };
     if (item.source.kind === "service") tx.update(source.ref, updated);
@@ -144,6 +154,17 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
       const repair = { ...source.repair, tasks: source.repair.tasks.map((t: DocumentData) => t.id === item.source.taskId ? updated : t) };
       tx.update(source.ref, item.source.kind === "intake" ? { repair } : { repairs: source.document!.repairs.map((r: DocumentData) => r.id === item.source.repairId ? repair : r) });
     }
+    // Separate photo evidence never adds another personal completion. Stable path
+    // deduplicates retries, including after a lost callable response.
+    if (added.length) {
+      const workKey = item.source.kind === "service" ? `service/${item.source.documentId}` : `repair/${source.repair.id}/task/${item.source.taskId}`;
+      tx.create(db().doc(`workEvents/${auditId("plan-photos", workKey, by.uid, ...added.map(p => p.path))}`), {
+        type: "photo_added", workKey, sourceKind: item.source.kind, sourcePath: source.ref.path, title: item.title,
+        staffId: by.uid, actorId: by.uid, actorName: by.name, visibleTo: [...new Set([...task.assignees, by.uid])],
+        text: data.comment.trim(), photos: added, selfReported: true, occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
+      });
+    }
+    if (receipt) tx.create(receipt, { createdAt: stamp(), staffId: by.uid });
   });
   return { ok: true };
 });

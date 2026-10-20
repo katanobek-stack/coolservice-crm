@@ -11,7 +11,7 @@ export function vladivostokDate(now = new Date()): string {
 export function sourceKey(source: PlanSource): string {
   return [source.kind, source.documentId, source.repairId ?? "", source.taskId ?? ""].join("/");
 }
-export type WorkTask = Pick<RepairTask, "assignees" | "doneBy" | "status" | "workComment">;
+export type WorkTask = Pick<RepairTask, "assignees" | "doneBy" | "status" | "workComment" | "photos">;
 export function resolveTask(source: PlanSource, tasks: ServiceTask[], clients: Client[], intake: IntakeRepair[]): WorkTask | undefined {
   if (source.kind === "service") return tasks.find(t => t.id === source.documentId) as WorkTask | undefined;
   if (source.kind === "repair") return clients.find(c => c.id === source.documentId)?.repairs?.find(r => r.id === source.repairId)?.tasks?.find(t => t.id === source.taskId);

@@ -3,6 +3,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { randomUUID } from "node:crypto";
 import { safeId } from "./dailyPlanLogic";
 import { auditId } from "./workAccountingLogic";
+import { getApp } from "firebase-admin/app";
+import { appendWorkPhotos, parseWorkPhotos } from "./workPhotos";
 
 // A shared closure and an employee's own work report are separate facts.
 export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
@@ -12,7 +14,10 @@ export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
   const id = safeId(data.id), requestId = safeId(data.requestId ?? randomUUID());
   if (data.report !== undefined && (typeof data.report !== "string" || data.report.length > 2000)) throw new HttpsError("invalid-argument", "Отчёт — до 2000 символов");
   const report = (data.report ?? "").trim();
-  const signature = auditId(data.action, report, String(data.title ?? ""), JSON.stringify(data.assignees ?? []), String(data.reportRevision ?? ""));
+  const photos = parseWorkPhotos(data.photos, `work-reports/${uid}/ppz/${id}`, getApp().options.projectId || process.env.GCLOUD_PROJECT || "");
+  if (photos.length && !["report", "complete"].includes(data.action)) throw new HttpsError("invalid-argument", "Фотографии прикладываются к отчёту");
+  const signatureParts = [data.action, report, String(data.title ?? ""), JSON.stringify(data.assignees ?? []), String(data.reportRevision ?? "")];
+  const signature = auditId(...(photos.length ? [...signatureParts, JSON.stringify(photos)] : signatureParts));
   const db = getFirestore();
   return db.runTransaction(async tx => {
     const profile = (await tx.get(db.doc(`staff/${uid}`))).data();
@@ -51,13 +56,14 @@ export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
         if (existing.status === "open") Object.assign(patch, { status: "in_progress", startedBy: uid, startedAt: stamp() });
         events.push({ type: "started", staffId: uid, selfReported: true, text: "" });
       }
-      if (data.action === "report" || (data.action === "complete" && report)) {
-        if (!report) throw new HttpsError("invalid-argument", "Опишите, что вы выполнили");
+      if (data.action === "report" || (data.action === "complete" && (report || photos.length))) {
+        if (!report && !(photos.length && own.result)) throw new HttpsError("invalid-argument", "Опишите, что вы выполнили");
         if (!Number.isSafeInteger(data.reportRevision) || data.reportRevision !== (own.revision ?? 0)) throw new HttpsError("aborted", "Ваш отчёт уже изменён. Обновите задачу.");
         const first = !own.reportedAt;
-        Object.assign(own, { name, result: report, revision: (own.revision ?? 0) + 1, updatedAt: stamp(), ...(first ? { reportedAt: stamp() } : {}) });
+        Object.assign(own, { name, result: report || own.result, revision: (own.revision ?? 0) + 1, updatedAt: stamp(), ...(first ? { reportedAt: stamp() } : {}),
+          ...(photos.length ? { photos: appendWorkPhotos(own.photos ?? [], photos) } : {}) });
         participants[uid] = own; patch.participants = participants;
-        events.push({ type: first ? "completed" : "report_updated", staffId: uid, selfReported: true, text: report });
+        events.push({ type: first ? "completed" : "report_updated", staffId: uid, selfReported: true, text: own.result, ...(photos.length ? { photos } : {}) });
       }
       if (data.action === "complete" && existing.status !== "done") {
         // Old open browser tabs can still close a task, but receive no personal

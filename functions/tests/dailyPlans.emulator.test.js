@@ -22,7 +22,7 @@ before(async () => { await db.doc("staff/manager").set({ role: "manager", name: 
 beforeEach(async () => {
   global.fetch = originalFetch;
   process.env.TELEGRAM_GROUP_CHAT_ID = "-100123";
-  for (const collection of ["dailyPlans", "dailyPlanNotifications", "servicetasks", "clients", "intakeRepairs", "staff"]) {
+  for (const collection of ["dailyPlans", "dailyPlanNotifications", "servicetasks", "clients", "intakeRepairs", "staff", "workEvents"]) {
     const docs = await db.collection(collection).get();
     for (const doc of docs.docs) await db.recursiveDelete(doc.ref);
   }
@@ -31,6 +31,21 @@ beforeEach(async () => {
   await db.doc("staff/other").set({ role: "mechanic", name: "Другой" });
 });
 after(async () => { global.fetch = originalFetch; await admin.app().delete(); });
+
+test("plan photos attach to the original task and employee history exactly once", async () => {
+  await task(); await save([item()]); await publish();
+  const path = `work-reports/worker/plan/${planId}/task-1/p1.jpg`;
+  const photo = { id: "p1", path, url: `https://firebasestorage.googleapis.com/v0/b/${projectId}.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media&token=demo` };
+  const data = { planId, itemId: "task-1", done: true, comment: "", photos: [photo] };
+  await assert.rejects(api.updateDailyPlanWork.run(request(data, "other")));
+  await api.updateDailyPlanWork.run(request(data, "worker"));
+  await api.updateDailyPlanWork.run(request(data, "worker"));
+  const result = (await db.doc("servicetasks/task-1").get()).data();
+  assert.deepEqual(result.photos, [photo]);
+  const events = (await db.collection("workEvents").where("type", "==", "photo_added").get()).docs;
+  assert.equal(events.length, 1); assert.equal(events[0].data().staffId, "worker");
+  assert.deepEqual(events[0].data().photos, [photo]);
+});
 
 test("mechanics cannot author plans; saves validate existing assignees", async () => {
   await task();
