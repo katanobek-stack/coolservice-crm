@@ -31,6 +31,7 @@ import { fmtMoney, fmtDate } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
+import { WorkAccountingPanel } from "../daily-plan/WorkAccountingPanel";
 
 const isClosedThisMonth = isRepairClosedInMonth;
 
@@ -740,6 +741,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const isAdmin        = role === "admin" || role === "owner";
   const showFinance    = role !== "mechanic";
   const showAmounts    = showFinance && canSeeDashboardFinancials;
+  const [showWorkHistory, setShowWorkHistory] = useState(false);
 
   const [showAllActive,    setShowAllActive]    = useState(false);
   const [selectedRepair,   setSelectedRepair]   = useState<EnrichedRepair | null>(null);
@@ -1229,6 +1231,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       )}
 
       {/* Mechanic productivity — all users */}
+      {isAdmin && <section className="crm-section ppz"><div className="section-header"><span className="section-title">Работы сотрудников · ППЗ и фотоотчёты</span><button type="button" className="btn-primary" onClick={() => setShowWorkHistory(value => !value)}>{showWorkHistory ? "Скрыть историю" : "Открыть статистику и фото"}</button></div>{showWorkHistory && <WorkAccountingPanel />}</section>}
       {mechanicStats.length > 0 && (
         <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
           <div className="section-header">

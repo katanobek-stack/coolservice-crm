@@ -1,14 +1,17 @@
+import type { PhotoData } from "../../shared/utils/photos";
 export interface WorkTime { toMillis(): number; toDate(): Date }
 export interface WorkEvent {
   id: string; type: string; workKey: string; sourceKind: string; title: string;
   staffId: string | null; actorId: string | null; actorName?: string | null;
   text: string; selfReported: boolean; occurredAt?: WorkTime; evidence: string;
+  photos?: PhotoData[];
 }
 export const workEventLabels: Record<string, string> = {
   task_created: "Задача создана", started: "Приступил", completed: "Отметка личного выполнения",
   report_updated: "Отчёт дополнен", completion_revoked: "Отметка выполнения снята",
   task_closed: "Общее закрытие", task_reopened: "Задача открыта повторно",
   comment_changed: "Комментарий изменён", vehicle_received: "Машина принята",
+  photo_added: "Фото работы добавлено",
 };
 export const workSourceLabels: Record<string, string> = { ppz: "ППЗ", repair: "Ремонт", intake: "Приёмка", service: "Сервис" };
 export function accountingRange(from: string, to: string): { start: Date; end: Date } | null {
@@ -33,6 +36,8 @@ export function summarizeWork(events: WorkEvent[], staffIds: string[]) {
       closed: unique(ordered.filter(e => e.type === "task_closed" && e.actorId === uid)),
       received: unique(ordered.filter(e => e.type === "vehicle_received" && e.actorId === uid)),
       revoked: unique(own.filter(e => e.type === "completion_revoked")),
+      photos: new Set(own.flatMap(e => (e.photos ?? []).map(p => p.path || `${e.workKey}/${p.id}`))).size,
+      withPhotos: unique(own.filter(e => (e.photos ?? []).length > 0)),
     };
   });
 }

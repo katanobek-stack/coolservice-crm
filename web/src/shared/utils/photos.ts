@@ -10,17 +10,23 @@ export interface PhotoData {
 }
 
 function compressToBlob(file: File, maxWidth = 800, quality = 0.65): Promise<Blob> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const fr = new FileReader();
+    fr.onerror = () => reject(new Error("Не удалось прочитать фотографию"));
     fr.onload = (e) => {
       const img = new Image();
+      img.onerror = () => reject(new Error("Не удалось открыть изображение. Выберите JPEG, PNG или WebP."));
       img.onload = () => {
         const canvas = document.createElement("canvas");
         let { width: w, height: h } = img;
         if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
         canvas.width = w; canvas.height = h;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", quality);
+        try {
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Не удалось обработать фотографию");
+          context.drawImage(img, 0, 0, w, h);
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Не удалось сжать фотографию")), "image/jpeg", quality);
+        } catch (error) { reject(error); }
       };
       img.src = e.target!.result as string;
     };

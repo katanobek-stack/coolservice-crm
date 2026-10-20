@@ -10,6 +10,8 @@ import { Input, Select, Textarea } from "../../shared/ui/Input";
 import { resolveTask, sourceKey, vladivostokDate, workDone } from "./logic";
 import "./dailyPlan.css";
 import { PpzTasks } from "./PpzTasks";
+import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
+import { employeeTone } from "./presentation";
 
 interface Candidate { source: PlanSource; title: string }
 const deliveryLabels = { pending: "Telegram: ожидает отправки", sent: "Telegram: доставлено", failed: "Telegram: ошибка отправки", unknown: "Telegram: результат отправки неизвестен" };
@@ -23,23 +25,26 @@ function WorkRow({ item, planId, staffId, own, published }: { item: PlanItem; pl
   const [error, setError] = useState("");
   const assigned = task?.assignees?.includes(staffId);
   const myDone = task?.doneBy?.includes(staffId) ?? false;
+  const attachments = useReportPhotos(`work-reports/${staffId}/plan/${planId}/${item.id}`);
   async function submit(done?: boolean) {
     setBusy(true); setError("");
-    try { await updateDailyPlanWork(planId, item.id, done, comment); setComment(""); }
+    try { const photos = await attachments.upload(); await updateDailyPlanWork(planId, item.id, done, comment, photos); setComment(""); attachments.reset(); }
     catch (err) { setError(errorText(err)); }
     finally { setBusy(false); }
   }
-  return <article className="ppz-card">
+  return <article className={`ppz-card ppz-task ppz-task--${task && workDone(task) ? "done" : myDone ? "in_progress" : "open"}`}>
     <div className="ppz-row"><strong>{item.order + 1}. {item.title}</strong><span>{task && workDone(task) ? "✓ Выполнено" : myDone ? "Вы завершили свою часть" : "К выполнению"}</span></div>
     <p className="ppz-muted">{item.priority === "high" ? "Высокий приоритет · " : ""}{item.deadline ? `До ${item.deadline} · ` : ""}{item.source.kind === "service" ? "Сервисная задача" : item.source.kind === "repair" ? "Задача ремонта" : "Приёмка"}</p>
     {item.note && <p>{item.note}</p>}
     {task?.workComment && <p className="ppz-comment">{task.workComment}</p>}
+    <PhotoEvidence photos={task?.photos} />
     {!task && <p role="alert">Исходная задача удалена или перемещена. Обратитесь к руководителю.</p>}
     {task && !assigned && <p role="alert">Исполнитель изменён. Руководителю нужно обновить план.</p>}
     {own && published && assigned && <div className="ppz-work">
       <Textarea aria-label={`Комментарий: ${item.title}`} placeholder="Комментарий о работе" value={comment} onChange={e => setComment(e.target.value)} maxLength={1000} disabled={busy}/>
+      <ReportPhotoPicker files={attachments.files} onChange={attachments.setFiles} disabled={busy} />
       <div className="ppz-row"><Button disabled={busy} onClick={() => void submit(!myDone)}>{myDone ? "Вернуть в работу" : "Моя часть выполнена"}</Button>
-        <Button variant="ghost" disabled={busy || !comment.trim()} onClick={() => void submit()}>Добавить комментарий</Button></div>
+        <Button variant="ghost" disabled={busy || (!comment.trim() && !attachments.files.length)} onClick={() => void submit()}>Сохранить комментарий / фото</Button></div>
     </div>}
     {error && <p className="ppz-error" role="alert">{error}</p>}
   </article>;
@@ -153,7 +158,7 @@ export function DailyPlanTab() {
       {editing && <Select aria-label="Сотрудник" value={staffId} disabled={busy || dirty} onChange={e => { setSelected(e.target.value); setCandidate(""); setNewTitle(""); }}>
         {staff.map(s => <option key={s.id} value={s.id}>{s.name || s.email || "Сотрудник"}</option>)}</Select>}
     </div>
-    <p className="ppz-muted">Персональный план на {date}. Время — Владивосток.</p>
+    <div className={`ppz-day-banner ppz-person--${employeeTone(staffId)}`}><div><span className="ppz-person-dot" aria-hidden="true" /><strong>{staff.find(s => s.id === staffId)?.name || "Мой план"}</strong></div><span>Персональный план на {date} · Владивосток</span></div>
     {absence && <p className="ppz-warning">По графику у сотрудника {absence}. Проверьте назначение работ.</p>}
     {error && <p className="ppz-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
@@ -185,7 +190,7 @@ export function DailyPlanTab() {
           <Button variant="ghost" disabled={busy} onClick={() => { if (!dirty || window.confirm("Загрузить актуальный план и отменить несохранённые изменения?")) void run(reload); }}>Загрузить актуальный план</Button></div>
         <p className="ppz-muted">Убрать пункт из плана не удаляет исходную задачу. Новая сервисная работа создаётся при сохранении черновика. Чтобы перенести работу, выберите другой день и добавьте её из существующих задач.</p>
       </> : <>
-        {plan?.status !== "published" ? <p>План пока не опубликован. Обратитесь к руководителю.</p> : published.length === 0 ? <p>Назначенных задач в плане нет.</p> : published.map(item => <WorkRow key={item.id} item={item} planId={planId} staffId={staffId} own={staffId === uid} published/>) }
+        {plan?.status !== "published" ? <p>План пока не опубликован. Обратитесь к руководителю.</p> : published.length === 0 ? <p>Назначенных задач в плане нет.</p> : published.map(item => <WorkRow key={`${planId}:${item.id}`} item={item} planId={planId} staffId={staffId} own={staffId === uid} published/>) }
         {otherWork.length > 0 && <section className="ppz-card"><h3>Другие назначенные работы</h3><p className="ppz-muted">Эти работы доступны в разделе «Заявки». Порядок выполнения можно уточнить у руководителя.</p>{otherWork.map(c => <p key={sourceKey(c.source)}>{c.title}</p>)}</section>}
       </>}
     </>}

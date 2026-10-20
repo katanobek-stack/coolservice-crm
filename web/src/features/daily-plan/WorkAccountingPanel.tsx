@@ -6,6 +6,9 @@ import { Button } from "../../shared/ui/Button";
 import { Input, Select } from "../../shared/ui/Input";
 import { vladivostokDate } from "./logic";
 import { accountingRange, csvCell, summarizeWork, workEventLabels, workSourceLabels, type WorkEvent } from "./workAccounting";
+import { PhotoEvidence } from "./ReportPhotos";
+import { employeeTone } from "./presentation";
+import "./dailyPlan.css";
 
 export function WorkAccountingPanel() {
   const { staff } = useData();
@@ -29,7 +32,7 @@ export function WorkAccountingPanel() {
   const name = (id: string | null) => id ? staff.find(s => s.id === id)?.name || id : "Автор не установлен";
   const time = (e: WorkEvent) => e.occurredAt?.toDate().toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok" }) ?? "";
   function download() {
-    const rows = [["Время (Владивосток)", "Источник", "Работа", "Действие", "Исполнитель отметки", "Автор действия", "Личная отметка", "Отчёт"], ...filtered.map(e => [time(e), workSourceLabels[e.sourceKind] || e.sourceKind, e.title, workEventLabels[e.type] || e.type, name(e.staffId), name(e.actorId), e.selfReported ? "Да" : "Нет", e.text])];
+    const rows = [["Время (Владивосток)", "Источник", "Работа", "Действие", "Исполнитель отметки", "Автор действия", "Личная отметка", "Отчёт", "Фото"], ...filtered.map(e => [time(e), workSourceLabels[e.sourceKind] || e.sourceKind, e.title, workEventLabels[e.type] || e.type, name(e.staffId), name(e.actorId), e.selfReported ? "Да" : "Нет", e.text, String(e.photos?.length ?? 0)])];
     const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.map(row => row.map(csvCell).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `work-history-${from}-${to}.csv`; link.click(); URL.revokeObjectURL(url);
   }
@@ -45,8 +48,8 @@ export function WorkAccountingPanel() {
     {!range && <p role="alert">Укажите корректный период.</p>}
     {error && <p role="alert">{error}</p>}
     {loading ? <p>Загружаем историю…</p> : !error && range && <>
-      <div className="ppz-table-scroll"><table className="ppz-accounting"><thead><tr><th>Сотрудник</th><th>Начал ППЗ</th><th>Лично отметил выполнение</th><th>Отмечено другим / системой</th><th>Общих закрытий</th><th>Принял машин</th><th>Снятых отметок</th></tr></thead><tbody>
-        {summary.map(row => <tr key={row.uid}><td>{name(row.uid)}</td><td>{row.started}</td><td>{row.personal}</td><td>{row.recordedByOthers}</td><td>{row.closed}</td><td>{row.received}</td><td>{row.revoked}</td></tr>)}
+      <div className="ppz-table-scroll"><table className="ppz-accounting"><thead><tr><th>Сотрудник</th><th>Начал ППЗ</th><th>Лично отметил выполнение</th><th>Отмечено другим / системой</th><th>Общих закрытий</th><th>Принял машин</th><th>Снятых отметок</th><th>Работ с фото</th><th>Фотографий</th></tr></thead><tbody>
+        {summary.map(row => <tr key={row.uid}><td><span className={`ppz-person ppz-person--${employeeTone(row.uid)}`}><span className="ppz-person-dot" aria-hidden="true" />{name(row.uid)}</span></td><td>{row.started}</td><td>{row.personal}</td><td>{row.recordedByOthers}</td><td>{row.closed}</td><td>{row.received}</td><td>{row.revoked}</td><td>{row.withPhotos}</td><td>{row.photos}</td></tr>)}
       </tbody></table></div>
       <p className="ppz-muted">Одна работа учитывается один раз на сотрудника в выбранном периоде. Снятая отметка исключается, если она последняя за период. Начало и конец периода — по Владивостоку. Время между началом и отчётом не считается отработанными часами.</p>
       <p className="ppz-muted">История собирается с подключения этого учёта. Старые работы и перенос из приёмки к клиенту не начисляют новые выполнения. Отметка выполнения — сообщение о работе, а не оценка качества.</p>
@@ -55,6 +58,7 @@ export function WorkAccountingPanel() {
         <strong>{e.title}</strong><p>{time(e)} · {workSourceLabels[e.sourceKind]} · {workEventLabels[e.type] || e.type}</p>
         <p>Автор действия: {e.actorName || name(e.actorId)}{e.staffId && e.staffId !== e.actorId ? ` · Отметка за: ${name(e.staffId)}` : ""}</p>
         {e.text && <p className="ppz-comment">{e.text}</p>}
+        <PhotoEvidence photos={e.photos} />
         {e.type === "completed" && !e.selfReported && <p className="ppz-muted">Личное действие этого исполнителя не подтверждено автором записи.</p>}
       </article>)}
       {filtered.length > showCount && <Button variant="ghost" onClick={() => setShowCount(n => n + 100)}>Показать ещё</Button>}
