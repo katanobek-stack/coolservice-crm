@@ -84,7 +84,8 @@ export const saveDailyPlan = onCall({ region: REGION }, async request => {
     }
     const revision = data.revision + 1;
     tx.set(ref, { staffId, date, revision, status: plan.data()?.status ?? "draft", version: plan.data()?.version ?? 0,
-      hasDraft: true, updatedAt: stamp(), updatedBy: by.uid, ...(plan.exists ? {} : { createdAt: stamp(), createdBy: by.uid }) }, { merge: true });
+      hasDraft: true, updatedAt: stamp(), updatedBy: by.uid, updatedByName: by.name,
+      ...(plan.exists ? {} : { createdAt: stamp(), createdBy: by.uid, createdByName: by.name, staffName: String(staff.data()?.name || "Сотрудник") }) }, { merge: true });
     return { revision };
   });
 });
@@ -105,12 +106,26 @@ export const publishDailyPlan = onCall({ region: REGION, secrets }, async reques
     const draft = await tx.get(ref.collection("draftItems"));
     const old = await tx.get(ref.collection("items"));
     const items = parsePlanItems(draft.docs.map(doc => doc.data()).sort((a, b) => a.order - b.order));
-    for (const item of items) assertAssigned((await readSource(tx, item.source)).task, staffId);
+    const publishedItems: { title: string; workKey: string; sourceKind: string }[] = [];
+    for (const item of items) {
+      const source = await readSource(tx, item.source);
+      assertAssigned(source.task, staffId);
+      publishedItems.push({ title: item.title, sourceKind: item.source.kind,
+        workKey: item.source.kind === "service" ? `service/${item.source.documentId}` : `repair/${source.repair.id}/task/${item.source.taskId}` });
+    }
     const version = (plan.version ?? 0) + 1;
     const revision = data.revision + 1;
     for (const doc of old.docs) tx.delete(doc.ref);
     for (const item of items) tx.set(ref.collection("items").doc(item.id), item);
-    tx.update(ref, { status: "published", hasDraft: false, version, revision, publishedAt: stamp(), publishedBy: by.uid, updatedAt: stamp(), deliveryStatus: "pending" });
+    tx.update(ref, { status: "published", hasDraft: false, version, revision, publishedAt: stamp(), publishedBy: by.uid, publishedByName: by.name, updatedAt: stamp(), deliveryStatus: "pending" });
+    tx.create(db().doc(`workEvents/${auditId("plan-published", ref.id, String(version))}`), {
+      type: "plan_published", workKey: `plan/${ref.id}`, sourceKind: "plan", sourcePath: ref.path,
+      title: `Дневной ППЗ ${date} · версия ${version}`, staffId, actorId: by.uid, actorName: by.name,
+      createdBy: plan.createdBy ?? null, createdByName: plan.createdByName ?? null, createdAt: plan.createdAt ?? null,
+      assigneeIds: [staffId], assigneeNames: { [staffId]: String(staff.data()?.name || "Сотрудник") },
+      visibleTo: [...new Set([staffId, by.uid])], selfReported: false, text: "", evidence: "authenticated_action",
+      occurredAt: stamp(), recordedAt: stamp(), planDate: date, planVersion: version, planItems: publishedItems,
+    });
     const parts = splitMessage(planMessage(date, String(staff.data()?.name || "Сотрудник"), version, items));
     chatIds.forEach((chatId, recipient) => parts.forEach((text, part) => tx.create(db().doc(`dailyPlanNotifications/${ref.id}_${version}_${recipient}_${part}`), {
       planId: ref.id, version, recipient, part, parts: parts.length, chatId, text, status: "pending", attempts: 0, nextAttemptAt: Timestamp.now(), createdAt: stamp(),
@@ -143,6 +158,7 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
     const existingPhotos = task.photos ?? [];
     const added = photos.filter(p => !existingPhotos.some((old: DocumentData) => old.path === p.path));
     const nextPhotos = photos.length ? appendWorkPhotos(existingPhotos, photos) : existingPhotos;
+    const changedDone = data.done !== undefined && (task.doneBy ?? []).includes(by.uid) !== data.done;
     const doneBy = [...new Set<string>(task.doneBy ?? [])].filter(uid => uid !== by.uid);
     if (data.done) doneBy.push(by.uid);
     const updated = { ...task,
@@ -165,6 +181,15 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
       });
     }
     if (receipt) tx.create(receipt, { createdAt: stamp(), staffId: by.uid });
+    if (changedDone) {
+      // The callable knows the actual user; the Firestore trigger only sees a service account.
+      const workKey = item.source.kind === "service" ? `service/${item.source.documentId}` : `repair/${source.repair.id}/task/${item.source.taskId}`;
+      tx.create(db().collection("workEvents").doc(), {
+        type: data.done ? "completed" : "completion_revoked", workKey, sourceKind: item.source.kind, sourcePath: source.ref.path,
+        title: item.title, staffId: by.uid, actorId: by.uid, actorName: by.name, selfReported: true,
+        visibleTo: [...new Set([...task.assignees, by.uid])], text: data.comment.trim(), occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
+      });
+    }
   });
   return { ok: true };
 });

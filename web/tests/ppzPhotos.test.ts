@@ -8,6 +8,7 @@ import { PhotoEvidence, ReportPhotoPicker } from "../src/features/daily-plan/Rep
 import { ReportText } from "../src/shared/ui/ReportText";
 import { appendDictation, startDictation, type Recognition } from "../src/shared/utils/reportDictation";
 import { WorkCommentForm } from "../src/shared/repair-work/RepairTaskWork";
+import { Timestamp } from "firebase/firestore";
 
 class FakeRecognition implements Recognition {
   lang = ""; continuous = false; interimResults = true;
@@ -103,6 +104,12 @@ test("task shows each employee, personal photo evidence and accessible upload co
   const foreign = renderToStaticMarkup(createElement(TaskCard, { task, uid: "not-assigned", name }));
   assert.doesNotMatch(foreign, /Фото работы из галереи/);
   assert.doesNotMatch(foreign, /Надиктовать отчёт/);
+});
+test("PPZ card shows original creator, time, assigned people and self-assignment, preserving legacy unknowns", () => {
+  const html = renderToStaticMarkup(createElement(TaskCard, { task: { ...task, createdBy: "a", createdByName: "Автор при создании", assigneeNames: { a: "Исполнитель A", b: "Исполнитель B" }, createdAt: Timestamp.fromDate(new Date("2026-10-05T10:00:00Z")) }, uid: "b", name }));
+  assert.match(html, /Автор при создании/); assert.match(html, /05\.10\.2026/); assert.match(html, /Исполнитель A, Исполнитель B/); assert.match(html, /автор назначил задачу в том числе себе/);
+  const old = renderToStaticMarkup(createElement(TaskCard, { task, uid: "b", name }));
+  assert.match(old, /Автор не зафиксирован/); assert.match(old, /Дата создания не зафиксирована/);
 });
 test("legacy evidence can be absent and busy picker is disabled", () => {
   assert.equal(renderToStaticMarkup(createElement(PhotoEvidence, {})), "");

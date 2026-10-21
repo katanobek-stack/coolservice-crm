@@ -15,6 +15,8 @@ export interface PlanItem {
   newService?: boolean;
 }
 export interface DailyPlan {
+  createdBy?: string; createdByName?: string; createdAt?: { toDate(): Date };
+  staffName?: string; publishedBy?: string; publishedByName?: string; publishedAt?: { toDate(): Date };
   staffId: string;
   date: string;
   revision: number;

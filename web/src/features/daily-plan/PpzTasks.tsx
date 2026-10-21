@@ -12,10 +12,11 @@ import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhoto
 import type { PhotoData } from "../../shared/utils/photos";
 import { employeeTone, newestPpzTasks } from "./presentation";
 
-interface PpzTask {
+export interface PpzTask {
   id: string; title: string; assignees: string[]; status: "open" | "in_progress" | "done";
   description?: string;
   createdAt?: Timestamp;
+  createdBy?: string; createdByName?: string; assigneeNames?: Record<string, string>;
   completedByName?: string; completedAt?: Timestamp; startedBy?: string;
   participants?: Record<string, { name: string; startedAt?: Timestamp; result?: string; photos?: PhotoData[]; reportedAt?: Timestamp; updatedAt?: Timestamp; revision: number }>;
 }
@@ -42,6 +43,8 @@ export function TaskCard({ task, uid, name }: { task: PpzTask; uid: string; name
   return <article className={`ppz-card ppz-task ppz-task--${task.status}`}>
     <div className="ppz-row"><strong>{task.title}</strong><span className={`ppz-status ppz-status--${task.status}`}>{task.status === "done" ? "✓ Выполнено" : task.status === "in_progress" ? "◉ В работе" : "К выполнению"}</span></div>
     {task.description && <p className="ppz-comment">{task.description}</p>}
+    <p className="ppz-muted">Создал в CRM: {task.createdByName || (task.createdBy ? name(task.createdBy) : "Автор не зафиксирован")} · {task.createdAt ? `${time(task.createdAt)} (Владивосток)` : "Дата создания не зафиксирована"}</p>
+    <p className="ppz-muted">Назначено: {task.assignees.map(id => task.assigneeNames?.[id] || name(id)).join(", ")}{task.createdBy && task.assignees.includes(task.createdBy) ? " · автор назначил задачу в том числе себе" : ""}</p>
     <div className="ppz-people">{task.assignees.map(id => <span key={id} className={`ppz-person ppz-person--${employeeTone(id)}`}><span className="ppz-person-dot" aria-hidden="true" />{name(id)}</span>)}</div>
     {task.status === "done" && <p>Закрыл: {task.completedByName} · {time(task.completedAt)} (Владивосток)</p>}
     {task.assignees.map(id => {
@@ -105,7 +108,7 @@ export function PpzTasks() {
       {administrator && <Select aria-label="Фильтр сотрудников" value={employee} onChange={e => setEmployee(e.target.value)}><option value="">Все сотрудники</option>{staff.map(s => <option key={s.id} value={s.id}>{name(s.id)}</option>)}</Select>}
       {administrator && <Button variant="ghost" onClick={() => setAccounting(value => !value)}>{accounting ? "Скрыть учёт работ" : "Учёт работ и история"}</Button>}
     </div>
-    {administrator && accounting && <WorkAccountingPanel />}
+    {administrator && accounting && <WorkAccountingPanel ppzTasks={tasks} />}
     {administrator && <fieldset disabled={busy} className="ppz-editor">
       <Input aria-label="Название задачи без срока" placeholder="Название задачи" value={title} maxLength={200} onChange={e => setTitle(e.target.value)}/>
       <div className="ppz-row">{staff.map(s => <label key={s.id}><input type="checkbox" checked={assignees.includes(s.id)} onChange={e => setAssignees(previous => e.target.checked ? [...previous, s.id] : previous.filter(id => id !== s.id))}/>{name(s.id)}</label>)}</div>
