@@ -10,11 +10,12 @@ import { ReportText } from "../../shared/ui/ReportText";
 import { WorkAccountingPanel } from "./WorkAccountingPanel";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
 import type { PhotoData } from "../../shared/utils/photos";
-import { employeeTone } from "./presentation";
+import { employeeTone, newestPpzTasks } from "./presentation";
 
 interface PpzTask {
   id: string; title: string; assignees: string[]; status: "open" | "in_progress" | "done";
   description?: string;
+  createdAt?: Timestamp;
   completedByName?: string; completedAt?: Timestamp; startedBy?: string;
   participants?: Record<string, { name: string; startedAt?: Timestamp; result?: string; photos?: PhotoData[]; reportedAt?: Timestamp; updatedAt?: Timestamp; revision: number }>;
 }
@@ -94,7 +95,7 @@ export function PpzTasks() {
     finally { setBusy(false); }
   }
   const name = (id: string) => staff.find(s => s.id === id)?.name || staff.find(s => s.id === id)?.email || id;
-  const visible = tasks.filter(t => (completed ? t.status === "done" : t.status !== "done") && (!administrator || !employee || t.assignees.includes(employee)));
+  const visible = newestPpzTasks(tasks.filter(t => (completed ? t.status === "done" : t.status !== "done") && (!administrator || !employee || t.assignees.includes(employee))));
   return <section className="ppz-card">
     <h3>Задачи без сроков</h3>
     <p className="ppz-muted">Закрытие одним исполнителем завершает задачу для всех. Личное выполнение каждого сотрудника фиксируется его отдельным отчётом.</p>
