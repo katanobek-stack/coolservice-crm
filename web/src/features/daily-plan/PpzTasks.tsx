@@ -5,7 +5,8 @@ import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import { getFirebaseDb, getFirebaseFunctions } from "../../shared/firebase/app";
 import { Button } from "../../shared/ui/Button";
-import { Input, Select, Textarea } from "../../shared/ui/Input";
+import { Input, Select } from "../../shared/ui/Input";
+import { ReportText } from "../../shared/ui/ReportText";
 import { WorkAccountingPanel } from "./WorkAccountingPanel";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
 import type { PhotoData } from "../../shared/utils/photos";
@@ -19,12 +20,13 @@ interface PpzTask {
 }
 export function TaskCard({ task, uid, name }: { task: PpzTask; uid: string; name: (uid: string) => string }) {
   const [report, setReport] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [dictating, setDictating] = useState(false);
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const own = task.participants?.[uid];
   const attachments = useReportPhotos(`work-reports/${uid}/ppz/${task.id}`);
   const time = (t?: Timestamp) => t?.toDate().toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok" }) ?? "";
   async function act(action: "start" | "report" | "complete") {
-    if (busy) return;
+    if (busy || dictating) return;
     setBusy(true); setError("");
     try {
       const photos = action === "start" ? [] : await attachments.upload();
@@ -50,11 +52,11 @@ export function TaskCard({ task, uid, name }: { task: PpzTask; uid: string; name
       </div>;
     })}
     {task.assignees.includes(uid) && <div className="ppz-work">
-      {task.status !== "done" && !own?.startedAt && <Button disabled={busy} onClick={() => void act("start")}>Приступить к работе</Button>}
-      <Textarea aria-label={`Мой результат: ${task.title}`} maxLength={2000} disabled={busy} value={report} onChange={e => setReport(e.target.value)} placeholder={own?.result ? "Уточните свой результат — предыдущая запись останется в истории" : "Что именно вы выполнили в этой задаче?"}/>
+      {task.status !== "done" && !own?.startedAt && <Button disabled={busy || dictating} onClick={() => void act("start")}>Приступить к работе</Button>}
+      <ReportText label={`Мой результат: ${task.title}`} maxLength={2000} disabled={busy} value={report} onChange={setReport} onListeningChange={setDictating} placeholder={own?.result ? "Уточните свой результат — предыдущая запись останется в истории" : "Что именно вы выполнили в этой задаче?"}/>
       <ReportPhotoPicker files={attachments.files} onChange={attachments.setFiles} disabled={busy} />
-      <div className="ppz-row"><Button disabled={busy || (!report.trim() && !(own?.result && attachments.files.length))} onClick={() => void act("report")}>{busy ? "Сохраняем отчёт…" : own?.result ? "Уточнить мой результат" : "Зафиксировать моё выполнение"}</Button>
-        {task.status !== "done" && <Button disabled={busy || (!report.trim() && !own?.result)} onClick={() => void act("complete")}>Завершить для всех</Button>}
+      <div className="ppz-row"><Button disabled={busy || dictating || (!report.trim() && !(own?.result && attachments.files.length))} onClick={() => void act("report")}>{busy ? "Сохраняем отчёт…" : own?.result ? "Уточнить мой результат" : "Зафиксировать моё выполнение"}</Button>
+        {task.status !== "done" && <Button disabled={busy || dictating || (!report.trim() && !own?.result)} onClick={() => void act("complete")}>Завершить для всех</Button>}
       </div>
       {task.status === "done" && <p className="ppz-muted">Общая задача уже закрыта. Вы можете отдельно зафиксировать свою выполненную работу.</p>}
     </div>}

@@ -13,6 +13,7 @@ import { PhotoGrid, DualPhotoButton } from "../ui/PhotoUploader";
 import { CreatorLine } from "../ui/CreatorLine";
 import type { Repair, RepairTask } from "../types/client";
 import type { RepairEditor } from "./editor";
+import { ReportText } from "../ui/ReportText";
 
 export const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 
@@ -36,29 +37,45 @@ export function WorkCommentModal({ current, onSave, onClose }: {
   onSave: (comment: string) => Promise<void>;
   onClose: () => void;
 }) {
+  return <Modal title="Отчёт о выполнении" onClose={onClose}><WorkCommentForm current={current} onSave={onSave} onClose={onClose} /></Modal>;
+}
+
+export function WorkCommentForm({ current, onSave, onClose }: {
+  current?: string;
+  onSave: (comment: string) => Promise<void>;
+  onClose: () => void;
+}) {
   const [comment, setComment] = useState(current ?? "");
   const [saving, setSaving] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSave() {
-    setSaving(true);
-    await onSave(comment.trim());
-    onClose();
+    if (saving || dictating) return;
+    setSaving(true); setError("");
+    try { await onSave(comment.trim()); onClose(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Не удалось сохранить отчёт. Текст остался в форме."); }
+    finally { setSaving(false); }
   }
 
   return (
-    <Modal title="Отчёт о выполнении" onClose={onClose}>
+    <>
       <FormGroup label="Что сделано">
-        <Textarea
+        <ReportText
+          label="Отчёт о выполнении задачи"
           placeholder="Заменил компрессор, залил масло, проверил давление..."
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          autoFocus
+          onChange={setComment}
+          onListeningChange={setDictating}
+          disabled={saving}
+          maxLength={Math.max(2000, current?.length ?? 0)}
         />
       </FormGroup>
-      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+      {error && <p className="report-text-error" role="alert">{error}</p>}
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving || dictating}>
         {saving ? "Сохранение..." : "Сохранить"}
       </Button>
-    </Modal>
+    </>
   );
 }
 
