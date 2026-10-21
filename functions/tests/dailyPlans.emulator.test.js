@@ -32,6 +32,28 @@ beforeEach(async () => {
 });
 after(async () => { global.fetch = originalFetch; await admin.app().delete(); });
 
+test("plan author and destination survive edits and self-assignment; personal marks are atomic and idempotent", async () => {
+  await task(); await save([item()]);
+  const created = (await planRef().get()).data();
+  assert.equal(created.createdBy, "manager"); assert.equal(created.createdByName, "Руководитель"); assert.equal(created.staffName, "Владимир");
+  await save([item()], 1); await publish(2);
+  const updated = (await planRef().get()).data();
+  assert.ok(updated.createdAt.isEqual(created.createdAt)); assert.equal(updated.publishedByName, "Руководитель");
+  const publications = (await db.collection("workEvents").where("type", "==", "plan_published").get()).docs.map(d => d.data());
+  assert.equal(publications.length, 1); assert.equal(publications[0].assigneeIds[0], "worker");
+  assert.equal(publications[0].createdByName, "Руководитель"); assert.equal(publications[0].planItems[0].workKey, "service/task-1");
+  const data = { planId, itemId: "task-1", done: true, comment: "" };
+  await Promise.all([api.updateDailyPlanWork.run(request(data, "worker")), api.updateDailyPlanWork.run(request(data, "worker"))]);
+  let events = (await db.collection("workEvents").get()).docs.map(d => d.data()).filter(e => e.type !== "plan_published");
+  assert.equal(events.length, 1); assert.equal(events[0].selfReported, true); assert.equal(events[0].actorId, "worker"); assert.equal(events[0].type, "completed");
+  await api.updateDailyPlanWork.run(request({ ...data, done: false }, "worker"));
+  events = (await db.collection("workEvents").get()).docs.map(d => d.data()).filter(e => e.type !== "plan_published");
+  assert.equal(events.length, 2); assert.ok(events.some(e => e.type === "completion_revoked"));
+  await api.saveDailyPlan.run(request({ ...input(0), staffId: "manager", items: [] }));
+  const self = (await db.doc("dailyPlans/manager_2026-10-13").get()).data();
+  assert.equal(self.createdBy, self.staffId); assert.equal(self.createdByName, "Руководитель");
+});
+
 test("plan photos attach to the original task and employee history exactly once", async () => {
   await task(); await save([item()]); await publish();
   const path = `work-reports/worker/plan/${planId}/task-1/p1.jpg`;

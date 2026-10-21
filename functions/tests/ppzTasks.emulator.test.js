@@ -13,6 +13,21 @@ beforeEach(async () => {
   for (const [id, role] of [["admin", "admin"], ["owner", "owner"], ["manager", "manager"], ["a", "mechanic"], ["b", "mechanic"]]) await db.doc(`staff/${id}`).set({ role, name: id });
 });
 after(() => admin.app().delete());
+
+test("creation attribution and assignment snapshots come from auth and staff, including self-assignment", async () => {
+  await create({ assignees: ["admin", "a"], createdBy: "forged", createdByName: "Подмена", assigneeNames: { a: "Подмена" } });
+  const first = (await db.doc("ppzTasks/shared").get()).data();
+  assert.equal(first.createdBy, "admin"); assert.equal(first.createdByName, "admin");
+  assert.deepEqual(first.assigneeNames, { admin: "admin", a: "a" }); assert.ok(first.createdAt.toMillis() > 0);
+  await db.doc("staff/admin").update({ name: "Новое имя" });
+  await api.run(request("report", "admin", { report: "Выполнил сам", reportRevision: 0, requestId: "self-report" }));
+  await api.run(request("report", "admin", { report: "Выполнил сам", reportRevision: 0, requestId: "self-report" }));
+  const history = (await db.collection("workEvents").get()).docs.map(d => d.data());
+  assert.equal(history.length, 2);
+  assert.ok(history.every(e => e.createdBy === "admin" && e.createdByName === "admin" && e.createdAt.isEqual(first.createdAt)));
+  assert.ok(history.every(e => e.assigneeIds.includes("admin") && e.assigneeNames.a === "a"));
+  assert.equal(history.filter(e => e.type === "completed").length, 1);
+});
 test("only administrators create; all assignees must exist; no deadline is stored", async () => {
   for (const uid of ["a", "manager"]) await assert.rejects(api.run(request("create", uid)), { code: "permission-denied" });
   await assert.rejects(create({ assignees: ["missing"] }), { code: "not-found" });

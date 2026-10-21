@@ -39,8 +39,13 @@ export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
       if (existing) throw new HttpsError("already-exists", "Задача уже существует");
       if (typeof data.title !== "string" || !data.title.trim() || data.title.length > 200 || !Array.isArray(data.assignees) || !data.assignees.length || data.assignees.length > 50) throw new HttpsError("invalid-argument", "Укажите название и исполнителей");
       const assignees = [...new Set<string>(data.assignees.map(safeId))];
-      for (const assignee of assignees) if (!(await tx.get(db.doc(`staff/${assignee}`))).exists) throw new HttpsError("not-found", "Исполнитель не найден");
-      task = { title: data.title.trim(), assignees, status: "open", createdBy: uid, createdAt: stamp() };
+      const assigneeNames: Record<string, string> = {};
+      for (const assignee of assignees) {
+        const person = await tx.get(db.doc(`staff/${assignee}`));
+        if (!person.exists) throw new HttpsError("not-found", "Исполнитель не найден");
+        assigneeNames[assignee] = String(person.data()?.name || "Сотрудник");
+      }
+      task = { title: data.title.trim(), assignees, assigneeNames, status: "open", createdBy: uid, createdByName: name, createdAt: stamp() };
       tx.create(ref, task);
       events.push({ type: "task_created", staffId: uid, selfReported: false, text: "" });
     } else {
@@ -77,6 +82,8 @@ export const savePpzTask = onCall({ region: "europe-west1" }, async request => {
     events.forEach((event, index) => tx.create(db.doc(`workEvents/${auditId("ppz", id, uid, requestId, String(index))}`), {
       ...event, workKey: `ppz/${id}`, sourceKind: "ppz", sourcePath: ref.path, title: task.title,
       actorId: uid, actorName: name, visibleTo: [...new Set<string>([...task.assignees, uid])],
+      createdBy: task.createdBy ?? null, createdByName: task.createdByName ?? null,
+      createdAt: task.createdAt ?? null, assigneeIds: task.assignees, assigneeNames: task.assigneeNames ?? {},
       occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
     }));
     if (events.length) tx.create(receipt, { signature, createdAt: stamp() });

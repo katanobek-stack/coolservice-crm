@@ -162,6 +162,7 @@ export function DailyPlanTab() {
         {staff.map(s => <option key={s.id} value={s.id}>{s.name || s.email || "Сотрудник"}</option>)}</Select>}
     </div>
     <div className={`ppz-day-banner ppz-person--${employeeTone(staffId)}`}><div><span className="ppz-person-dot" aria-hidden="true" /><strong>{staff.find(s => s.id === staffId)?.name || "Мой план"}</strong></div><span>Персональный план на {date} · Владивосток</span></div>
+    {plan && <p className="ppz-muted">Создал план: {plan.createdByName || staff.find(s => s.id === plan.createdBy)?.name || plan.createdBy || "Автор не зафиксирован"} · {plan.createdAt?.toDate().toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok" }) || "Дата не зафиксирована"} · Для: {plan.staffName || staff.find(s => s.id === staffId)?.name || staffId}{plan.createdBy === staffId ? " · назначил себе" : ""}</p>}
     {absence && <p className="ppz-warning">По графику у сотрудника {absence}. Проверьте назначение работ.</p>}
     {error && <p className="ppz-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
