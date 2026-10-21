@@ -1,0 +1,8 @@
+.report-text { display: grid; gap: 8px; min-width: 0; }
+.report-text-hint { color: var(--text2); font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+.report-text-error { color: #b91c1c; background: #fef2f2; padding: 12px; border-radius: 10px; margin: 0; }
+.report-dictation { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 56px; padding: 12px 18px; border: 1px solid #a9c8fa; border-radius: 14px; background: #edf5ff; color: #174b9a; font: inherit; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.report-dictation span { font-size: 24px; }
+.report-dictation.is-listening { background: #fff0ef; border-color: #f2aaa3; color: #a52d25; }
+.report-dictation:disabled { opacity: .55; cursor: not-allowed; }
+.report-dictation:focus-visible { outline: 3px solid #367bf5; outline-offset: 3px; }

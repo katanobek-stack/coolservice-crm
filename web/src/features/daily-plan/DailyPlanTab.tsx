@@ -12,6 +12,7 @@ import "./dailyPlan.css";
 import { PpzTasks } from "./PpzTasks";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
 import { employeeTone } from "./presentation";
+import { ReportText } from "../../shared/ui/ReportText";
 
 interface Candidate { source: PlanSource; title: string }
 const deliveryLabels = { pending: "Telegram: ожидает отправки", sent: "Telegram: доставлено", failed: "Telegram: ошибка отправки", unknown: "Telegram: результат отправки неизвестен" };
@@ -21,12 +22,14 @@ function WorkRow({ item, planId, staffId, own, published }: { item: PlanItem; pl
   const { tasks, clients, intakeRepairs } = useData();
   const task = resolveTask(item.source, tasks, clients, intakeRepairs);
   const [comment, setComment] = useState("");
+  const [dictating, setDictating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const assigned = task?.assignees?.includes(staffId);
   const myDone = task?.doneBy?.includes(staffId) ?? false;
   const attachments = useReportPhotos(`work-reports/${staffId}/plan/${planId}/${item.id}`);
   async function submit(done?: boolean) {
+    if (busy || dictating) return;
     setBusy(true); setError("");
     try { const photos = await attachments.upload(); await updateDailyPlanWork(planId, item.id, done, comment, photos); setComment(""); attachments.reset(); }
     catch (err) { setError(errorText(err)); }
@@ -41,10 +44,10 @@ function WorkRow({ item, planId, staffId, own, published }: { item: PlanItem; pl
     {!task && <p role="alert">Исходная задача удалена или перемещена. Обратитесь к руководителю.</p>}
     {task && !assigned && <p role="alert">Исполнитель изменён. Руководителю нужно обновить план.</p>}
     {own && published && assigned && <div className="ppz-work">
-      <Textarea aria-label={`Комментарий: ${item.title}`} placeholder="Комментарий о работе" value={comment} onChange={e => setComment(e.target.value)} maxLength={1000} disabled={busy}/>
+      <ReportText label={`Комментарий: ${item.title}`} placeholder="Комментарий о работе" value={comment} onChange={setComment} onListeningChange={setDictating} maxLength={1000} disabled={busy}/>
       <ReportPhotoPicker files={attachments.files} onChange={attachments.setFiles} disabled={busy} />
-      <div className="ppz-row"><Button disabled={busy} onClick={() => void submit(!myDone)}>{myDone ? "Вернуть в работу" : "Моя часть выполнена"}</Button>
-        <Button variant="ghost" disabled={busy || (!comment.trim() && !attachments.files.length)} onClick={() => void submit()}>Сохранить комментарий / фото</Button></div>
+      <div className="ppz-row"><Button disabled={busy || dictating} onClick={() => void submit(!myDone)}>{myDone ? "Вернуть в работу" : "Моя часть выполнена"}</Button>
+        <Button variant="ghost" disabled={busy || dictating || (!comment.trim() && !attachments.files.length)} onClick={() => void submit()}>Сохранить комментарий / фото</Button></div>
     </div>}
     {error && <p className="ppz-error" role="alert">{error}</p>}
   </article>;
