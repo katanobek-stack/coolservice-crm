@@ -1,3 +1,5 @@
+export function canAttachPpzPhotos(role?: string): boolean { return role === "admin" || role === "owner"; }
+
 /** Stable, bounded palette; status remains text-labelled, not colour-only. */
 export function employeeTone(id: string): string {
   let hash = 0;

@@ -14,6 +14,57 @@ beforeEach(async () => {
 });
 after(() => admin.app().delete());
 
+test("admin and owner attach task photos without assignment, completion or rewriting author/assignees", async () => {
+  await create();
+  const original = (await db.doc("ppzTasks/shared").get()).data();
+  for (const uid of ["admin", "owner"]) await api.run(request("attach_photos", uid, {
+    requestId: `photo-${uid}`, photos: [photo(uid, `p-${uid}`)], actorId: "a", actorName: "Подмена", status: "done", assignees: [uid],
+  }));
+  const saved = (await db.doc("ppzTasks/shared").get()).data();
+  const { photoAttachments, ...unchanged } = saved;
+  assert.deepEqual(unchanged, original);
+  assert.equal(Object.keys(photoAttachments).length, 2);
+  for (const uid of ["admin", "owner"]) {
+    const batch = Object.values(photoAttachments).find(batch => batch.actorId === uid);
+    assert.equal(batch.actorName, uid); assert.ok(batch.createdAt.toMillis() > 0);
+    assert.deepEqual(batch.photos, [photo(uid, `p-${uid}`)]);
+  }
+  const events = (await db.collection("workEvents").get()).docs.map(d => d.data());
+  assert.equal(events.filter(e => e.type === "completed" || e.type === "task_closed").length, 0);
+  const additions = events.filter(e => e.type === "photo_added");
+  assert.equal(additions.length, 2); assert.ok(additions.every(e => !e.selfReported && e.visibleTo.includes("a") && e.visibleTo.includes(e.actorId)));
+});
+
+test("photo attachment retries, changed request IDs and a closed task preserve all personal reports", async () => {
+  await create();
+  await api.run(request("complete", "a", { report: "Выполнил", reportRevision: 0 }));
+  const original = (await db.doc("ppzTasks/shared").get()).data();
+  const data = { requestId: "admin-attachment", photos: [photo("admin", "p-admin")] };
+  await Promise.all([api.run(request("attach_photos", "admin", data)), api.run(request("attach_photos", "admin", data))]);
+  await api.run(request("attach_photos", "admin", { ...data, requestId: "new-request-same-photos" }));
+  await assert.rejects(api.run(request("attach_photos", "admin", { ...data, photos: [photo("admin", "other")] })), { code: "already-exists" });
+  const { photoAttachments, ...saved } = (await db.doc("ppzTasks/shared").get()).data();
+  assert.deepEqual(saved, original); assert.equal(Object.keys(photoAttachments).length, 1);
+  assert.equal((await db.collection("workEvents").where("type", "==", "photo_added").get()).size, 1);
+  assert.equal((await db.collection("workEvents").where("type", "==", "completed").get()).size, 1);
+});
+
+test("task-photo action never grants manager/mechanic new rights and rejects foreign paths or empty uploads", async () => {
+  await create();
+  for (const uid of ["manager", "a", "b"]) await assert.rejects(api.run(request("attach_photos", uid, { photos: [photo(uid)] })), { code: "permission-denied" });
+  await assert.rejects(api.run({ data: { action: "attach_photos", id: "shared" } }), { code: "unauthenticated" });
+  await assert.rejects(api.run(request("attach_photos", "admin", { photos: [photo("a")] })), { code: "invalid-argument" });
+  await assert.rejects(api.run(request("attach_photos", "admin", { photos: [] })), { code: "invalid-argument" });
+  assert.equal((await db.doc("ppzTasks/shared").get()).data().photoAttachments, undefined);
+});
+
+test("shared task photos keep the existing 60-photo bound across all batches", async () => {
+  await create();
+  await db.doc("ppzTasks/shared").update({ photoAttachments: { seed: { actorId: "admin", actorName: "admin", createdAt: admin.firestore.Timestamp.now(), photos: Array.from({ length: 60 }, (_, i) => photo("admin", `seed-${i}`)) } } });
+  await assert.rejects(api.run(request("attach_photos", "admin", { photos: [photo("admin", "extra")] })), { code: "resource-exhausted" });
+  assert.equal((await db.collection("workEvents").where("type", "==", "photo_added").get()).size, 0);
+});
+
 test("creation attribution and assignment snapshots come from auth and staff, including self-assignment", async () => {
   await create({ assignees: ["admin", "a"], createdBy: "forged", createdByName: "Подмена", assigneeNames: { a: "Подмена" } });
   const first = (await db.doc("ppzTasks/shared").get()).data();

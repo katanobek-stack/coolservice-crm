@@ -9,6 +9,7 @@ import { ReportText } from "../src/shared/ui/ReportText";
 import { appendDictation, startDictation, type Recognition } from "../src/shared/utils/reportDictation";
 import { WorkCommentForm } from "../src/shared/repair-work/RepairTaskWork";
 import { Timestamp } from "firebase/firestore";
+import { canAttachPpzPhotos } from "../src/features/daily-plan/presentation";
 
 class FakeRecognition implements Recognition {
   lang = ""; continuous = false; interimResults = true;
@@ -110,6 +111,28 @@ test("PPZ card shows original creator, time, assigned people and self-assignment
   assert.match(html, /Автор при создании/); assert.match(html, /05\.10\.2026/); assert.match(html, /Исполнитель A, Исполнитель B/); assert.match(html, /автор назначил задачу в том числе себе/);
   const old = renderToStaticMarkup(createElement(TaskCard, { task, uid: "b", name }));
   assert.match(old, /Автор не зафиксирован/); assert.match(old, /Дата создания не зафиксирована/);
+});
+test("unassigned admin/owner have a separate task-photo control, without a personal completion button", () => {
+  for (const role of ["admin", "owner"]) {
+    assert.equal(canAttachPpzPhotos(role), true);
+    const html = renderToStaticMarkup(createElement(TaskCard, { task, uid: role, name, canAttachPhotos: canAttachPpzPhotos(role) }));
+    assert.match(html, /Сохранить фото задачи/); assert.match(html, /Фото задачи из галереи/); assert.match(html, /не засчитывает выполненную работу/);
+    assert.doesNotMatch(html, /Зафиксировать моё выполнение/); assert.doesNotMatch(html, /Надиктовать отчёт/);
+  }
+  for (const role of ["mechanic", "manager", undefined]) assert.equal(canAttachPpzPhotos(role), false);
+});
+test("assignees see shared photos, author and time, including on a completed PPZ", () => {
+  const shared = { ...task, status: "done" as const, photoAttachments: { batch: { actorId: "admin", actorName: "Администратор при загрузке", createdAt: Timestamp.fromDate(new Date("2026-10-22T00:00:00Z")), photos: [photo] } } };
+  const html = renderToStaticMarkup(createElement(TaskCard, { task: shared, uid: "b", name }));
+  assert.match(html, /Администратор при загрузке/); assert.match(html, /22\.10\.2026/); assert.match(html, /Фото задачи · 1/);
+  assert.doesNotMatch(html, /Сохранить фото задачи/); assert.match(html, /Фото работы из галереи/);
+});
+test("published plan administration uses a photo-only endpoint and keeps role gates", () => {
+  const view = readFileSync(new URL("../src/features/daily-plan/DailyPlanTab.tsx", import.meta.url), "utf8");
+  const api = readFileSync(new URL("../src/shared/firebase/dailyPlans.ts", import.meta.url), "utf8");
+  assert.match(view, /if \(!canAttachPpzPhotos\(myProfile\?\.role\)\) return null/);
+  assert.match(view, /Фото задач опубликованного ППЗ/); assert.match(view, /<PlanTaskPhotos/);
+  assert.match(api, /comment: "", photos, attachPhotosOnly: true/);
 });
 test("legacy evidence can be absent and busy picker is disabled", () => {
   assert.equal(renderToStaticMarkup(createElement(PhotoEvidence, {})), "");

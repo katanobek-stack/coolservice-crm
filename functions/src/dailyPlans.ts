@@ -24,7 +24,8 @@ async function actor(request: CallableRequest, managerOnly = true) {
   if (!profile) throw new HttpsError("permission-denied", "Профиль сотрудника не найден");
   const manager = request.auth.token.role === "owner" || ["owner", "admin", "manager"].includes(profile.role);
   if (managerOnly && !manager) throw new HttpsError("permission-denied", "План составляет руководитель");
-  return { uid: request.auth.uid, name: String(profile.name || "Сотрудник"), manager };
+  const administrator = request.auth.token.role === "owner" || ["owner", "admin"].includes(profile.role);
+  return { uid: request.auth.uid, name: String(profile.name || "Сотрудник"), manager, administrator };
 }
 function input(request: CallableRequest) {
   const data = request.data;
@@ -137,22 +138,26 @@ export const publishDailyPlan = onCall({ region: REGION, secrets }, async reques
 export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
   const by = await actor(request, false);
   const data = request.data;
+  const photoOnly = data?.attachPhotosOnly === true;
+  if (data?.attachPhotosOnly !== undefined && typeof data.attachPhotosOnly !== "boolean") throw new HttpsError("invalid-argument", "Некорректное действие с фото");
+  if (photoOnly && !by.administrator) throw new HttpsError("permission-denied", "Фото чужого плана добавляет администратор или владелец");
   if (!data || typeof data !== "object" || (data.done !== undefined && typeof data.done !== "boolean") || typeof data.comment !== "string" || data.comment.length > 1000
     || (data.done === undefined && !data.comment.trim() && !data.photos?.length)) {
     throw new HttpsError("invalid-argument", "Некорректная отметка выполнения");
   }
   const planId = safeId(data.planId), itemId = safeId(data.itemId);
   const photos = parseWorkPhotos(data.photos, `work-reports/${by.uid}/plan/${planId}/${itemId}`, getApp().options.projectId || process.env.GCLOUD_PROJECT || "");
+  if (photoOnly && (!photos.length || data.done !== undefined || data.comment.trim())) throw new HttpsError("invalid-argument", "Это действие добавляет только фото, без изменения выполнения или отчёта");
   await db().runTransaction(async tx => {
     const ref = db().doc(`dailyPlans/${planId}`);
     const plan = (await tx.get(ref)).data();
-    if (plan?.staffId !== by.uid || plan.status !== "published") throw new HttpsError("permission-denied", "Можно отмечать только свой опубликованный план");
+    if (!plan || plan.status !== "published" || (!photoOnly && plan.staffId !== by.uid)) throw new HttpsError("permission-denied", "Можно отмечать только свой опубликованный план");
     const item = (await tx.get(ref.collection("items").doc(itemId))).data() as PlanItem | undefined;
     if (!item) throw new HttpsError("not-found", "Пункт плана не найден");
     const receipt = photos.length ? ref.collection("photoRequests").doc(auditId(by.uid, itemId, String(data.done), data.comment, ...photos.map(p => p.path))) : null;
     if (receipt && (await tx.get(receipt)).exists) return;
     const source = await readSource(tx, item.source);
-    assertAssigned(source.task, by.uid);
+    assertAssigned(source.task, photoOnly ? plan.staffId : by.uid);
     if (source.repair?.closedByManager || source.repair?.status === "cancelled") throw new HttpsError("failed-precondition", "Заявка уже закрыта");
     const task = source.task!;
     const existingPhotos = task.photos ?? [];
@@ -177,7 +182,7 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
       tx.create(db().doc(`workEvents/${auditId("plan-photos", workKey, by.uid, ...added.map(p => p.path))}`), {
         type: "photo_added", workKey, sourceKind: item.source.kind, sourcePath: source.ref.path, title: item.title,
         staffId: by.uid, actorId: by.uid, actorName: by.name, visibleTo: [...new Set([...task.assignees, by.uid])],
-        text: data.comment.trim(), photos: added, selfReported: true, occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
+        text: photoOnly ? "Фото задачи добавлены руководителем" : data.comment.trim(), photos: added, selfReported: !photoOnly, occurredAt: stamp(), recordedAt: stamp(), evidence: "authenticated_action",
       });
     }
     if (receipt) tx.create(receipt, { createdAt: stamp(), staffId: by.uid });

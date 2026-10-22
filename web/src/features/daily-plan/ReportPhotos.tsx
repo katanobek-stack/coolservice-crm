@@ -17,7 +17,7 @@ export function useReportPhotos(folder: string) {
   };
 }
 
-export function ReportPhotoPicker({ files, onChange, disabled }: { files: File[]; onChange: (files: File[]) => void; disabled: boolean }) {
+export function ReportPhotoPicker({ files, onChange, disabled, purpose = "report" }: { files: File[]; onChange: (files: File[]) => void; disabled: boolean; purpose?: "report" | "task" }) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -32,11 +32,11 @@ export function ReportPhotoPicker({ files, onChange, disabled }: { files: File[]
     setError(""); onChange([...files, ...added]);
   }
   return <fieldset disabled={disabled} className="ppz-photo-picker">
-    <legend>Фото выполненной работы · до 6</legend>
+    <legend>{purpose === "task" ? "Фото задачи" : "Фото выполненной работы"} · до 6</legend>
     <div className="ppz-row">
-      <label className="ppz-photo-select">📷 Снять фото<input aria-label="Снять фото работы" type="file" accept="image/*" capture="environment" onChange={e => { select(e.target.files); e.target.value = ""; }} /></label>
-      <label className="ppz-photo-select">▧ Из галереи<input aria-label="Фото работы из галереи" type="file" accept="image/*" multiple onChange={e => { select(e.target.files); e.target.value = ""; }} /></label>
-      <span className="ppz-muted">{files.length}/6 · сохранятся вместе с отчётом</span>
+      <label className="ppz-photo-select">📷 Снять фото<input aria-label={purpose === "task" ? "Снять фото задачи" : "Снять фото работы"} type="file" accept="image/*" capture="environment" onChange={e => { select(e.target.files); e.target.value = ""; }} /></label>
+      <label className="ppz-photo-select">▧ Из галереи<input aria-label={purpose === "task" ? "Фото задачи из галереи" : "Фото работы из галереи"} type="file" accept="image/*" multiple onChange={e => { select(e.target.files); e.target.value = ""; }} /></label>
+      <span className="ppz-muted">{files.length}/6 · {purpose === "task" ? "сохранятся к задаче без отметки выполнения" : "сохранятся вместе с отчётом"}</span>
     </div>
     <div className="ppz-photo-grid">{files.map((file, index) => <div key={`${file.name}-${index}`}>
       {previews[index] && <img src={previews[index]} alt={`Выбранное фото ${index + 1}`} />}
@@ -46,10 +46,10 @@ export function ReportPhotoPicker({ files, onChange, disabled }: { files: File[]
   </fieldset>;
 }
 
-export function PhotoEvidence({ photos = [] }: { photos?: PhotoData[] }) {
+export function PhotoEvidence({ photos = [], label = "Фотоотчёт" }: { photos?: PhotoData[]; label?: string }) {
   const [index, setIndex] = useState<number | null>(null);
   if (!photos.length) return null;
-  return <div className="ppz-evidence"><span className="ppz-muted">Фотоотчёт · {photos.length}</span>
+  return <div className="ppz-evidence"><span className="ppz-muted">{label} · {photos.length}</span>
     <div className="ppz-photo-grid">{photos.map((photo, i) => <button type="button" key={photo.path || photo.id} aria-label={`Открыть фото работы ${i + 1}`} onClick={() => setIndex(i)}><img src={photo.url || photo.data} alt={`Фото выполненной работы ${i + 1}`} loading="lazy" /></button>)}</div>
     {index !== null && <PhotoLightbox photos={photos} index={index} onIndexChange={setIndex} onClose={() => setIndex(null)} />}
   </div>;
