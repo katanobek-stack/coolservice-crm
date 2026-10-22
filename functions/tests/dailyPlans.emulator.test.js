@@ -32,6 +32,38 @@ beforeEach(async () => {
 });
 after(async () => { global.fetch = originalFetch; await admin.app().delete(); });
 
+test("admin/owner can add only photos to another worker's published plan, not claim their work", async () => {
+  await task(); await save([item()]); await publish();
+  const original = (await db.doc("servicetasks/task-1").get()).data();
+  const photoFor = uid => { const path = `work-reports/${uid}/plan/${planId}/task-1/p-${uid}.jpg`; return { id: `p-${uid}`, path, url: `https://firebasestorage.googleapis.com/v0/b/${projectId}.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media&token=demo` }; };
+  for (const uid of ["admin", "owner"]) {
+    await db.doc(`staff/${uid}`).set({ role: uid, name: uid });
+    const data = { planId, itemId: "task-1", comment: "", photos: [photoFor(uid)], attachPhotosOnly: true };
+    await Promise.all([api.updateDailyPlanWork.run(request(data, uid)), api.updateDailyPlanWork.run(request(data, uid))]);
+    await assert.rejects(api.updateDailyPlanWork.run(request({ ...data, done: true }, uid)), { code: "invalid-argument" });
+    await assert.rejects(api.updateDailyPlanWork.run(request({ ...data, comment: "Чужой результат" }, uid)), { code: "invalid-argument" });
+    await assert.rejects(api.updateDailyPlanWork.run(request({ ...data, attachPhotosOnly: false }, uid)), { code: "permission-denied" });
+  }
+  const { photos, ...unchanged } = (await db.doc("servicetasks/task-1").get()).data();
+  assert.deepEqual(unchanged, original); assert.equal(photos.length, 2);
+  const events = (await db.collection("workEvents").where("type", "==", "photo_added").get()).docs.map(d => d.data());
+  assert.equal(events.length, 2); assert.ok(events.every(e => !e.selfReported && e.actorId !== "worker" && e.visibleTo.includes("worker")));
+  assert.equal((await db.collection("workEvents").where("type", "==", "completed").get()).size, 0);
+  for (const uid of ["manager", "worker", "other"]) await assert.rejects(api.updateDailyPlanWork.run(request({ planId, itemId: "task-1", comment: "", photos: [photoFor(uid)], attachPhotosOnly: true }, uid)), { code: "permission-denied" });
+});
+
+test("administrator plan-photo action still requires a published plan and an unchanged assignee", async () => {
+  await db.doc("staff/admin").set({ role: "admin", name: "Администратор" });
+  await task(); await save([item()]);
+  const path = `work-reports/admin/plan/${planId}/task-1/p.jpg`;
+  const photo = { id: "p", path, url: `https://firebasestorage.googleapis.com/v0/b/${projectId}.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media&token=demo` };
+  const data = { planId, itemId: "task-1", comment: "", photos: [photo], attachPhotosOnly: true };
+  await assert.rejects(api.updateDailyPlanWork.run(request(data, "admin")), { code: "permission-denied" });
+  await publish(); await db.doc("servicetasks/task-1").update({ assignees: ["other"] });
+  await assert.rejects(api.updateDailyPlanWork.run(request(data, "admin")), { code: "failed-precondition" });
+  assert.equal((await db.collection("workEvents").where("type", "==", "photo_added").get()).size, 0);
+});
+
 test("plan author and destination survive edits and self-assignment; personal marks are atomic and idempotent", async () => {
   await task(); await save([item()]);
   const created = (await planRef().get()).data();

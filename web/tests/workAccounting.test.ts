@@ -115,3 +115,10 @@ test("published daily plan snapshots survive revisions and do not count assignme
   const [row] = monthlyWorkSummary(revisions, [], [], ["a"], range);
   assert.equal(row.plansPublished, 2); assert.equal(row.plannedTasks, 1); assert.equal(row.personal, 0); assert.equal(row.ppzCompleted, 0);
 });
+test("administrator's shared photos add photo history, never completions or credit for assignees", () => {
+  const photo = { id: "p", path: "work-reports/admin/ppz/shared/p.jpg", url: "https://example.org/demo.jpg" };
+  const additions = [event("1", "photo_added", { staffId: "admin", actorId: "admin", selfReported: false, photos: [photo] })];
+  const [admin, worker] = summarizeWork(additions, ["admin", "a"]);
+  assert.equal(admin.photos, 1); assert.equal(admin.personal, 0); assert.equal(admin.ppzCompleted, 0); assert.equal(admin.closed, 0);
+  assert.equal(worker.personal, 0); assert.equal(worker.photos, 0);
+});

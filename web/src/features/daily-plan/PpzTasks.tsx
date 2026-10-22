@@ -10,7 +10,7 @@ import { ReportText } from "../../shared/ui/ReportText";
 import { WorkAccountingPanel } from "./WorkAccountingPanel";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
 import type { PhotoData } from "../../shared/utils/photos";
-import { employeeTone, newestPpzTasks } from "./presentation";
+import { canAttachPpzPhotos, employeeTone, newestPpzTasks } from "./presentation";
 
 export interface PpzTask {
   id: string; title: string; assignees: string[]; status: "open" | "in_progress" | "done";
@@ -19,24 +19,28 @@ export interface PpzTask {
   createdBy?: string; createdByName?: string; assigneeNames?: Record<string, string>;
   completedByName?: string; completedAt?: Timestamp; startedBy?: string;
   participants?: Record<string, { name: string; startedAt?: Timestamp; result?: string; photos?: PhotoData[]; reportedAt?: Timestamp; updatedAt?: Timestamp; revision: number }>;
+  photoAttachments?: Record<string, { actorId: string; actorName: string; createdAt?: Timestamp; photos: PhotoData[] }>;
 }
-export function TaskCard({ task, uid, name }: { task: PpzTask; uid: string; name: (uid: string) => string }) {
+export function TaskCard({ task, uid, name, canAttachPhotos = false }: { task: PpzTask; uid: string; name: (uid: string) => string; canAttachPhotos?: boolean }) {
   const [report, setReport] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [dictating, setDictating] = useState(false);
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const own = task.participants?.[uid];
   const attachments = useReportPhotos(`work-reports/${uid}/ppz/${task.id}`);
+  const taskAttachments = useReportPhotos(`work-reports/${uid}/ppz/${task.id}`);
   const time = (t?: Timestamp) => t?.toDate().toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok" }) ?? "";
-  async function act(action: "start" | "report" | "complete") {
+  async function act(action: "start" | "report" | "complete" | "attach_photos") {
     if (busy || dictating) return;
     setBusy(true); setError("");
     try {
-      const photos = action === "start" ? [] : await attachments.upload();
-      const payload = { action, id: task.id, ...(action === "start" ? {} : { report: report.trim(), reportRevision: own?.revision ?? 0, ...(photos.length ? { photos } : {}) }) };
+      const photos = action === "start" ? [] : await (action === "attach_photos" ? taskAttachments : attachments).upload();
+      const payload = { action, id: task.id, ...(action === "start" ? {} : action === "attach_photos" ? { photos } : { report: report.trim(), reportRevision: own?.revision ?? 0, ...(photos.length ? { photos } : {}) }) };
       const signature = JSON.stringify(payload);
       if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
       await httpsCallable(getFirebaseFunctions(), "savePpzTask")({ ...payload, requestId: pending.current.id });
-      pending.current = null; if (action !== "start") { setReport(""); attachments.reset(); }
+      pending.current = null;
+      if (action === "attach_photos") taskAttachments.reset();
+      else if (action !== "start") { setReport(""); attachments.reset(); }
     } catch (err) { setError(err instanceof Error ? err.message : "Не удалось сохранить выполнение"); }
     finally { setBusy(false); }
   }
@@ -47,6 +51,16 @@ export function TaskCard({ task, uid, name }: { task: PpzTask; uid: string; name
     <p className="ppz-muted">Назначено: {task.assignees.map(id => task.assigneeNames?.[id] || name(id)).join(", ")}{task.createdBy && task.assignees.includes(task.createdBy) ? " · автор назначил задачу в том числе себе" : ""}</p>
     <div className="ppz-people">{task.assignees.map(id => <span key={id} className={`ppz-person ppz-person--${employeeTone(id)}`}><span className="ppz-person-dot" aria-hidden="true" />{name(id)}</span>)}</div>
     {task.status === "done" && <p>Закрыл: {task.completedByName} · {time(task.completedAt)} (Владивосток)</p>}
+    {Object.entries(task.photoAttachments ?? {}).sort(([a, left], [b, right]) => (left.createdAt?.toMillis() ?? 0) - (right.createdAt?.toMillis() ?? 0) || a.localeCompare(b)).map(([id, entry]) => <div className="ppz-card" key={id}>
+      <p className="ppz-muted">Добавил фото: {entry.actorName || name(entry.actorId)} · {time(entry.createdAt) || "Время не зафиксировано"} (Владивосток)</p>
+      <PhotoEvidence photos={entry.photos} label="Фото задачи" />
+    </div>)}
+    {canAttachPhotos && <div className="ppz-work">
+      <strong>Фото задачи · администратор / владелец</strong>
+      <p className="ppz-muted">Можно добавить фото до, во время или после выполнения. Это не меняет статус и не засчитывает выполненную работу.</p>
+      <ReportPhotoPicker files={taskAttachments.files} onChange={taskAttachments.setFiles} disabled={busy || dictating} purpose="task" />
+      <Button disabled={busy || dictating || !taskAttachments.files.length} onClick={() => void act("attach_photos")}>{busy ? "Сохраняем…" : "Сохранить фото задачи"}</Button>
+    </div>}
     {task.assignees.map(id => {
       const participant = task.participants?.[id];
       return <div key={id} className={`ppz-participant ppz-person--${employeeTone(id)} ${participant?.result ? "is-reported" : participant?.startedAt ? "is-working" : "is-waiting"}`}><div className="ppz-row"><strong><span className="ppz-person-dot" aria-hidden="true" />{name(id)}</strong><span className="ppz-muted">{participant?.result ? "Личное выполнение отмечено" : participant?.startedAt ? "Выполняет" : "Ещё не приступил"}</span></div>
@@ -116,6 +130,6 @@ export function PpzTasks() {
     </fieldset>}
     {error && <p role="alert">{error}</p>}
     {loading ? <p>Загружаем задачи…</p> : !visible.length && <p>Задач нет.</p>}
-    {visible.map(task => <TaskCard key={task.id} task={task} uid={uid} name={name}/>)}
+    {visible.map(task => <TaskCard key={task.id} task={task} uid={uid} name={name} canAttachPhotos={canAttachPpzPhotos(myProfile?.role)}/>)}
   </section>;
 }

@@ -3,7 +3,7 @@ import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from "fire
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import { getFirebaseDb } from "../../shared/firebase/app";
-import { saveDailyPlan, publishDailyPlan, updateDailyPlanWork, retryDailyPlanNotification } from "../../shared/firebase/dailyPlans";
+import { saveDailyPlan, publishDailyPlan, updateDailyPlanWork, retryDailyPlanNotification, attachDailyPlanPhotos } from "../../shared/firebase/dailyPlans";
 import type { DailyPlan, PlanItem, PlanSource } from "../../shared/types/dailyPlan";
 import { Button } from "../../shared/ui/Button";
 import { Input, Select, Textarea } from "../../shared/ui/Input";
@@ -11,12 +11,31 @@ import { resolveTask, sourceKey, vladivostokDate, workDone } from "./logic";
 import "./dailyPlan.css";
 import { PpzTasks } from "./PpzTasks";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
-import { employeeTone } from "./presentation";
+import { canAttachPpzPhotos, employeeTone } from "./presentation";
 import { ReportText } from "../../shared/ui/ReportText";
 
 interface Candidate { source: PlanSource; title: string }
 const deliveryLabels = { pending: "Telegram: ожидает отправки", sent: "Telegram: доставлено", failed: "Telegram: ошибка отправки", unknown: "Telegram: результат отправки неизвестен" };
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось выполнить действие";
+
+export function PlanTaskPhotos({ item, planId }: { item: PlanItem; planId: string }) {
+  const { myProfile } = useAuth();
+  const { tasks, clients, intakeRepairs } = useData();
+  const task = resolveTask(item.source, tasks, clients, intakeRepairs);
+  const attachments = useReportPhotos(`work-reports/${myProfile?.id ?? ""}/plan/${planId}/${item.id}`);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  if (!canAttachPpzPhotos(myProfile?.role)) return null;
+  async function save() {
+    if (busy || !attachments.files.length) return;
+    setBusy(true); setError("");
+    try { await attachDailyPlanPhotos(planId, item.id, await attachments.upload()); attachments.reset(); }
+    catch (err) { setError(errorText(err)); } finally { setBusy(false); }
+  }
+  return <article className="ppz-card"><strong>{item.title}</strong><PhotoEvidence photos={task?.photos} label="Фото задачи" />
+    {task ? <><ReportPhotoPicker files={attachments.files} onChange={attachments.setFiles} disabled={busy} purpose="task" /><Button disabled={busy || !attachments.files.length} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить фото задачи"}</Button></> : <p>Исходная задача недоступна или перемещена.</p>}
+    {error && <p className="ppz-error" role="alert">{error}</p>}
+  </article>;
+}
 
 function WorkRow({ item, planId, staffId, own, published }: { item: PlanItem; planId: string; staffId: string; own: boolean; published: boolean }) {
   const { tasks, clients, intakeRepairs } = useData();
@@ -193,6 +212,7 @@ export function DailyPlanTab() {
           <Button disabled={busy || conflict || (!dirty && !plan?.hasDraft && !!plan)} onClick={() => void run(publish)}>Опубликовать и отправить в Telegram</Button>
           <Button variant="ghost" disabled={busy} onClick={() => { if (!dirty || window.confirm("Загрузить актуальный план и отменить несохранённые изменения?")) void run(reload); }}>Загрузить актуальный план</Button></div>
         <p className="ppz-muted">Убрать пункт из плана не удаляет исходную задачу. Новая сервисная работа создаётся при сохранении черновика. Чтобы перенести работу, выберите другой день и добавьте её из существующих задач.</p>
+        {plan?.status === "published" && canAttachPpzPhotos(myProfile?.role) && <section className="ppz-card"><h3>Фото задач опубликованного ППЗ</h3><p className="ppz-muted">Фото добавляются к исходным работам, без отметки выполнения. Неопубликованный черновик и закрытые заявки этим действием не меняются.</p>{published.map(item => <PlanTaskPhotos key={`${planId}:${item.id}`} item={item} planId={planId}/>)}</section>}
       </> : <>
         {plan?.status !== "published" ? <p>План пока не опубликован. Обратитесь к руководителю.</p> : published.length === 0 ? <p>Назначенных задач в плане нет.</p> : published.map(item => <WorkRow key={`${planId}:${item.id}`} item={item} planId={planId} staffId={staffId} own={staffId === uid} published/>) }
         {otherWork.length > 0 && <section className="ppz-card"><h3>Другие назначенные работы</h3><p className="ppz-muted">Эти работы доступны в разделе «Заявки». Порядок выполнения можно уточнить у руководителя.</p>{otherWork.map(c => <p key={sourceKey(c.source)}>{c.title}</p>)}</section>}

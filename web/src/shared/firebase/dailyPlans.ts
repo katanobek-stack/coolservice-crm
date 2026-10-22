@@ -12,6 +12,9 @@ export async function publishDailyPlan(staffId: string, date: string, revision: 
 export async function updateDailyPlanWork(planId: string, itemId: string, done: boolean | undefined, comment: string, photos: PhotoData[] = []) {
   await httpsCallable(getFirebaseFunctions(), "updateDailyPlanWork")({ planId, itemId, ...(done === undefined ? {} : { done }), comment, ...(photos.length ? { photos } : {}) });
 }
+export async function attachDailyPlanPhotos(planId: string, itemId: string, photos: PhotoData[]) {
+  await httpsCallable(getFirebaseFunctions(), "updateDailyPlanWork")({ planId, itemId, comment: "", photos, attachPhotosOnly: true });
+}
 export async function retryDailyPlanNotification(planId: string) {
   await httpsCallable(getFirebaseFunctions(), "retryDailyPlanNotification")({ planId });
 }
