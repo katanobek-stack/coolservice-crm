@@ -23,3 +23,13 @@ Use the CRM Manrope font and existing palette: base #F5F7FA, white #FFFFFF, ink 
 
 ## Acceptance
 Verify combined search/status/employee filtering, counts, legacy records, no-match versus empty, stable create retries, changed-input IDs, permission-gated report/photo UI, shared closure protection and the existing PPZ/photo tests. Run web typecheck, unit tests and build; broader tests require emulator setup. Inspect rendered desktop and wide mobile preview; label demonstration data. Do not send production notifications or create live tasks for testing.
+
+## Verification record
+
+- Web TypeScript checks and production build passed (existing bundle-size warning remains).
+- Full web npm test passed in Firestore emulator: 212 tests, no failures.
+- Server daily-plan logic: 12 tests passed; shared-task/daily-plan integration: 31 passed in emulator. No backend or rules changes.
+- Independent fresh-context code review found no concrete regressions in retry IDs, legacy records, role gates, report state retention and daily-plan publication.
+- Browser on the actual shared-task UI component with synthetic data: combined search, native card disclosure, report draft retention after filtering, cancelled shared close, failed assignment retaining input, successful retry with one task, desktop and 480px mobile layout checked. No 320/390 checks.
+- Production login page loaded, but authenticated production task creation/completion was not exercised; no test tasks or Telegram messages were written to production.
+- Temporary noindex QA pages were removed after verification.
