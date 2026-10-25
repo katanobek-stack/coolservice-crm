@@ -32,6 +32,11 @@ import { Modal } from "../../shared/ui/Modal";
 import type { Tab } from "../../app/AppShell";
 import type { Repair, Vehicle } from "../../shared/types/client";
 import { WorkAccountingPanel } from "../daily-plan/WorkAccountingPanel";
+import {DashboardOverview} from "./DashboardOverview";
+import {collectDashboardRepairs,dashboardStatusLabel,dashboardPhase,dashboardDay,dashboardNumber,dashboardMonthRevenue,dashboardFinancialAccess,type DashboardRepair} from "./dashboardLogic";
+import {sourcesReady} from "../../shared/context/dataReadiness";
+import {shiftMonth} from "../../shared/utils/finance";
+import "./dashboard.css";
 
 const isClosedThisMonth = isRepairClosedInMonth;
 
@@ -65,54 +70,6 @@ const APPOINTMENT_TYPE_LABELS: Record<string, string> = {
 function freonMonthLabel(mk: string): string {
   const [y, m] = mk.split("-");
   return `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${y}`;
-}
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, icon, accent, color, delta, deltaUp }: {
-  label:    string;
-  value:    string | number;
-  icon:     string;
-  accent:   string;
-  color:    string;
-  delta?:   string;
-  deltaUp?: boolean;
-}) {
-  return (
-    <div className={`kpi-card ${accent}`}>
-      <i className={`ti ${icon} kpi-icon`} />
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value" style={{ color }}>{value}</div>
-      {delta && (
-        <div className={`kpi-delta ${deltaUp === false ? "down" : deltaUp ? "up" : "muted"}`}>
-          <i className={`ti ${deltaUp === false ? "ti-trending-down" : deltaUp ? "ti-trending-up" : "ti-minus"}`} />
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Quick Actions ────────────────────────────────────────────────────────────
-
-function QuickAction({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: "var(--bg2)", border: "1px solid var(--border)",
-        borderRadius: 12, padding: "14px 8px", cursor: "pointer",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-        transition: "all 0.18s", width: "100%",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = ""; }}
-    >
-      <i className={`ti ${icon}`} style={{ fontSize: 20, color: "var(--accent2)" }} />
-      <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text2)" }}>{label}</span>
-    </button>
-  );
 }
 
 // ─── Revenue chart (CSS bars) ─────────────────────────────────────────────────
@@ -177,9 +134,10 @@ function RevenueChart({ monthData, onBarClick, hideAmounts }: {
           const isLast = i === n - 1;
           const isHov  = hovered === i;
           return (
-            <div
-              key={i}
-              style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%", cursor: onBarClick ? "pointer" : "default" }}
+            <button type="button" aria-label={`${m.label}: выручка ${fmtMoney(m.rev)}, расходы ${fmtMoney(m.exp)}, результат ${fmtMoney(profit)}. Открыть месяц`}
+              key={m.mk}
+              style={{ border:0,background:"transparent",padding:0,flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%", cursor: onBarClick ? "pointer" : "default" }}
+              onFocus={() => setHovered(i)} onBlur={() => setHovered(null)}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
               onClick={() => onBarClick?.(m.mk)}
@@ -216,7 +174,7 @@ function RevenueChart({ monthData, onBarClick, hideAmounts }: {
                   transition: "height 0.4s ease",
                 }} />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -349,7 +307,7 @@ function MechanicRow({ name, monthlyCars, monthLabel, idx, closed, active, crown
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: monthlyCars > 0 ? "var(--text)" : "var(--text3)" }}>
-          🔧 {monthlyCars} машин
+          {monthlyCars} завершённых заявок с назначением
         </div>
         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{monthLabel}</div>
         {(closed > 0 || active > 0) && (
@@ -383,11 +341,11 @@ function RepairDetailModal({ repair, isAdmin, onClose }: {
   const names    = assigneeNames(repair);
   const freonType = repair.freonType  || (repair.tasks ?? []).find((t) => t.freonTask && t.freonType)?.freonType  || "";
   const freonAmt  = repair.freonAmount || (repair.tasks ?? []).find((t) => t.freonTask && t.freonKg)?.freonKg      || "";
-  const cost      = parseFloat(repair.cost ?? "0") || 0;
+  const cost      = dashboardNumber(repair.cost);
   const brand     = repair.vehicle?.brand ?? repair.vehicle?.model;
-  const st        = repairStatus(repair);
-  const statusLabel = st === "done" ? "Закрыто" : st === "cancelled" ? "Отказ" : "В работе";
-  const statusColor = st === "done" ? "#16a34a" : st === "cancelled" ? "var(--text3)" : "var(--accent2)";
+  const st        = dashboardPhase(repair);
+  const statusLabel = dashboardStatusLabel(repair);
+  const statusColor = st === "closed" || st === "ready" ? "#16a34a" : st === "cancelled" ? "var(--text3)" : "var(--accent2)";
 
   return (
     <Modal title={repair.clientName} onClose={onClose}>
@@ -521,7 +479,7 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
     .filter((r) => repairFinancialMonth(r) === mk)
     .forEach((r) => {
       const prev = clientRevMap.get(r.clientId) ?? { name: r.clientName, amount: 0 };
-      clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (parseFloat(r.cost ?? "0") || 0) });
+      clientRevMap.set(r.clientId, { name: r.clientName, amount: prev.amount + (dashboardNumber(r.cost)) });
     });
   const clientRevList = Array.from(clientRevMap.values()).filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
 
@@ -531,9 +489,9 @@ function MonthDetailModal({ mk, doneRepairs, rawFinance, expenses, rentalIncome,
   const totalRevenue  = clientRevList.reduce((s, c) => s + c.amount, 0) + monthRental;
 
   // Expenses
-  const electricity = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
-  const purchases   = (fin.purchases ?? []).filter((p) => p.date?.slice(0, 7) === mk).reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
-  const commission  = expenses.filter((e) => e.category === "commission" && e.month === mk).reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
+  const electricity = dashboardNumber((fin.elecBills ?? {})[mk]);
+  const purchases   = (fin.purchases ?? []).filter((p) => p.date?.slice(0, 7) === mk).reduce((s, p) => s + (dashboardNumber(p.amount)), 0);
+  const commission  = expenses.filter((e) => e.category === "commission" && e.month === mk).reduce((s, e) => s + (dashboardNumber(e.amount)), 0);
   const totalExpenses = salary + rent + electricity + purchases + commission;
 
   const profit = totalRevenue - totalExpenses;
@@ -647,109 +605,29 @@ function Section({ title, icon, count, actions, children }: {
   );
 }
 
-// ─── Repair card ──────────────────────────────────────────────────────────────
-
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  in_progress: { label: "В работе", cls: "work" },
-  done:        { label: "Готово",   cls: "done" },
-  new:         { label: "Новая",    cls: "new"  },
-};
-
-const AVATAR_COLORS = [
-  { bg: "rgba(239,68,68,0.15)",   color: "#dc2626" },
-  { bg: "rgba(59,130,246,0.15)",  color: "#2563eb" },
-  { bg: "rgba(34,197,94,0.15)",   color: "#16a34a" },
-  { bg: "rgba(139,92,246,0.15)",  color: "#7c3aed" },
-  { bg: "rgba(6,182,212,0.15)",   color: "#0891b2" },
-  { bg: "rgba(245,158,11,0.15)",  color: "#b45309" },
-];
-
-function repairPriority(date?: string): { color: string; shadow?: string } {
-  if (!date) return { color: "var(--text3)" };
-  const days = (Date.now() - new Date(date).getTime()) / 86_400_000;
-  if (days > 3) return { color: "var(--red)", shadow: "0 0 6px var(--red)" };
-  if (days > 1) return { color: "var(--yellow)" };
-  return { color: "var(--text3)" };
-}
-
-function RepairCard({ clientName, description, date, cost, status, plate, isAdmin, idx }: {
-  clientName: string; description?: string; date?: string;
-  cost?: string; status: string; plate?: string; isAdmin: boolean; idx: number;
-}) {
-  const s       = STATUS_MAP[status] ?? { label: status, cls: "new" };
-  const initials = (clientName || "").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-  const costNum  = parseFloat(cost ?? "0") || 0;
-  const av       = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-  const prio     = repairPriority(date);
-  return (
-    <div
-      className="tr-animate"
-      style={{
-        padding: "12px 20px", borderBottom: "1px solid var(--border)",
-        display: "flex", alignItems: "center", gap: 12,
-        animationDelay: `${0.35 + idx * 0.07}s`,
-      }}
-    >
-      {/* Priority dot */}
-      <div style={{
-        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-        background: prio.color,
-        boxShadow: prio.shadow,
-      }} />
-      {/* Colored client avatar */}
-      <div style={{
-        width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-        background: av.bg, color: av.color,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700,
-      }}>
-        {initials}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{clientName}</span>
-          {plate && (
-            <span className="mono" style={{ background: "var(--bg3)", padding: "1px 6px", borderRadius: 5, flexShrink: 0 }}>
-              {plate}
-            </span>
-          )}
-        </div>
-        {description && (
-          <div style={{ fontSize: 12.5, color: "var(--text2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {description}
-          </div>
-        )}
-      </div>
-      <span className={`status-badge ${s.cls}`}>{s.label}</span>
-      {isAdmin && costNum > 0 && (
-        <span className="mono" style={{ color: "#16a34a", flexShrink: 0 }}>{fmtMoney(costNum)}</span>
-      )}
-      {date && (
-        <span style={{ fontSize: 11.5, color: "var(--text3)", flexShrink: 0 }}>{fmtDate(date)}</span>
-      )}
-    </div>
-  );
-}
-
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { clients, tasks, staff, freezers, finance: rawFinance, expenses, appointments } = useData();
+  const { clients, tasks, staff, freezers, finance: rawFinance, expenses, appointments, intakeRepairs, sourceStatus } = useData();
   const { myProfile, isOwner } = useAuth();
   const { canSeeDashboardFinancials } = usePermissions();
   const role           = myProfile?.role ?? "mechanic";
   const isAdmin        = role === "admin" || role === "owner";
   const showFinance    = role !== "mechanic";
-  const showAmounts    = showFinance && canSeeDashboardFinancials;
+  const showAmounts    = dashboardFinancialAccess(role, canSeeDashboardFinancials);
+  const [view,setView]=useState<"overview"|"analytics"|"team">("overview");
+  const [teamOpened,setTeamOpened]=useState(false);
 
-  const [showAllActive,    setShowAllActive]    = useState(false);
   const [selectedRepair,   setSelectedRepair]   = useState<EnrichedRepair | null>(null);
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
 
-  const now          = new Date();
-  const curMonthKey  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-  const prevDate     = new Date(now.getFullYear(), now.getMonth()-1, 1);
-  const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,"0")}`;
+  const [clock,setClock]=useState(()=>Date.now());
+  const localDay=dashboardDay(new Date(clock));
+  const curMonthKey=localDay.slice(0,7),prevMonthKey=shiftMonth(curMonthKey,-1);
+  const calendarYear=Number(curMonthKey.slice(0,4)),calendarMonth=Number(curMonthKey.slice(5,7))-1;
+  const prevDate=new Date(`${prevMonthKey}-01T00:00:00Z`);
+  const financesReady=sourcesReady(sourceStatus,["clients","freezers","finance","expenses"]);
+  const operations=useMemo(()=>collectDashboardRepairs(clients,intakeRepairs),[clients,intakeRepairs]);
 
   // ── Flat repairs ──────────────────────────────────────────────────────────
   const allRepairs = useMemo(
@@ -764,27 +642,26 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     [clients],
   );
 
-  const inProgressRepairs = allRepairs.filter((r) => repairStatus(r) === "in_progress");
-  const doneRepairs       = allRepairs.filter((r) => repairStatus(r) === "done");
-  // Local calendar day — toISOString() would give UTC and shift "today" for UTC+10.
-  const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const doneToday         = doneRepairs.filter((r) => repairFinancialDay(r) === localDay).length;
-  const activeTasks       = tasks.filter((t) => t.status !== "done").length;
+  const doneRepairs = allRepairs.filter(repair => repairStatus(repair) === "done");
 
   // ── Monitoring overview (dashboard widget) ────────────────────────────
   const [monDevices, setMonDevices] = useState<MonitoringDevice[]>([]);
   const [monStates, setMonStates] = useState<Map<string, MonitoringDeviceState>>(new Map());
   const [monControllerStatuses, setMonControllerStatuses] = useState<Map<string, MonitoringControllerStatus>>(new Map());
   const [monThreshold, setMonThreshold] = useState(DEFAULT_OFFLINE_THRESHOLD_MINUTES);
-  const [monLoaded, setMonLoaded] = useState(false);
+  const [monReady,setMonReady]=useState({devices:false,states:false,controllers:false,settings:false});
+  const [monError,setMonError]=useState(false);
+  const monLoaded=Object.values(monReady).every(Boolean);
   const [monNowMs, setMonNowMs] = useState(() => Date.now());
 
   useEffect(() => {
-    const unsubscribeDevices = listenMonitoringDevices((next) => { setMonDevices(next); setMonLoaded(true); }, () => setMonLoaded(true));
-    const unsubscribeStates = listenMonitoringStates(setMonStates, () => undefined);
-    const unsubscribeStatuses = listenMonitoringControllerStatuses(setMonControllerStatuses, () => undefined);
-    const unsubscribeSettings = listenMonitoringSettings(setMonThreshold, () => undefined);
-    const timer = window.setInterval(() => setMonNowMs(Date.now()), 30_000);
+    const mark=(source:keyof typeof monReady)=>setMonReady(current=>({...current,[source]:true}));
+    const fail=()=>setMonError(true);
+    const unsubscribeDevices=listenMonitoringDevices(next=>{setMonDevices(next);mark("devices");},fail);
+    const unsubscribeStates=listenMonitoringStates(next=>{setMonStates(next);mark("states");},fail);
+    const unsubscribeStatuses=listenMonitoringControllerStatuses(next=>{setMonControllerStatuses(next);mark("controllers");},fail);
+    const unsubscribeSettings=listenMonitoringSettings(next=>{setMonThreshold(next);mark("settings");},fail);
+    const timer=window.setInterval(()=>{const now=Date.now();setClock(now);setMonNowMs(now);},30_000);
     return () => {
       unsubscribeDevices();
       unsubscribeStates();
@@ -801,8 +678,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     const problems: Array<{ id: string; name: string; label: string }> = [];
     monDevices.forEach((device) => {
       const state = monStates.get(device.id);
-      alarms += Object.keys(state?.activeAlertIds ?? {}).length;
       if (!device.enabled) return;
+      alarms += Object.keys(state?.activeAlertIds ?? {}).length;
       const reading = monitoringStatus(state, monNowMs, monThreshold).reading;
       const connection = controllerConnectionStatus(monControllerStatuses.get(device.id), monNowMs, monThreshold);
       if (connection === "online" && reading === "fresh") {
@@ -816,22 +693,13 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         });
       }
     });
-    return { total: monDevices.length, online, attention, alarms, problems: problems.slice(0, 3) };
+    return { total: monDevices.filter(device=>device.enabled).length, online, attention, alarms, problems: problems.slice(0, 3) };
   }, [monDevices, monStates, monControllerStatuses, monThreshold, monNowMs]);
-
-  // ── Today's appointments ──────────────────────────────────────────────
-  const todayAppointments = useMemo(() =>
-    (appointments ?? [])
-      .filter((a) => a.date === localDay && a.status !== "closed")
-      .sort((a, b) => a.time.localeCompare(b.time)),
-  [appointments, localDay]);
-
-  const visibleRepairs = showAllActive ? inProgressRepairs : inProgressRepairs.slice(0, 5);
 
   // ── Freezer rental income (fixed monthly) ────────────────────────────────
   const totalRentIncome = freezers
     .filter((f) => f.rented === true || f.status === "rented")
-    .reduce((s, f) => s + (parseFloat(String(f.rentAmount ?? 0)) || 0), 0);
+    .reduce((s, f) => s + (dashboardNumber(f.rentAmount)), 0);
 
   // ── Monthly revenue + expenses (last 6 months) ───────────────────────────
   const monthData = useMemo(() => {
@@ -848,7 +716,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     const purchByMonth: Record<string, number> = {};
     (fin.purchases ?? []).forEach((p) => {
       const mk = p.date?.slice(0, 7);
-      if (mk) purchByMonth[mk] = (purchByMonth[mk] ?? 0) + (parseFloat(String(p.amount)) || 0);
+      if (mk) purchByMonth[mk] = (purchByMonth[mk] ?? 0) + (dashboardNumber(p.amount));
     });
 
     // Commissions grouped by month
@@ -856,15 +724,15 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     expenses
       .filter((e) => e.category === "commission")
       .forEach((e) => {
-        if (e.month) commByMonth[e.month] = (commByMonth[e.month] ?? 0) + (parseFloat(String(e.amount)) || 0);
+        if (e.month) commByMonth[e.month] = (commByMonth[e.month] ?? 0) + (dashboardNumber(e.amount));
       });
 
     const map = new Map<string, { rev: number; exp: number; cnt: number }>();
     for (let i = 5; i >= 0; i--) {
-      const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mk  = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const d   = new Date(Date.UTC(calendarYear, calendarMonth - i, 1));
+      const mk  = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
       const { boxCost, salCost, rentalIncome } = resolveFixedCosts(fin, totalRentIncome, mk);
-      const elec  = parseFloat(String((fin.elecBills ?? {})[mk] ?? 0)) || 0;
+      const elec  = dashboardNumber((fin.elecBills ?? {})[mk]);
       const purch = purchByMonth[mk] ?? 0;
       const comm  = commByMonth[mk] ?? 0;
       map.set(mk, { rev: rentalIncome, exp: boxCost + salCost + elec + purch + comm, cnt: 0 });
@@ -873,19 +741,17 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       const mk = repairFinancialMonth(r);
       if (!mk || !map.has(mk)) return;
       const prev = map.get(mk)!;
-      map.set(mk, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
+      map.set(mk, { ...prev, rev: prev.rev + (dashboardNumber(r.cost)), cnt: prev.cnt + 1 });
     });
     return Array.from(map.entries()).map(([mk, v]) => ({
       mk,
       label: MONTH_NAMES[parseInt(mk.split("-")[1]) - 1],
       ...v,
     }));
-  }, [doneRepairs, rawFinance, expenses, totalRentIncome]);
+  }, [doneRepairs, rawFinance, expenses, totalRentIncome,curMonthKey]);
 
-  const curMonthRev  = doneRepairs.filter((r) => repairFinancialMonth(r) === curMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
-  const prevMonthRev = doneRepairs.filter((r) => repairFinancialMonth(r) === prevMonthKey)
-    .reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0) + totalRentIncome;
+  const curMonthRev=dashboardMonthRevenue(doneRepairs,curMonthKey,rawFinance,totalRentIncome);
+  const prevMonthRev=dashboardMonthRevenue(doneRepairs,prevMonthKey,rawFinance,totalRentIncome);
   const revDiff = prevMonthRev > 0 ? Math.round(((curMonthRev-prevMonthRev)/prevMonthRev)*100) : null;
 
   // ── Top clients ───────────────────────────────────────────────────────────
@@ -893,7 +759,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     const map = new Map<string, { clientId: string; name: string; rev: number; cnt: number }>();
     doneRepairs.forEach((r) => {
       const prev = map.get(r.clientId) ?? { clientId: r.clientId, name: r.clientName, rev: 0, cnt: 0 };
-      map.set(r.clientId, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
+      map.set(r.clientId, { ...prev, rev: prev.rev + (dashboardNumber(r.cost)), cnt: prev.cnt + 1 });
     });
     return Array.from(map.values()).filter((c) => c.rev > 0).sort((a,b) => b.rev-a.rev).slice(0,5);
   }, [doneRepairs]);
@@ -905,7 +771,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     doneRepairs.forEach((r) => {
       const key  = r.serviceType ?? "other";
       const prev = map.get(key) ?? { label: key, emoji: "⚙️", rev: 0, cnt: 0 };
-      map.set(key, { ...prev, rev: prev.rev + (parseFloat(r.cost ?? "0") || 0), cnt: prev.cnt + 1 });
+      map.set(key, { ...prev, rev: prev.rev + (dashboardNumber(r.cost)), cnt: prev.cnt + 1 });
     });
     return Array.from(map.values()).filter((s) => s.rev > 0).sort((a,b) => b.rev-a.rev);
   }, [doneRepairs]);
@@ -964,7 +830,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       (r) => repairStatus(r) === "done" && repairFinancialMonth(r) === curMonthKey,
     );
     closedThisMonthAll.forEach((r) => {
-        const cost = parseFloat(String(r.cost ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
+        const cost = dashboardNumber(r.cost);
         if (cost <= 0) return;
         const mechs = getMechanics(r);
         if (mechs.length === 0) return;
@@ -1002,11 +868,11 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     let total = 0;
 
     allRepairs.forEach((r) => {
-      let amt = parseFloat(r.freonAmount ?? "") || 0;
+      let amt = dashboardNumber(r.freonAmount);
       if (amt <= 0) {
         (r.tasks ?? []).forEach((t) => {
           if (t.freonTask && t.freonKg) {
-            const kg = parseFloat(t.freonKg) || 0;
+            const kg = dashboardNumber(t.freonKg);
             if (kg > 0) amt = kg;
           }
         });
@@ -1042,165 +908,16 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   }, [allRepairs]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-      {/* Quick Actions */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, animation: "fadeUp 0.45s ease 0.15s both" }}>
-        <QuickAction icon="ti-plus"          label="Новая заявка" onClick={() => onNavigate("phys")}     />
-        <QuickAction icon="ti-list-check"    label="Мои задачи"   onClick={() => onNavigate("mytasks")}  />
-        <QuickAction icon="ti-calendar"      label="Записи"       onClick={() => onNavigate("calendar")} />
-      </div>
-
-      {/* KPI grid */}
-      <div className="kpi-grid">
-        <KpiCard
-          label="В работе" icon="ti-tools" accent="blue" color="var(--accent2)"
-          value={inProgressRepairs.length}
-          delta={activeTasks > 0 ? `+${activeTasks} задач` : undefined}
-          deltaUp={activeTasks > 0}
-        />
-        {showAmounts && (
-          <KpiCard
-            label="Выручка / месяц" icon="ti-currency-ruble" accent="green" color="#16a34a"
-            value={curMonthRev > 0 ? fmtMoney(curMonthRev) : "—"}
-            delta={revDiff !== null ? `${revDiff >= 0 ? "+" : ""}${revDiff}% к пр. мес` : undefined}
-            deltaUp={revDiff !== null ? revDiff >= 0 : undefined}
-          />
-        )}
-        <KpiCard
-          label="Закрыто сегодня" icon="ti-clock" accent="yellow" color="#b45309"
-          value={doneToday}
-          delta={doneRepairs.length > 0 ? `всего ${doneRepairs.length}` : undefined}
-        />
-        <KpiCard
-          label="Клиентов" icon="ti-users" accent="purple" color="#7c3aed"
-          value={clients.length}
-          delta={`${inProgressRepairs.length} в ремонте`}
-        />
-      </div>
-
-      {/* Monitoring overview */}
-      {monLoaded && monStats.total > 0 && (
-        <Section
-          title="Оборудование"
-          icon="ti-device-desktop-analytics"
-          count={`${monStats.total} устройств`}
-          actions={
-            <button className="btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => onNavigate("monitoring")}>
-              Мониторинг
-            </button>
-          }
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 10, padding: "14px 20px" }}>
-            {([
-              { label: "Всего", value: monStats.total, color: "var(--text)" },
-              { label: "На связи", value: monStats.online, color: "#16a34a" },
-              { label: "Внимание", value: monStats.attention, color: monStats.attention > 0 ? "#d97706" : "var(--text3)" },
-              { label: "Аварии", value: monStats.alarms, color: monStats.alarms > 0 ? "#dc2626" : "var(--text3)" },
-            ] as const).map((item) => (
-              <div key={item.label} style={{ background: "var(--bg3)", borderRadius: 10, padding: "10px 8px", border: "1px solid var(--border)", textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: item.color, fontFamily: "JetBrains Mono, monospace" }}>{item.value}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
-          {monStats.problems.length > 0 && (
-            <div style={{ padding: "0 20px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-              {monStats.problems.map((problem) => (
-                <button
-                  key={problem.id}
-                  type="button"
-                  onClick={() => onNavigate("monitoring")}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", textAlign: "left" }}
-                >
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{problem.name}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#d97706", flexShrink: 0 }}>{problem.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </Section>
-      )}
-
-      {/* Today appointments */}
-      <Section
-        title="Сегодня в сервисе"
-        icon="ti-calendar"
-        count={todayAppointments.length > 0 ? `${todayAppointments.length} записей` : undefined}
-        actions={
-          <button className="btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => onNavigate("calendar")}>
-            Календарь
-          </button>
-        }
-      >
-        {todayAppointments.length === 0 ? (
-          <div style={{ padding: "20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Записей на сегодня нет
-          </div>
-        ) : (
-          <div>
-            {todayAppointments.map((a) => (
-              <div key={a.id} style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
-                <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--accent2)", flexShrink: 0 }}>{a.time}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.clientName}
-                  </div>
-                  {(a.carPlate || a.note) && (
-                    <div style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {a.carPlate && <span className="mono">{a.carPlate}</span>}
-                      {a.carPlate && a.note ? " · " : ""}
-                      {a.note}
-                    </div>
-                  )}
-                </div>
-                <span className="status-badge new">{APPOINTMENT_TYPE_LABELS[a.type] ?? a.type}</span>
-                {(a.assigneeNames ?? []).length > 0 && (
-                  <span style={{ fontSize: 11, color: "var(--text3)", flexShrink: 0 }}>{a.assigneeNames.join(", ")}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Active repairs */}
-      <Section
-        title="Заявки в работе"
-        icon="ti-clipboard-list"
-        count={`${inProgressRepairs.length} записей`}
-        actions={
-          inProgressRepairs.length > 5 && (
-            <button className="btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAllActive((v) => !v)}>
-              {showAllActive ? "Свернуть" : `Все ${inProgressRepairs.length}`}
-            </button>
-          )
-        }
-      >
-        {inProgressRepairs.length === 0 ? (
-          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет заявок в работе
-          </div>
-        ) : (
-          (visibleRepairs || []).map((r, i) => (
-            <div key={r.id} onClick={() => setSelectedRepair(r as EnrichedRepair)} style={{ cursor: "pointer" }}>
-              <RepairCard
-                idx={i}
-                clientName={r.clientName}
-                description={r.description}
-                date={r.date}
-                cost={r.cost}
-                status="in_progress"
-                plate={r.vehicle?.plate}
-                isAdmin={showFinance}
-              />
-            </div>
-          ))
-        )}
-      </Section>
-
+    <div className="dash-workspace">
+      <header className="dash-workspace-header"><div><p className="dash-eyebrow">РефСервисДВ</p><h1>Сервис сегодня</h1><p>Текущая работа, показатели и состояние оборудования.</p></div><span className="dash-date">{new Date(`${localDay}T00:00:00Z`).toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long",timeZone:"UTC"})}<small>Владивосток · UTC+10</small></span></header>
+      <nav className="dash-workspace-nav" aria-label="Разделы дашборда">{([{id:"overview",label:"Обзор"},{id:"analytics",label:"Аналитика"},{id:"team",label:"Команда"}] as const).map(section=><button type="button" key={section.id} aria-current={view===section.id?"page":undefined} onClick={()=>{setView(section.id);if(section.id==="team")setTeamOpened(true);}}>{section.label}</button>)}</nav>
+      <section hidden={view!=="overview"} aria-label="Рабочий обзор"><DashboardOverview repairs={operations} appointments={appointments} tasks={tasks} staff={staff} uid={myProfile?.id||""} role={role} day={localDay} sourceStatus={sourceStatus} canFinance={showAmounts} finance={financesReady?{current:curMonthRev,previous:prevMonthRev,label:`${MONTH_NAMES_FULL[calendarMonth]} ${calendarYear}`}:undefined} monitoring={{...monStats,ready:monLoaded,error:monError}} onNavigate={onNavigate} onOpenRepair={repair=>setSelectedRepair(repair)}/></section>
+      <section hidden={view!=="analytics"} className="dash-report-grid" aria-label="Аналитика сервиса">
+        <div className="dash-report-intro"><h2>Показатели и динамика</h2><p>График — последние шесть месяцев. Отчёты ниже помечены своим периодом. Суммы отражают учёт CRM, а не подтверждение оплаты.</p></div>
+        {showAmounts&&!financesReady&&<p className="dash-message" role="status">Финансовые источники ещё не загружены или недоступны. Расчёты появятся после подтверждения данных.</p>}
+        {!showAmounts&&<p className="dash-message">Финансовые показатели скрыты согласно вашим правам доступа.</p>}
       {/* Finance: Revenue chart */}
-      {showFinance && (
+      {showAmounts && financesReady && (
         <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
           <div className="section-header">
             <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
@@ -1217,11 +934,11 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           {showAmounts && (
             <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", borderTop: "1px solid var(--border)" }}>
               <div>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[now.getMonth()]}</div>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[calendarMonth]}</div>
                 <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "#16a34a", marginTop: 2 }}>{fmtMoney(curMonthRev)}</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getMonth()]}</div>
+                <div style={{ fontSize: 10, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{MONTH_NAMES[prevDate.getUTCMonth()]}</div>
                 <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--text3)", marginTop: 2 }}>{fmtMoney(prevMonthRev)}</div>
               </div>
             </div>
@@ -1229,66 +946,9 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </div>
       )}
 
-      {/* Mechanic productivity — all users */}
-      {isAdmin && <section className="crm-section ppz"><WorkAccountingPanel dashboard /></section>}
-      {mechanicStats.length > 0 && (
-        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
-          <div className="section-header">
-            <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
-            <span className="section-title">Механики</span>
-            <span className="section-count">нагрузка</span>
-          </div>
-          <div className="mechanic-list">
-            {(mechanicStats || []).slice(0, 4).map((m, i) => (
-              <MechanicRow
-                key={m.uid}
-                name={m.name}
-                monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
-                monthLabel={`${MONTH_NAMES_FULL[now.getMonth()].toLowerCase()} ${now.getFullYear()}`}
-                idx={i}
-                closed={m.closed}
-                active={m.active}
-                crownColor={mechRating.find((e) => e.uid === m.uid)?.crownColor}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Finance: Mechanic revenue breakdown — owner only */}
-      {isOwner && mechRating.length > 0 && (
-        <>
-          <style>{`@keyframes glow{0%,100%{text-shadow:0 0 6px #FFD700,0 0 12px #FFD700}50%{text-shadow:0 0 2px #FFD700}}`}</style>
-          <Section
-            title={`Выручка механиков — ${MONTH_NAMES_FULL[now.getMonth()]}`}
-            icon="ti-currency-ruble"
-            count={`${mechRating.length} чел.`}
-          >
-            <div style={{ padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-              {mechRating.map((m) => (
-                <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{
-                    fontSize: 12, color: "var(--text3)", width: 20,
-                    textAlign: "right", flexShrink: 0, fontFamily: "JetBrains Mono, monospace",
-                  }}>
-                    {m.rank}.
-                  </span>
-                  <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>
-                    {m.name}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
-                    {Math.round(m.total).toLocaleString("ru-RU")} ₽
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Section>
-        </>
-      )}
-
       {/* Finance: Top clients */}
-      {showAmounts && topClients.length > 0 && (
-        <Section title="Топ клиентов по выручке" icon="ti-trophy" count={`${topClients.length}`}>
+      {showAmounts && financesReady && topClients.length > 0 && (
+        <Section title="Топ клиентов по выручке · всё время" icon="ti-trophy" count={`${topClients.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {(topClients || []).map((c) => (
               <BarRow
@@ -1305,8 +965,8 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       )}
 
       {/* Finance: Revenue by service type */}
-      {showAmounts && byServiceType.length > 0 && (
-        <Section title="Выручка по типам услуг" icon="ti-chart-pie" count={`${byServiceType.length}`}>
+      {showAmounts && financesReady && byServiceType.length > 0 && (
+        <Section title="Выручка по типам услуг · всё время" icon="ti-chart-pie" count={`${byServiceType.length}`}>
           <div style={{ padding: "16px 20px" }}>
             {(byServiceType || []).map((s) => (
               <BarRow
@@ -1324,7 +984,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
 
       {/* Finance: Loyalty */}
       {showFinance && loyalty.total > 0 && (
-        <Section title="Лояльность клиентов" icon="ti-heart">
+        <Section title="Повторные обращения · всё время" icon="ti-heart">
           <div style={{ padding: "16px 20px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
               {[
@@ -1360,7 +1020,7 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       {/* Finance: Freon consumption */}
       {showFinance && freonData.total > 0 && (
         <Section
-          title="Расход фреона"
+          title="Расход фреона · всё время"
           icon="ti-snowflake"
           count={`${freonData.total.toFixed(1)} кг`}
         >
@@ -1417,15 +1077,77 @@ export function StatsTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         </Section>
       )}
 
+
+      </section>
+      <section hidden={view!=="team"} className="dash-report-grid" aria-label="Работа команды"><div className="dash-report-intro"><h2>Нагрузка и выполненные работы</h2><p>Назначение работы и её личное выполнение — разные показатели. Общая задача не начисляет выполнение всем участникам автоматически.</p></div>
+      {/* Mechanic productivity — all users */}
+      {isAdmin && teamOpened && <section className="dash-team-accounting ppz"><WorkAccountingPanel dashboard /></section>}
+      {mechanicStats.length > 0 && (
+        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
+          <div className="section-header">
+            <i className="ti ti-users" style={{ fontSize: 17, color: "var(--text2)" }} />
+            <span className="section-title">Механики</span>
+            <span className="section-count">назначения, не оценка качества</span>
+          </div>
+          <div className="mechanic-list">
+            {(mechanicStats || []).slice(0, 4).map((m, i) => (
+              <MechanicRow
+                key={m.uid}
+                name={m.name}
+                monthlyCars={mechMonthlyCars.get(m.uid) ?? 0}
+                monthLabel={`${MONTH_NAMES_FULL[calendarMonth].toLowerCase()} ${calendarYear}`}
+                idx={i}
+                closed={m.closed}
+                active={m.active}
+                crownColor={undefined}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Finance: Mechanic revenue breakdown — owner only */}
+      {isOwner && financesReady && mechRating.length > 0 && (
+        <>
+
+          <Section
+            title={`Распределение учтённой выручки — ${MONTH_NAMES_FULL[calendarMonth]}`}
+            icon="ti-currency-ruble"
+            count={`${mechRating.length} чел.`}
+          >
+            <div style={{ padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {mechRating.map((m) => (
+                <div key={m.uid} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    fontSize: 12, color: "var(--text3)", width: 20,
+                    textAlign: "right", flexShrink: 0, fontFamily: "JetBrains Mono, monospace",
+                  }}>
+                    {m.rank}.
+                  </span>
+                  <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>
+                    {m.name}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text2)", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
+                    {Math.round(m.total).toLocaleString("ru-RU")} ₽
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </>
+      )}
+
+
+      </section>
       {selectedRepair && (
         <RepairDetailModal
           repair={selectedRepair}
-          isAdmin={showFinance}
+          isAdmin={showAmounts}
           onClose={() => setSelectedRepair(null)}
         />
       )}
 
-      {selectedMonthKey && (
+      {selectedMonthKey && showAmounts && financesReady && (
         <MonthDetailModal
           mk={selectedMonthKey}
           doneRepairs={doneRepairs}

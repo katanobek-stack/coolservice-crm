@@ -21,6 +21,8 @@ import type { StaffMember } from "../types/staff";
 import type { Appointment } from "../types/appointment";
 import type { IntakeRepair } from "../types/intake";
 
+import { DATA_SOURCES, initialDataStatus, markDataStatus, type DataSource, type SourceStatus, type DataStatus } from "./dataReadiness";
+
 export interface Expense {
   id:         string;
   category:   string;
@@ -41,6 +43,7 @@ interface DataContextValue {
   appointments: Appointment[];
   intakeRepairs: IntakeRepair[];
   loaded:       boolean;
+  sourceStatus: DataStatus;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -54,7 +57,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [expenses,     setExpenses]     = useState<Expense[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [intakeRepairs, setIntakeRepairs] = useState<IntakeRepair[]>([]);
-  const [loadCount,    setLoadCount]    = useState(0);
+  const [sourceStatus, setSourceStatus] = useState(initialDataStatus);
+  const mark = (source: DataSource, status: SourceStatus) => setSourceStatus(current => markDataStatus(current, source, status));
 
   useEffect(() => {
     const db = getFirebaseDb();
@@ -64,52 +68,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
         query(collection(db, "clients"), orderBy("createdAt", "desc")),
         (snap) => {
           setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Client));
-          setLoadCount((n) => n + 1);
+          mark("clients", "ready");
         },
+        () => mark("clients", "error"),
       ),
       onSnapshot(collection(db, "staff"), (snap) => {
         setStaff(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as StaffMember));
-        setLoadCount((n) => n + 1);
-      }),
+        mark("staff", "ready");
+      }, () => mark("staff", "error")),
       onSnapshot(collection(db, "servicetasks"), (snap) => {
         setTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ServiceTask));
-        setLoadCount((n) => n + 1);
-      }),
+        mark("tasks", "ready");
+      }, () => mark("tasks", "error")),
       onSnapshot(collection(db, "freezers"), (snap) => {
         setFreezers(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Freezer));
-        setLoadCount((n) => n + 1);
-      }),
+        mark("freezers", "ready");
+      }, () => mark("freezers", "error")),
       onSnapshot(
         doc(db, "settings", "finance"),
         (d) => {
           setFinance(d.exists() ? (d.data() as Record<string, unknown>) : {});
-          setLoadCount((n) => n + 1);
+          mark("finance", "ready");
         },
         () => {
           setFinance({});
-          setLoadCount((n) => n + 1);
+          mark("finance", "error");
         },
       ),
       onSnapshot(
         query(collection(db, "expenses"), orderBy("createdAt", "desc")),
         (snap) => {
           setExpenses(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense));
-          setLoadCount((n) => n + 1);
+          mark("expenses", "ready");
         },
         () => {
           setExpenses([]);
-          setLoadCount((n) => n + 1);
+          mark("expenses", "error");
         },
       ),
       onSnapshot(
         query(collection(db, "appointments"), orderBy("createdAt", "desc")),
         (snap) => {
           setAppointments(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Appointment));
-          setLoadCount((n) => n + 1);
+          mark("appointments", "ready");
         },
         () => {
           setAppointments([]);
-          setLoadCount((n) => n + 1);
+          mark("appointments", "error");
         },
       ),
       // No orderBy: the collection is small and transient, IntakeTab sorts by
@@ -119,12 +124,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         collection(db, "intakeRepairs"),
         (snap) => {
           setIntakeRepairs(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as IntakeRepair));
-          setLoadCount((n) => n + 1);
+          mark("intakeRepairs", "ready");
         },
         (err) => {
           console.error("[DataProvider] intakeRepairs listener error:", err);
           setIntakeRepairs([]);
-          setLoadCount((n) => n + 1);
+          mark("intakeRepairs", "error");
         },
       ),
     ];
@@ -142,9 +147,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       expenses,
       appointments,
       intakeRepairs,
-      loaded: loadCount >= 8,
+      loaded: DATA_SOURCES.every(source => sourceStatus[source] !== "loading"),
+      sourceStatus,
     }),
-    [clients, staff, tasks, freezers, finance, expenses, appointments, intakeRepairs, loadCount],
+    [clients, staff, tasks, freezers, finance, expenses, appointments, intakeRepairs, sourceStatus],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
