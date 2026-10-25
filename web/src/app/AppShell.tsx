@@ -65,7 +65,7 @@ function canSeeTab(t: TabDef, role: StaffRole, hidePnl = false): boolean {
 }
 
 const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
-  dailyPlan: { title: "ППЗ", sub: "персональный план на день" },
+  dailyPlan: { title: "ППЗ", sub: "задачи команды и дневные планы" },
   stats:    { title: "Дашборд",   sub: "главные показатели" },
   mytasks:  { title: "Заявки",    sub: "ремонты и задачи" },
   intake:   { title: "Приёмка",   sub: "машины без клиента" },

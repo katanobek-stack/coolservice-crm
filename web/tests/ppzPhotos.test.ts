@@ -146,3 +146,22 @@ if (process.env.PPZ_PHOTO_PREVIEW) {
     createElement(TaskCard, { task: { ...task, id: "open", title: "Подготовить инструмент для выезда", status: "open", participants: {} }, uid: "a", name })));
   writeFileSync(process.env.PPZ_PHOTO_PREVIEW, `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/index.css"><link rel="stylesheet" href="/ppz.css"><body><main style="max-width:1050px;margin:24px auto;padding:16px">${cards}</main></body></html>`);
 }
+
+test("shared task uses keyboard-native disclosure without losing its report controls", () => {
+  const html = renderToStaticMarkup(createElement(TaskCard, { task, uid: "b", name }));
+  assert.match(html, /<details\b/); assert.match(html, /<summary\b/);
+  assert.doesNotMatch(html, /<details[^>]*\bopen[\s=>]/);
+  assert.match(html, /Мой результат/); assert.match(html, /Завершить для всех/);
+});
+
+import { PpzTaskWorkspace } from "../src/features/daily-plan/PpzTaskWorkspace";
+test("workspace offers administrator creation but never exposes it to a mechanic or manager", () => {
+  const props = { tasks: [task], staff: [{id:"a",name:"Александр"},{id:"b",name:"Владимир"}], uid:"b", onCreate: async () => {} };
+  const admin=renderToStaticMarkup(createElement(PpzTaskWorkspace,{...props,role:"admin"}));
+  assert.match(admin,/Поиск задач ППЗ/);assert.match(admin,/Фильтр сотрудников/);assert.match(admin,/Название задачи без срока/);
+  for(const role of ["mechanic","manager"]) {
+    const html=renderToStaticMarkup(createElement(PpzTaskWorkspace,{...props,role}));
+    assert.doesNotMatch(html,/Название задачи без срока|Фильтр сотрудников/);
+    assert.match(html,/Поиск задач ППЗ/);
+  }
+});

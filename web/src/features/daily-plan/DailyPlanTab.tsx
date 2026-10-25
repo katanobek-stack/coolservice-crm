@@ -77,6 +77,7 @@ export function DailyPlanTab() {
   const { staff, tasks, clients, intakeRepairs, appointments } = useData();
   const uid = myProfile?.id ?? "";
   const manager = ["owner", "admin", "manager"].includes(myProfile?.role ?? "mechanic");
+  const [workspace, setWorkspace] = useState<"tasks" | "day">("tasks");
   const [mode, setMode] = useState<"mine" | "meeting">("mine");
   const [date, setDate] = useState(vladivostokDate);
   const [selected, setSelected] = useState(uid);
@@ -171,9 +172,18 @@ export function DailyPlanTab() {
     setDraft(items?.docs.map(d => d.data() as PlanItem).sort((a, b) => a.order - b.order) ?? []);
     setRevision(current?.revision ?? 0); setDirty(false);
   }
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const conflict = dirty && (plan?.revision ?? 0) !== revision;
-  return <div className="ppz">
-    <PpzTasks />
+  return <div className="ppz ppz-workspace">
+    <header className="ppz-workspace-header"><div><p className="ppz-eyebrow">Работа команды</p><h1>Персональные планы</h1><p>Задачи, дневной порядок работы и личные результаты — в одном месте.</p></div><span className="ppz-location">Владивосток · UTC+10</span></header>
+    <nav className="ppz-workspace-nav" aria-label="Разделы ППЗ"><button type="button" aria-current={workspace === "tasks" ? "page" : undefined} onClick={() => setWorkspace("tasks")}>{["owner", "admin"].includes(myProfile?.role ?? "") ? "Задачи команды" : "Мои задачи"}</button><button type="button" aria-current={workspace === "day" ? "page" : undefined} onClick={() => setWorkspace("day")}>Дневной план{dirty && <span className="ppz-draft-dot" aria-label="Есть несохранённые изменения"/>}</button></nav>
+    <div hidden={workspace !== "tasks"}><PpzTasks /></div>
+    <section hidden={workspace !== "day"} className="ppz-day-workspace" aria-label="Дневной план"><div className="ppz-section-intro"><h2>Порядок работы на день</h2><p className="ppz-muted">Сотрудник видит опубликованный план. Руководитель составляет и публикует план на планёрке.</p></div>
     <div className="ppz-row ppz-controls"><div className="ppz-row"><Button variant={mode === "mine" ? "primary" : "ghost"} disabled={busy || dirty} onClick={() => setMode("mine")}>Мой день</Button>
       {manager && <Button variant={mode === "meeting" ? "primary" : "ghost"} disabled={busy || dirty} onClick={() => setMode("meeting")}>Планёрка</Button>}</div>
       <Input aria-label="Дата плана" type="date" value={date} disabled={busy || dirty} onChange={e => { if (e.target.value) setDate(e.target.value); }}/>
@@ -218,5 +228,6 @@ export function DailyPlanTab() {
         {otherWork.length > 0 && <section className="ppz-card"><h3>Другие назначенные работы</h3><p className="ppz-muted">Эти работы доступны в разделе «Заявки». Порядок выполнения можно уточнить у руководителя.</p>{otherWork.map(c => <p key={sourceKey(c.source)}>{c.title}</p>)}</section>}
       </>}
     </>}
+    </section>
   </div>;
 }

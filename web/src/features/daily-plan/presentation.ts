@@ -22,3 +22,32 @@ export function newestPpzTasks<T extends { id: string; createdAt?: { seconds: nu
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
+
+export type PpzStatusFilter = "active" | "all" | "open" | "in_progress" | "done";
+interface SearchablePpzTask {
+  id: string; title: string; description?: string; assignees: string[];
+  status: "open" | "in_progress" | "done"; createdBy?: string; createdByName?: string;
+  assigneeNames?: Record<string, string>; createdAt?: { seconds: number; nanoseconds: number } | null;
+}
+/** Filter an authorized snapshot only; counts describe the same search/employee scope. */
+export function selectPpzTasks<T extends SearchablePpzTask>(tasks: readonly T[], filter: { search: string; employee: string; status: PpzStatusFilter }, name: (id: string) => string) {
+  const normalize = (text: string) => text.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+  const words = normalize(filter.search.trim()).split(/\s+/).filter(Boolean);
+  const scope = tasks.filter(task => {
+    if (filter.employee && !task.assignees.includes(filter.employee)) return false;
+    const text = normalize([task.title, task.description, task.createdByName, task.createdBy ? name(task.createdBy) : "",
+      ...task.assignees.flatMap(id => [name(id), task.assigneeNames?.[id]])].filter(Boolean).join(" "));
+    return words.every(word => text.includes(word));
+  });
+  const counts = { all: scope.length, active: 0, open: 0, in_progress: 0, done: 0 };
+  for (const task of scope) { counts[task.status]++; if (task.status !== "done") counts.active++; }
+  return { counts, tasks: newestPpzTasks(scope.filter(task => filter.status === "all" || (filter.status === "active" ? task.status !== "done" : task.status === filter.status))) };
+}
+
+export interface PpzCreateRequest { action: "create"; id: string; requestId: string; title: string; assignees: string[] }
+/** Reuse both document and receipt IDs when retrying the same logical creation. */
+export function ppzCreateRequest(previous: PpzCreateRequest | null, input: { title: string; assignees: string[] }, newId: () => string): PpzCreateRequest {
+  const title = input.title.trim(), assignees = [...new Set(input.assignees)].sort();
+  if (previous && previous.title === title && JSON.stringify(previous.assignees) === JSON.stringify(assignees)) return previous;
+  return { action: "create", id: newId(), requestId: newId(), title, assignees };
+}

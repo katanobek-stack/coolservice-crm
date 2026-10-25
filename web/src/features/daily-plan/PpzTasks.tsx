@@ -5,12 +5,12 @@ import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import { getFirebaseDb, getFirebaseFunctions } from "../../shared/firebase/app";
 import { Button } from "../../shared/ui/Button";
-import { Input, Select } from "../../shared/ui/Input";
 import { ReportText } from "../../shared/ui/ReportText";
+import { PpzTaskWorkspace } from "./PpzTaskWorkspace";
 import { WorkAccountingPanel } from "./WorkAccountingPanel";
 import { PhotoEvidence, ReportPhotoPicker, useReportPhotos } from "./ReportPhotos";
 import type { PhotoData } from "../../shared/utils/photos";
-import { canAttachPpzPhotos, employeeTone, newestPpzTasks } from "./presentation";
+import { canAttachPpzPhotos, employeeTone } from "./presentation";
 
 export interface PpzTask {
   id: string; title: string; assignees: string[]; status: "open" | "in_progress" | "done";
@@ -31,6 +31,7 @@ export function TaskCard({ task, uid, name, canAttachPhotos = false }: { task: P
   const time = (t?: Timestamp) => t?.toDate().toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok" }) ?? "";
   async function act(action: "start" | "report" | "complete" | "attach_photos") {
     if (busy || dictating) return;
+    if (action === "complete" && !window.confirm(`Завершить задачу «${task.title}» для всех исполнителей (${task.assignees.length})? Личные отчёты остальных сотрудников сохранятся отдельно.`)) return;
     setBusy(true); setError("");
     try {
       const photos = action === "start" ? [] : await (action === "attach_photos" ? taskAttachments : attachments).upload();
@@ -45,7 +46,10 @@ export function TaskCard({ task, uid, name, canAttachPhotos = false }: { task: P
     finally { setBusy(false); }
   }
   return <article className={`ppz-card ppz-task ppz-task--${task.status}`}>
-    <div className="ppz-row"><strong>{task.title}</strong><span className={`ppz-status ppz-status--${task.status}`}>{task.status === "done" ? "✓ Выполнено" : task.status === "in_progress" ? "◉ В работе" : "К выполнению"}</span></div>
+    <details className="ppz-task-disclosure">
+    <summary className="ppz-task-summary"><div className="ppz-task-heading"><strong>{task.title}</strong><span className={`ppz-status ppz-status--${task.status}`}>{task.status === "done" ? "Выполнено" : task.status === "in_progress" ? "В работе" : "К выполнению"}</span></div>
+      <div className="ppz-task-preview"><span>{task.assignees.map(id => task.assigneeNames?.[id] || name(id)).join(", ")}</span><span>{task.status === "done" ? `Закрыл: ${task.completedByName || "Исполнитель"}` : `${task.assignees.filter(id => task.participants?.[id]?.result).length} из ${task.assignees.length} с личным отчётом`}</span></div><span className="ppz-task-chevron" aria-hidden="true">⌄</span>
+    </summary><div className="ppz-task-body">
     {task.description && <p className="ppz-comment">{task.description}</p>}
     <p className="ppz-muted">Создал в CRM: {task.createdByName || (task.createdBy ? name(task.createdBy) : "Автор не зафиксирован")} · {task.createdAt ? `${time(task.createdAt)} (Владивосток)` : "Дата создания не зафиксирована"}</p>
     <p className="ppz-muted">Назначено: {task.assignees.map(id => task.assigneeNames?.[id] || name(id)).join(", ")}{task.createdBy && task.assignees.includes(task.createdBy) ? " · автор назначил задачу в том числе себе" : ""}</p>
@@ -78,7 +82,8 @@ export function TaskCard({ task, uid, name, canAttachPhotos = false }: { task: P
       </div>
       {task.status === "done" && <p className="ppz-muted">Общая задача уже закрыта. Вы можете отдельно зафиксировать свою выполненную работу.</p>}
     </div>}
-    {error && <p role="alert">{error}</p>}
+    {error && <p className="ppz-error" role="alert">{error}</p>}
+    </div></details>
   </article>;
 }
 export function PpzTasks() {
@@ -87,11 +92,6 @@ export function PpzTasks() {
   const uid = myProfile?.id ?? "";
   const administrator = ["owner", "admin"].includes(myProfile?.role ?? "");
   const [tasks, setTasks] = useState<PpzTask[]>([]);
-  const [title, setTitle] = useState("");
-  const [assignees, setAssignees] = useState<string[]>([]);
-  const [employee, setEmployee] = useState("");
-  const [completed, setCompleted] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [accounting, setAccounting] = useState(false);
@@ -103,33 +103,7 @@ export function PpzTasks() {
       setTasks(snap.docs.map(d => ({ ...d.data(), id: d.id }) as PpzTask)); setLoading(false);
     }, err => { setError(err.message); setLoading(false); });
   }, [uid, administrator]);
-  async function act(action: "create" | "start" | "complete", id: string) {
-    setBusy(true); setError("");
-    try {
-      await httpsCallable(getFirebaseFunctions(), "savePpzTask")({ action, id, ...(action === "create" ? { title, assignees } : {}) });
-      if (action === "create") { setTitle(""); setAssignees([]); }
-    } catch (err) { setError(err instanceof Error ? err.message : "Не удалось сохранить задачу"); }
-    finally { setBusy(false); }
-  }
-  const name = (id: string) => staff.find(s => s.id === id)?.name || staff.find(s => s.id === id)?.email || id;
-  const visible = newestPpzTasks(tasks.filter(t => (completed ? t.status === "done" : t.status !== "done") && (!administrator || !employee || t.assignees.includes(employee))));
-  return <section className="ppz-card">
-    <h3>Задачи без сроков</h3>
-    <p className="ppz-muted">Закрытие одним исполнителем завершает задачу для всех. Личное выполнение каждого сотрудника фиксируется его отдельным отчётом.</p>
-    <div className="ppz-row">
-      <Button variant={!completed ? "primary" : "ghost"} onClick={() => setCompleted(false)}>Активные</Button>
-      <Button variant={completed ? "primary" : "ghost"} onClick={() => setCompleted(true)}>Завершённые</Button>
-      {administrator && <Select aria-label="Фильтр сотрудников" value={employee} onChange={e => setEmployee(e.target.value)}><option value="">Все сотрудники</option>{staff.map(s => <option key={s.id} value={s.id}>{name(s.id)}</option>)}</Select>}
-      {administrator && <Button variant="ghost" onClick={() => setAccounting(value => !value)}>{accounting ? "Скрыть учёт работ" : "Учёт работ и история"}</Button>}
-    </div>
-    {administrator && accounting && <WorkAccountingPanel ppzTasks={tasks} />}
-    {administrator && <fieldset disabled={busy} className="ppz-editor">
-      <Input aria-label="Название задачи без срока" placeholder="Название задачи" value={title} maxLength={200} onChange={e => setTitle(e.target.value)}/>
-      <div className="ppz-row">{staff.map(s => <label key={s.id}><input type="checkbox" checked={assignees.includes(s.id)} onChange={e => setAssignees(previous => e.target.checked ? [...previous, s.id] : previous.filter(id => id !== s.id))}/>{name(s.id)}</label>)}</div>
-      <Button disabled={!title.trim() || !assignees.length} onClick={() => void act("create", crypto.randomUUID())}>Назначить задачу</Button>
-    </fieldset>}
-    {error && <p role="alert">{error}</p>}
-    {loading ? <p>Загружаем задачи…</p> : !visible.length && <p>Задач нет.</p>}
-    {visible.map(task => <TaskCard key={task.id} task={task} uid={uid} name={name} canAttachPhotos={canAttachPpzPhotos(myProfile?.role)}/>)}
-  </section>;
+  return <><PpzTaskWorkspace key={uid} tasks={tasks} staff={staff} uid={uid} role={myProfile?.role} loading={loading} loadError={error}
+    onCreate={async request => { await httpsCallable(getFirebaseFunctions(), "savePpzTask")(request); }} accounting={accounting} onToggleAccounting={() => setAccounting(value => !value)}/>
+    {administrator && accounting && <WorkAccountingPanel ppzTasks={tasks}/>}</>;
 }
