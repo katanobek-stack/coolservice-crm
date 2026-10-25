@@ -21,18 +21,29 @@
 
 ### Task 1: Typed operational selectors and source readiness
 Files: stats/dashboardLogic.ts, shared/context/dataReadiness.ts, DataContext.tsx, tests/dashboard.test.ts, package.json.
-- [ ] Write and run failing behavioral tests for cases above, readiness and localized amounts.
-- [ ] Implement selectors, typed role checks and readiness updates; keep financial helpers unchanged.
-- [ ] Verify targeted tests.
+- [x] Write and run failing behavioral tests for cases above, readiness and localized amounts.
+- [x] Implement selectors, typed role checks and readiness updates; keep financial helpers unchanged.
+- [x] Verify targeted tests.
 
 ### Task 2: Overview and compatible analytics/team sections
 Files: stats/DashboardOverview.tsx, StatsTab.tsx, stats/dashboard.css.
-- [ ] Add SSR permission/empty/loading tests and observe required failures.
-- [ ] Implement search, scope/status filters, client/intake rows, today's appointments, monitoring and quick actions.
-- [ ] Integrate PPZ-style navigation; preserve reports, protect all financial surfaces, keyboard-enable monthly details and request rows.
-- [ ] Verify typecheck, unit suite and build.
+- [x] Add SSR permission/empty/loading tests and observe required failures.
+- [x] Implement search, scope/status filters, client/intake rows, today's appointments, monitoring and quick actions.
+- [x] Integrate PPZ-style navigation; preserve reports, protect all financial surfaces, keyboard-enable monthly details and request rows.
+- [x] Verify typecheck, unit suite and build.
 
 ### Task 3: Review, browser and publishing
-- [ ] Fresh-context code review of the complete change.
-- [ ] Full web emulator suite; inspect actual UI components on synthetic desktop/mobile preview.
-- [ ] Publish through the existing workflow, verify CI/deployment, remove temporary QA pages and record limitations.
+- [x] Fresh-context code review of the complete change.
+- [x] Full web emulator suite; inspect actual UI components on synthetic desktop/mobile preview.
+- [x] Publish through the existing workflow, verify CI/deployment, remove temporary QA pages and record limitations.
+
+## Verification record
+- TypeScript application and tests: passed. Production Vite build: passed (existing bundle-size advisory remains).
+- Unit tests: 121 passed, including 11 dashboard checks. Red-to-green tests covered selectors, readiness, hidden amounts, source errors, legacy appointments and completion/closure labels.
+- Full web emulator suite: 221 checks passed before two additional SSR/status regressions; the final unit run includes both. No backend or Firestore rules changed.
+- Independent fresh-context review found legacy missing assignees and an ambiguous closure label. Both fixed and reviewed again with no remaining findings.
+- Browser/CI/deployment evidence will be recorded after publication below.
+
+- Production component browser QA on explicitly synthetic data: desktop screenshot saved; search, callback, personal scope, mobile unassigned filter, hidden money and source failure verified. Mobile document width/scrollWidth: 480/480, no horizontal overflow. No 320/390 checks.
+- First GitHub Pages deployment ccff54b succeeded. Temporary QA pages removed in the verification follow-up commit. Final deployment/CI statuses checked through GitHub Actions.
+- Limitation: production app requires sign-in; authenticated live data interactions were not performed. Analytical panels verified by typecheck/unit tests/code review, not by a logged-in browser session.
