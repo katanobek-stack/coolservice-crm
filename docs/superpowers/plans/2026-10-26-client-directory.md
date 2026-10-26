@@ -31,9 +31,9 @@ Files: ClientDirectory.tsx, clients.css, ClientsTab.tsx, shared/ui/Modal.tsx.
 - [x] Run typecheck, unit tests, build and inspect diff.
 
 ### Task 3: Delivery
-- [ ] Fresh review, test/fix concrete regressions.
-- [ ] Full Firestore emulator suite, synthetic browser desktop/480 checks of real components.
-- [ ] Authorized commit/PR/publish, verify CI/deploy, remove temporary QA pages and record limitations.
+- [x] Fresh review, test/fix concrete regressions.
+- [x] Full Firestore emulator suite, synthetic browser desktop/480 checks of real components.
+- [x] Authorized commit/PR/publish, verify CI/deploy, remove temporary QA pages and record limitations.
 
 ## Verification record
 - 144 unit/SSR tests passed, including 12 directory checks. Tests were observed failing before selectors/disclosure/source-state/deep-link implementations.
@@ -42,3 +42,11 @@ Files: ClientDirectory.tsx, clients.css, ClientsTab.tsx, shared/ui/Modal.tsx.
 - Existing profile sections, mutation APIs and role/amount policies are retained; ready work is shown in Work, confirmed closure/cancel in History, using the same request-stage helper as the requests screen.
 - Deep links wait for confirmed client snapshots and retain vehicle ids locally before acknowledging AppShell navigation. Deleted clients are never rendered from cached selection snapshots.
 - No schema/backend/rules/dependency changes, production records or notifications. Optional Modal className changes only the new profile width.
+
+## Browser and delivery evidence
+- First GitHub Pages deployment e42d036 succeeded. Actual ClientsTab/ClientDirectory/profile components ran against synthetic providers and Firebase accessors that throw before any write. No real client records were read or changed for UI QA.
+- Desktop: default letter groups and grid inspected; show-more expanded 24 to all 31 matching clients; Latin plate query selected the expected record; compact company table sorted Айсберг, Бриз, Восток, Дальневосточная доставка, Рыбный порт, Северная логистика.
+- Profile: Overview/Equipment/History/Appointments sections inspected. New and legacy appointments both appear (2 expected). Pending deep link opened only after source readiness; direct vehicle link opened the correct vehicle history. Removing the selected synthetic client from its provider closed the stale profile.
+- Blocked create-company write retained its entered name and displayed explicit error. Mechanic saw no create action; source error hid stale records and rendered an alert.
+- Mobile width480: directory document480/scrollWidth480; table kept horizontal scrolling inside its own region (446/760), no page overflow; profile478/scrollWidth478 with five panels; mobile equipment view visually inspected. Never checked320/390.
+- Screenshots explicitly contain synthetic data. Temporary QA pages removed in verification follow-up. Production app login and final deployment checked separately; no authenticated production write workflow was tested.
