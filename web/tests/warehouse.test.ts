@@ -67,7 +67,7 @@ test("warehouse has accessible controls and preserves illustrations, management 
   assert.match(manager, /Поиск оборудования/);
   assert.match(manager, /Все камеры/);
   assert.match(manager, /freezer-illustration/);
-  assert.match(manager, /freezer-snow/);
+  assert.match(manager, /equipment-rotor/);
   assert.match(manager, /Аренда в месяц/);
   const mechanic = render(false);
   assert.doesNotMatch(mechanic, /Аренда в месяц|Добавить камеру/);

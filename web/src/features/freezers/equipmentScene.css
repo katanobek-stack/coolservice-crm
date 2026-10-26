@@ -1,0 +1,28 @@
+/* The product and moving mechanics share the same registered 3:2 plane. */
+.equipment-scene{position:relative;isolation:isolate;width:100%;max-height:none!important;height:auto;aspect-ratio:3/2;overflow:hidden;background:#edf3f8;pointer-events: none;contain:paint}
+.equipment-scene-caption{position:absolute;inset:11px 14px auto;z-index:2;display:flex;align-items:center;gap:6px;font-size:8px;font-weight:650;letter-spacing:.15px;color:#536e85;line-height:1.3}
+.equipment-scene-mark{width:8px;height:8px;border:1px solid #87a3b7;border-radius:2px;position:relative}.equipment-scene-mark::after{content:"";position:absolute;inset:2px;background:#87a3b7}
+.equipment-rig{position:absolute;inset:19px 8px 17px;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
+.equipment-render,.equipment-mechanics{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.equipment-mechanics{overflow:visible;pointer-events: none}
+.equipment-rig[data-ready=false] .equipment-mechanics{visibility:hidden}
+.equipment-rig[data-failed=true] .equipment-render{visibility:hidden}
+.equipment-image-fallback{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;color:#597289}
+.equipment-rotor{transform-origin:0 0;transform-box:view-box;will-change:auto}
+.is-rented .equipment-rotor{animation:equipment-fan-cycle 2.7s linear infinite}
+.is-rented .equipment-rotor--1{animation-direction:reverse;animation-duration:3.1s}
+.equipment-airflow{opacity:0;stroke-dasharray:3 22;transition:opacity .5s ease}
+.is-rented .equipment-airflow{opacity:.55;animation:equipment-air-cycle 3.6s linear infinite}
+.equipment-cabinet-light{opacity:0;transition:opacity .5s ease}.is-rented .equipment-cabinet-light{opacity:.8}
+.equipment-scene-baseline{position:absolute;inset:auto 16px 10px;display:flex;gap:7px;align-items:center;opacity:.65}.equipment-scene-baseline>span{height:1px;background:#c3d3df;flex:1}.equipment-scene-baseline>i{width:4px;height:4px;background:#9db4c7;transform:rotate(45deg)}
+.freezer-card-scene{background:#edf3f8;border-block:1px solid #e1e9f0}
+.freezer-card .freezer-card-scene-label{position:static;display:block;bottom:auto;right:auto;padding:2px 13px 10px;text-align:right;color:#597289!important;font-size:8px;background:#edf3f8;line-height:1.5}
+@media(hover:hover) and (pointer:fine){.freezer-card:hover .equipment-rig{transform:translateY(-2px)}}
+@keyframes equipment-fan-cycle{to{transform:rotate(360deg)}}
+@keyframes equipment-air-cycle{to{stroke-dashoffset:-100}}
+@media(prefers-reduced-motion: reduce){
+  .equipment-rig,.equipment-airflow,.equipment-cabinet-light{transition:none}
+  .is-rented .equipment-rotor,.is-rented .equipment-airflow{animation: none}
+  .equipment-airflow{display:none}
+  .freezer-card:hover .equipment-rig{transform:none}
+}

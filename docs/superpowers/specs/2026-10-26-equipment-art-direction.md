@@ -1,0 +1,12 @@
+# Equipment artwork: engineered product visualization
+
+The owner explicitly replaces the earlier preservation constraint and delegates a complete reinvention of equipment imagery and motion. Use imagegen to create finished PBR industrial product artwork, not merely another variation of the old SVG cube. Preserve the warehouse controls, business fields, roles and Firebase persistence.
+
+## Art direction
+Four distinct silhouettes: pearl-white modular cold room with navy glazed door; navy deep-freeze room with heavy white insulated door and twin-fan cassette; long ribbed ISO refrigerated container with integrated end unit; glass-door refrigerated display cabinet. All are stylized representations of equipment categories, not photos or technical models of the user's actual assets. Unified studio camera, industrial materials, brushed aluminum trim, realistic panel depth, sensible refrigeration hardware, navy/pearl/graphite and restrained amber safety accents. No invented brand, numeric gauges, live readings or technical dimensions.
+
+## Engineering and motion
+Finished ImageGen raster assets live in web/public/warehouse; optimize to WebP with alpha preserved. New EquipmentScene.tsx owns artwork selection and decor. Layer moving fan rotors and stationary guards in shared 1536x1024 scene coordinates, registered to fan centers from the actual generated images. Clip motion inside the housing; keep guards, support braces and equipment stationary. A restrained schematic airflow path is active only with rental state; no falling Unicode snow, constant bouncing, animated numeric values or inferred online state. Display text clarifies category illustration and rental animation. Reduced-motion disables all ongoing decorative motion. Pointer overlays never block card actions. Assets use Vite base path correctly and don't increase the JavaScript bundle with inline base64.
+
+## Verification
+Test category selection/fallback, correct base-relative image paths, accessible decorative image handling, source data preservation, unique SVG IDs and rental/motion semantics. Reuse existing warehouse and unit checks, replace tests specifically tied to the deliberately superseded old snow/SVG. Inspect actual cards at desktop and 480px, compare stationary and rental scenes, inspect alignment over time and reduced-motion behavior. Independent review and existing authorized GitHub deployment. No production writes for QA.

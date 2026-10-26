@@ -27,28 +27,5 @@
 .freezer-card-contact span { font-size: 10px; color: #7b8fa1; }
 .freezer-card-contact strong { font-size: 12px; line-height: 1.4; color: #436079; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 767px) { .freezer-grid { padding: 14px; gap: 14px; } .freezer-illustration { max-height: 210px; } }
-.freezer-fan { transform-box: fill-box; transform-origin: center; }
-.is-rented .freezer-fan { animation: freezer-fan-turn 3.2s linear infinite; }
-.is-rented .freezer-fan--reverse { animation-direction: reverse; animation-duration: 4s; }
-.freezer-airflow { opacity: 0; }
-.is-rented .freezer-airflow { opacity: .45; }
-.is-rented .freezer-airflow path { stroke-dasharray: 7 13; animation: freezer-air-drift 3.5s linear infinite; }
-.is-rented .freezer-airflow path:nth-child(2) { animation-delay: -.8s; }
-.is-rented .freezer-airflow path:nth-child(3) { animation-delay: -1.6s; }
-@keyframes freezer-fan-turn { to { transform: rotate(360deg); } }
-@keyframes freezer-air-drift { to { stroke-dashoffset: -60; } }
-.freezer-snow { position: absolute; inset: 0 0 24px; overflow: hidden; pointer-events: none; }
-.freezer-snowflake { position: absolute; left: var(--snow-x); top: -18px; color: #70b4d8; font-size: var(--snow-size); line-height: 1; opacity: 0; animation: freezer-snow-fall var(--snow-duration) linear var(--snow-delay) infinite; }
-@keyframes freezer-snow-fall {
-  0% { transform: translate3d(-5px, 0, 0) rotate(0deg); opacity: 0; }
-  15% { opacity: .5; }
-  75% { opacity: .35; }
-  100% { transform: translate3d(12px, 240px, 0) rotate(100deg); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .freezer-card, .freezer-card-open { transition: none; }
-  .freezer-card:hover { transform: none; }
-  .is-rented .freezer-fan, .is-rented .freezer-airflow path { animation: none; }
-  .freezer-snow { display: none; }
-  .freezer-snowflake { animation: none; }
-}
+
+@media (prefers-reduced-motion: reduce) { .freezer-card, .freezer-card-open { transition: none; } .freezer-card:hover { transform: none; } }
