@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useAuth } from "../auth";
 import { useData } from "../../shared/context/DataContext";
 import {
@@ -18,8 +18,6 @@ import {
   saveOfflineThreshold,
 } from "../../shared/firebase/monitoring";
 import {
-  monitoringStatus,
-  controllerConnectionStatus,
   downsampleTemperaturePoints,
   temperatureChartSegments,
   monitoringPeriodMs,
@@ -46,6 +44,9 @@ import type {
   TemperaturePoint,
 } from "../../shared/types/monitoring";
 import "./monitoring.css";
+import {MonitoringOverview,MonitoringSourceBoundary} from "./MonitoringOverview";
+import {DEFAULT_MONITOR_FILTERS,monitorRows,monitorSourcesReady,monitorReading,safeMonitorTemperature,selectedSensorViews,monitorSensorColor,type MonitorSources,type MonitorSource} from "./workspaceLogic";
+import "./monitoring-workspace.css";
 
 const EMPTY_HISTORY: MonitoringHistoryResult = {
   points: [],
@@ -54,13 +55,14 @@ const EMPTY_HISTORY: MonitoringHistoryResult = {
 };
 
 function formatTemperature(value: number | undefined): string {
-  if (value === undefined) return "—";
-  return `${value.toFixed(1)} °C`;
+  if (safeMonitorTemperature(value) === undefined) return "—";
+  return `${value!.toFixed(1)} °C`;
 }
 
 function formatDateTime(value: Date | null | undefined): string {
-  if (!value) return "Нет данных";
+  if (!value || !Number.isFinite(value.getTime())) return "Нет данных";
   return value.toLocaleString("ru-RU", {
+    timeZone: "Asia/Vladivostok",
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -70,7 +72,7 @@ function formatDateTime(value: Date | null | undefined): string {
 }
 
 function relativeTime(value: Date | null | undefined, nowMs: number): string {
-  if (!value) return "Нет данных";
+  if (!value || !Number.isFinite(value.getTime())) return "Нет данных";
   const seconds = Math.max(0, Math.floor((nowMs - value.getTime()) / 1_000));
   if (seconds < 30) return "только что";
   if (seconds < 60) return `${seconds} сек. назад`;
@@ -108,14 +110,6 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
     unknown: "Статус связи не получен",
   };
   return <span className={`monitor-badge monitor-badge--connection-${status}`}>{labels[status]}</span>;
-}
-
-type TemperatureTone = "normal" | "warning" | "danger";
-
-function temperatureTone(reading: ReadingStatus, connection: ConnectionStatus): TemperatureTone {
-  if (connection === "offline" || reading === "missing") return "danger";
-  if (connection === "unknown" || reading === "stale") return "warning";
-  return "normal";
 }
 
 function registrationLabel(status: MonitoringControllerStatus): string {
@@ -165,67 +159,10 @@ function ActiveAlertBadge({ count }: { count: number }) {
   return <span className="monitor-badge monitor-badge--alert-active">Активных аварий: {count}</span>;
 }
 
-type MonitoringFilter = "all" | "online" | "attention" | "alarms";
-
-function MiniTemperatureSparkline({ points, tone }: { points: TemperaturePoint[]; tone: TemperatureTone }) {
-  const gradientId = `monitor-spark-${useId().replace(/:/g, "")}`;
-  const values = points.slice(-24).map((point) => point.temperatureC);
-  const min = values.length > 0 ? Math.min(...values) : 0;
-  const max = values.length > 0 ? Math.max(...values) : 1;
-  const spread = Math.max(max - min, 1);
-  const yFor = (value: number) => (48 - ((value - min) / spread) * 34).toFixed(1);
-  const chartPoints = values.length === 1
-    ? [`0.0,${yFor(values[0] ?? 0)}`, `180.0,${yFor(values[0] ?? 0)}`]
-    : values.map((value, index) => {
-    const x = values.length <= 1 ? 90 : (index / (values.length - 1)) * 180;
-    return `${x.toFixed(1)},${yFor(value)}`;
-    });
-  const colors = tone === "danger"
-    ? ["#fb7185", "#dc2626"]
-    : tone === "normal"
-      ? ["#22d3ee", "#2563eb"]
-      : ["#fbbf24", "#d97706"];
-  const line = chartPoints.join(" ");
-  const area = chartPoints.length > 0 ? `${line} 180,60 0,60` : "";
-  return (
-    <svg className="monitor-mini-chart" viewBox="0 0 180 64" preserveAspectRatio="none" role="img" aria-label={values.length > 0 ? "Тренд температуры за последний час" : "История температуры пока недоступна"}>
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor={colors[0]} />
-          <stop offset="100%" stopColor={colors[1]} />
-        </linearGradient>
-        <linearGradient id={`${gradientId}-fill`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={colors[1]} stopOpacity=".22" />
-          <stop offset="100%" stopColor={colors[1]} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d="M 0 60 L 180 60" className="monitor-mini-chart-baseline" />
-      {area && <polygon points={area} fill={`url(#${gradientId}-fill)`} />}
-      {line && <>
-        <polyline points={line} fill="none" stroke={colors[1]} className="monitor-mini-chart-shadow" />
-        <polyline points={line} fill="none" stroke={`url(#${gradientId})`} className="monitor-mini-chart-line" />
-        <circle cx={chartPoints.at(-1)?.split(",")[0]} cy={chartPoints.at(-1)?.split(",")[1]} r="3.2" fill={colors[1]} className="monitor-mini-chart-dot" />
-      </>}
-    </svg>
-  );
-}
-
-function MonitoringSummary({ total, online, attention, alarms, filter, onFilter }: {
-  total: number; online: number; attention: number; alarms: number;
-  filter: MonitoringFilter; onFilter: (value: MonitoringFilter) => void;
-}) {
-  const items: Array<{ id: MonitoringFilter; label: string; value: number; icon: string; tone: string }> = [
-    { id: "all", label: "Всего устройств", value: total, icon: "ti-device-desktop", tone: "neutral" },
-    { id: "online", label: "На связи", value: online, icon: "ti-wifi", tone: "success" },
-    { id: "attention", label: "Требуют внимания", value: attention, icon: "ti-alert-triangle", tone: "warning" },
-    { id: "alarms", label: "Активные аварии", value: alarms, icon: "ti-bell-ringing", tone: "danger" },
-  ];
-  return <div className="monitor-summary" aria-label="Сводка мониторинга">{items.map((item) => <button type="button" key={item.id} className={`monitor-summary-card monitor-summary-card--${item.tone} ${filter === item.id ? "is-active" : ""}`} onClick={() => onFilter(item.id)}><span className="monitor-summary-icon"><i className={`ti ${item.icon}`} /></span><span className="monitor-summary-copy"><span>{item.label}</span><strong>{item.value}</strong></span><i className="ti ti-chevron-right monitor-summary-arrow" /></button>)}</div>;
-}
-
-function RenameMonitoringDeviceDialog({ device, saving, error, onClose, onSave }: {
+function RenameMonitoringDeviceDialog({ device, saving, error, blocked=false, onClose, onSave }: {
   device: MonitoringDevice;
   saving: boolean;
+  blocked?: boolean;
   error: string;
   onClose: () => void;
   onSave: (name: string) => void;
@@ -234,11 +171,12 @@ function RenameMonitoringDeviceDialog({ device, saving, error, onClose, onSave }
   return <div className="monitor-rename-backdrop" role="presentation" onMouseDown={onClose}>
     <form className="monitor-rename-dialog" role="dialog" aria-modal="true" aria-labelledby="monitor-rename-title"
       onMouseDown={(event) => event.stopPropagation()}
-      onSubmit={(event) => { event.preventDefault(); onSave(name); }}>
+      onSubmit={(event) => { event.preventDefault(); if(!blocked&&!saving)onSave(name); }}>
       <div className="monitor-rename-dialog-head"><div><h3 id="monitor-rename-title">Название контроллера</h3><p>ID: {device.id}</p></div><button type="button" className="monitor-rename-close" onClick={onClose} aria-label="Закрыть"><i className="ti ti-x" /></button></div>
       <label className="monitor-rename-field"><span>Название</span><input autoFocus value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Например, Контроллер камеры №1" /></label>
-      {error && <div className="monitor-rename-error">{error}</div>}
-      <div className="monitor-rename-actions"><button type="button" className="monitor-filter-button" disabled={saving} onClick={onClose}>Отмена</button><button type="submit" className="btn btn-primary" disabled={saving || !name.trim()}>{saving ? "Сохраняем…" : "Сохранить"}</button></div>
+      {blocked&&<div className="monitor-rename-error" role="alert">Источники недоступны. Введённое название сохранено; запись временно недоступна.</div>}
+      {error && <div className="monitor-rename-error" role="alert">{error}</div>}
+      <div className="monitor-rename-actions"><button type="button" className="monitor-filter-button" disabled={saving} onClick={onClose}>Отмена</button><button type="submit" className="btn btn-primary" disabled={blocked || saving || !name.trim()}>{saving ? "Сохраняем…" : "Сохранить"}</button></div>
     </form>
   </div>;
 }
@@ -283,11 +221,11 @@ function qualityDetails(point: TemperaturePoint): string[] {
   return details;
 }
 
-function chartAxisLabel(timestamp: number, spanMs: number): string {
+export function chartAxisLabel(timestamp: number, spanMs: number): string {
   const date = new Date(timestamp);
   return spanMs > 24 * 60 * 60_000
-    ? date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-    : date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    ? date.toLocaleString("ru-RU", { timeZone: "Asia/Vladivostok", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleTimeString("ru-RU", { timeZone: "Asia/Vladivostok", hour: "2-digit", minute: "2-digit" });
 }
 
 type NavigatorDrag = { mode: "pan" | "start" | "end"; originX: number; window: ChartWindow };
@@ -588,7 +526,7 @@ function SensorHistoryChart({
   rules: MonitoringTemperatureRule[];
 }) {
   return (
-    <section className="crm-section monitor-sensor-history">
+    <section className="crm-section monitor-sensor-history" style={{"--monitor-sensor-color":monitorSensorColor(sensorId)} as CSSProperties}>
       <div className="section-header monitor-history-header">
         <div>
           <div className="section-title">{sensorName}</div>
@@ -695,7 +633,7 @@ function TemperatureRulesPanel({ deviceId, sensors, rules, loading, error, canMa
           <div className="section-title">Правила температурных аварий</div>
           <div className="monitor-history-subtitle">Правила работают одновременно; равенство порогу не считается аварией</div>
         </div>
-        {canManage && (
+        {canManage && !loading && !error && (
           <button type="button" className="btn-primary" onClick={resetForm} disabled={saving}>
             <i className="ti ti-plus" /> Добавить правило
           </button>
@@ -758,10 +696,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [devices, setDevices] = useState<MonitoringDevice[]>([]);
   const [states, setStates] = useState<Map<string, MonitoringDeviceState>>(new Map());
   const [controllerStatuses, setControllerStatuses] = useState<Map<string, MonitoringControllerStatus>>(new Map());
-  const [devicesLoaded, setDevicesLoaded] = useState(false);
-  const [statesLoaded, setStatesLoaded] = useState(false);
-  const [controllerStatusesLoaded, setControllerStatusesLoaded] = useState(false);
-  const [overviewError, setOverviewError] = useState("");
+  const [sourceStatus,setSourceStatus]=useState<MonitorSources>({devices:"loading",states:"loading",controllers:"loading",settings:"loading"});
+  const [sourceErrors,setSourceErrors]=useState<Partial<Record<MonitorSource,string>>>({});
+  const [actionError,setActionError]=useState("");
   const [threshold, setThreshold] = useState(DEFAULT_OFFLINE_THRESHOLD_MINUTES);
   const [thresholdSaving, setThresholdSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -776,12 +713,20 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesError, setRulesError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
-  const [search, setSearch] = useState("");
-  const [monitoringFilter, setMonitoringFilter] = useState<MonitoringFilter>("all");
-  const [previewHistory, setPreviewHistory] = useState<Map<string, TemperaturePoint[]>>(new Map());
   const [renamingDevice, setRenamingDevice] = useState<MonitoringDevice | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState("");
+
+  const [sensorOwner,setSensorOwner]=useState<string|null>(null);
+  const [sensorStatesReady,setSensorStatesReady]=useState(false);
+  const [sensorErrors,setSensorErrors]=useState({registry:"",states:""});
+  const sensorError=Object.values(sensorErrors).filter(Boolean).join(" · ");
+  const [rulesOwner,setRulesOwner]=useState<string|null>(null);
+  const [historyOwner,setHistoryOwner]=useState("");
+  const [overviewFilters,setOverviewFilters]=useState(DEFAULT_MONITOR_FILTERS);
+  const [detailView,setDetailView]=useState("temperature");
+  const [sensorFilter,setSensorFilter]=useState("all");
+  useEffect(()=>{setDetailView("temperature");setSensorFilter("all");},[selectedId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
@@ -792,189 +737,78 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     if (focusDeviceId) setSelectedId(focusDeviceId);
   }, [focusDeviceId]);
 
-  useEffect(() => {
-    setOverviewError("");
-    const unsubscribeDevices = listenMonitoringDevices((nextDevices) => {
-      setDevices(nextDevices);
-      setDevicesLoaded(true);
-    }, (error) => {
-      setDevicesLoaded(true);
-      setOverviewError(error.message || "Не удалось загрузить реестр устройств");
-    });
-    const unsubscribeStates = listenMonitoringStates((nextStates) => {
-      setStates(nextStates);
-      setStatesLoaded(true);
-    }, (error) => {
-      setStatesLoaded(true);
-      setOverviewError(error.message || "Не удалось загрузить состояния устройств");
-    });
-    const unsubscribeControllerStatuses = listenMonitoringControllerStatuses((nextStatuses) => {
-      setControllerStatuses(nextStatuses);
-      setControllerStatusesLoaded(true);
-    }, (error) => {
-      setControllerStatusesLoaded(true);
-      setOverviewError(error.message || "Не удалось загрузить статусы контроллеров");
-    });
-    const unsubscribeSettings = listenMonitoringSettings(setThreshold, (error) => {
-      setOverviewError(error.message || "Не удалось загрузить настройки мониторинга");
-    });
-    return () => {
-      unsubscribeDevices();
-      unsubscribeStates();
-      unsubscribeControllerStatuses();
-      unsubscribeSettings();
-    };
-  }, []);
+  useEffect(()=>{
+    let active=true;
+    const ready=(key:MonitorSource)=>{if(!active)return;setSourceStatus(current=>({...current,[key]:"ready"}));setSourceErrors(current=>({...current,[key]:""}));};
+    const fail=(key:MonitorSource)=>(error:Error)=>{if(!active)return;setSourceStatus(current=>({...current,[key]:"error"}));setSourceErrors(current=>({...current,[key]:error.message||"Не удалось подтвердить источник"}));};
+    const stops=[
+      listenMonitoringDevices(next=>{if(active){setDevices(next);ready("devices");}},fail("devices")),
+      listenMonitoringStates(next=>{if(active){setStates(next);ready("states");}},fail("states")),
+      listenMonitoringControllerStatuses(next=>{if(active){setControllerStatuses(next);ready("controllers");}},fail("controllers")),
+      listenMonitoringSettings(next=>{if(active){setThreshold(next);ready("settings");}},fail("settings")),
+    ];
+    return ()=>{active=false;stops.forEach(stop=>stop());};
+  },[]);
 
-  useEffect(() => {
-    if (!devicesLoaded) return undefined;
-    // The compact controller card intentionally represents the primary physical
-    // probe only. Multi-sensor firmware keeps that probe at temperature-1;
-    // detailed controller cards load each sensor separately. A legacy
-    // single-sensor controller has no temperature-1 series, so only then do
-    // we fall back to its compatible `default` series.
-    const unsubscribe = devices.map((device) => {
-      let stopLegacy: (() => void) | null = null;
-      const show = (result: MonitoringHistoryResult) => {
-        setPreviewHistory((current) => new Map(current).set(device.id, result.points));
-      };
-      const startLegacyFallback = () => {
-        if (stopLegacy) return;
-        stopLegacy = listenDeviceHistory(device.id, "default", "hour", show, () => undefined);
-      };
-      const stopPrimary = listenDeviceHistory(device.id, "temperature-1", "hour", (result) => {
-        if (result.points.length === 0) {
-          startLegacyFallback();
-          return;
-        }
-        stopLegacy?.();
-        stopLegacy = null;
-        show(result);
-      }, startLegacyFallback);
-      return () => {
-        stopPrimary();
-        stopLegacy?.();
-      };
-    });
-    return () => unsubscribe.forEach((stop) => stop());
-  }, [devices, devicesLoaded]);
-
-  useEffect(() => {
-    if (!selectedId) {
-      setSensors([]); setSensorStates(new Map()); setSensorsLoading(false);
-      return undefined;
-    }
+  useEffect(()=>{
+    let active=true;
+    setSensorOwner(selectedId);setSensors([]);setSensorStates(new Map());setSensorStatesReady(false);setSensorErrors({registry:"",states:""});
+    if(!selectedId){setSensorsLoading(false);return;}
     setSensorsLoading(true);
-    const stopSensors = listenMonitoringDeviceSensors(selectedId, (nextSensors) => {
-      setSensors(nextSensors); setSensorsLoading(false);
-    }, (error) => { setOverviewError(error.message || "Не удалось загрузить датчики"); setSensorsLoading(false); });
-    const stopStates = listenMonitoringSensorStates(selectedId, setSensorStates, (error) => {
-      setOverviewError(error.message || "Не удалось загрузить состояния датчиков");
-    });
-    return () => { stopSensors(); stopStates(); };
-  }, [selectedId]);
+    const stopSensors=listenMonitoringDeviceSensors(selectedId,next=>{if(active){setSensors(next);setSensorsLoading(false);setSensorErrors(current=>({...current,registry:""}));}},error=>{if(active){setSensorErrors(current=>({...current,registry:error.message||"Не удалось загрузить реестр датчиков"}));setSensorsLoading(false);}});
+    const stopStates=listenMonitoringSensorStates(selectedId,next=>{if(active){setSensorStates(next);setSensorStatesReady(true);setSensorErrors(current=>({...current,states:""}));}},error=>{if(active){setSensorErrors(current=>({...current,states:error.message||"Не удалось загрузить показания датчиков"}));setSensorStatesReady(true);}});
+    return ()=>{active=false;stopSensors();stopStates();};
+  },[selectedId]);
 
-  useEffect(() => {
-    if (!selectedId) {
-      setRules([]);
-      setRulesLoading(false);
-      setRulesError("");
-      return;
-    }
-    setRules([]);
+  useEffect(()=>{
+    let active=true;
+    setRulesOwner(selectedId);setRules([]);setRulesError("");
+    if(!selectedId){setRulesLoading(false);return;}
     setRulesLoading(true);
-    setRulesError("");
-    return listenMonitoringTemperatureRules(selectedId, (nextRules) => {
-      setRules(nextRules);
-      setRulesLoading(false);
-    }, (error) => {
-      setRulesError(error.message || "Не удалось загрузить правила");
-      setRulesLoading(false);
-    });
-  }, [selectedId]);
+    const stop=listenMonitoringTemperatureRules(selectedId,next=>{if(active){setRules(next);setRulesLoading(false);setRulesError("");}},error=>{if(active){setRulesError(error.message||"Не удалось загрузить правила");setRulesLoading(false);}});
+    return ()=>{active=false;stop();};
+  },[selectedId]);
 
   const selectedDevice = devices.find((device) => device.id === selectedId);
   const role = myProfile?.role ?? "mechanic";
   const canManageSettings = role === "owner" || role === "admin" || role === "manager";
-  const loading = !devicesLoaded || !statesLoaded || !controllerStatusesLoaded;
-  const deviceStatuses = devices.map((device) => ({
-    device,
-    state: states.get(device.id),
-    controllerStatus: controllerStatuses.get(device.id),
-    status: monitoringStatus(states.get(device.id), nowMs, threshold),
-    activeAlertCount: Object.keys(states.get(device.id)?.activeAlertIds ?? {}).length,
-  }));
-  const onlineCount = deviceStatuses.filter((item) => item.status.connection === "online").length;
-  const attentionCount = deviceStatuses.filter((item) => item.status.connection !== "online" || item.status.reading !== "fresh").length;
-  const alarmCount = deviceStatuses.filter((item) => item.activeAlertCount > 0).length;
-  const filteredDeviceStatuses = deviceStatuses.filter((item) => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("ru");
-    const searchable = `${item.device.name} ${objectLabel(item.device, clients)}`.toLocaleLowerCase("ru");
-    if (normalizedSearch && !searchable.includes(normalizedSearch)) return false;
-    if (monitoringFilter === "online" && item.status.connection !== "online") return false;
-    if (monitoringFilter === "attention" && item.status.connection === "online" && item.status.reading === "fresh") return false;
-    if (monitoringFilter === "alarms" && item.activeAlertCount === 0) return false;
-    return true;
-  });
-
-  const sensorViews = useMemo(() => {
-    const ids = new Set<string>([
-      ...sensors.map((sensor) => sensor.sensorId),
-      ...sensorStates.keys(),
-    ]);
-    // Controllers recorded before per-sensor state retain one compatible
-    // virtual sensor. Once telemetry has named sensors, no extra default card
-    // is invented alongside them.
-    if (ids.size === 0 && selectedDevice && states.get(selectedDevice.id)?.measuredAt) ids.add("default");
-    return [...ids].sort((left, right) => left.localeCompare(right, "en")).map((sensorId, index) => ({
-      sensorId,
-      sensor: sensors.find((item) => item.sensorId === sensorId) ?? { sensorId, lastSeenAt: null },
-      state: sensorStates.get(sensorId) ?? (sensorId === "default" && selectedDevice ? states.get(selectedDevice.id) : undefined),
-      index,
-    }));
-  }, [selectedDevice, sensorStates, sensors, states]);
+  const rows=useMemo(()=>monitorRows(devices,states,controllerStatuses,clients,nowMs,threshold),[devices,states,controllerStatuses,clients,nowMs,threshold]);
+  const selectedRow=rows.find(row=>row.device.id===selectedId);
+  const sensorsBusy=sensorOwner!==selectedId||sensorsLoading||!sensorStatesReady;
+  const sensorViews=useMemo(()=>selectedSensorViews({selectedId,owner:sensorOwner,registryReady:!sensorsLoading,statesReady:sensorStatesReady,error:sensorError,sensors,states:sensorStates,parent:selectedDevice?states.get(selectedDevice.id):undefined}),[selectedId,sensorOwner,sensorsLoading,sensorStatesReady,sensorError,sensors,sensorStates,selectedDevice,states]);
+  const visibleSensors=sensorFilter==="all"?sensorViews:sensorViews.filter(item=>item.sensorId===sensorFilter);
+  const selectedRules=rulesOwner===selectedId?rules:[];
 
   const sensorIdsKey = sensorViews.map((item) => item.sensorId).join("\u0000");
 
-  // Detailed history remains scoped to the open controller. Each sensor uses
-  // its own query, so raw points can never be mixed into another sensor graph.
-  useEffect(() => {
-    if (!selectedId || sensorViews.length === 0) {
-      setSensorHistories(new Map());
-      setLoadingSensorHistories(new Set());
-      setSensorHistoryErrors(new Map());
-      return undefined;
-    }
-    const sensorIds = sensorViews.map((item) => item.sensorId);
-    setSensorHistories(new Map());
-    setSensorHistoryErrors(new Map());
-    setLoadingSensorHistories(new Set(sensorIds));
-    const stops = sensorIds.map((sensorId) => (
-      listenDeviceHistory(selectedId, sensorId, period, (result) => {
-        setSensorHistories((current) => new Map(current).set(sensorId, result));
-        setLoadingSensorHistories((current) => {
-          const next = new Set(current); next.delete(sensorId); return next;
-        });
-      }, (error) => {
-        setSensorHistoryErrors((current) => new Map(current).set(sensorId, error.message || "Не удалось загрузить историю"));
-        setLoadingSensorHistories((current) => {
-          const next = new Set(current); next.delete(sensorId); return next;
-        });
-      })
-    ));
-    return () => stops.forEach((stop) => stop());
-  // sensorIdsKey intentionally ignores state value updates: they must not
-  // recreate all chart listeners after every fresh telemetry packet.
+  const historyScope=JSON.stringify([selectedId,sensorIdsKey,period]);
+  useEffect(()=>{
+    let active=true;
+    setSensorHistories(new Map());setSensorHistoryErrors(new Map());setHistoryOwner(historyScope);
+    if(!selectedId||!sensorViews.length){setLoadingSensorHistories(new Set());return;}
+    setLoadingSensorHistories(new Set(sensorViews.map(item=>item.sensorId)));
+    const stops=sensorViews.map(item=>listenDeviceHistory(selectedId,item.sensorId,period,result=>{
+      if(!active)return;
+      setSensorHistories(current=>new Map(current).set(item.sensorId,result));
+      setSensorHistoryErrors(current=>{if(!current.has(item.sensorId))return current;const next=new Map(current);next.delete(item.sensorId);return next;});
+      setLoadingSensorHistories(current=>{const next=new Set(current);next.delete(item.sensorId);return next;});
+    },error=>{
+      if(!active)return;
+      setSensorHistoryErrors(current=>new Map(current).set(item.sensorId,error.message||"Не удалось загрузить историю"));
+      setLoadingSensorHistories(current=>{const next=new Set(current);next.delete(item.sensorId);return next;});
+    }));
+    return ()=>{active=false;stops.forEach(stop=>stop());};
+  // Selection key intentionally ignores incoming value updates; telemetry never recreates history listeners.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, sensorIdsKey, period]);
+  },[historyScope]);
 
   async function changeThreshold(value: number) {
     setThresholdSaving(true);
-    setOverviewError("");
+    setActionError("");
     try {
       await saveOfflineThreshold(value);
     } catch (error) {
-      setOverviewError(error instanceof Error ? error.message : "Не удалось сохранить порог связи");
+      setActionError(error instanceof Error ? error.message : "Не удалось сохранить порог связи");
     } finally {
       setThresholdSaving(false);
     }
@@ -991,17 +825,19 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
     } finally { setRenameSaving(false); }
   }
 
+
   if (selectedDevice) {
     const state = states.get(selectedDevice.id);
     const controllerStatus = controllerStatuses.get(selectedDevice.id);
-    const status = monitoringStatus(state, nowMs, threshold);
-    const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
+    const status = {reading:selectedRow?.reading??"missing"};
+    const connection = selectedRow?.connection??"unknown";
     const activeAlertCount = Object.keys(state?.activeAlertIds ?? {}).length;
     return (
-      <div className="monitor-page">
+      <div className="monitor-page monitor-workspace monitor-detail-workspace" key={selectedDevice.id}>
         <button type="button" className="monitor-back" onClick={() => setSelectedId(null)}>
           <i className="ti ti-arrow-left" /> Все устройства
         </button>
+        <MonitoringSourceBoundary status={sourceStatus}>
         <section className="monitor-detail-head">
           <div>
             <div className="monitor-title-row">
@@ -1009,6 +845,9 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               {selectedDevice.isTest && <span className="monitor-test-badge">Тестовое устройство</span>}
             </div>
             <p>{objectLabel(selectedDevice, clients)}</p>
+            <p>ID: {selectedDevice.id}</p>
+            {!selectedDevice.enabled&&<p>Устройство отключено от наблюдения. Сохранённая история доступна ниже.</p>}
+            {canManageSettings&&<button type="button" className="monitor-detail-rename" onClick={()=>{setRenameError("");setRenamingDevice(selectedDevice);}}>Название контроллера</button>}
           </div>
           <div className="monitor-detail-badges">
             {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
@@ -1035,18 +874,20 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
           </div>
         </div>
 
+        <nav className="monitor-detail-view-nav" aria-label="Разделы контроллера">{[{id:"temperature",label:"Показания и графики"},{id:"connection",label:"Связь и диагностика"},{id:"rules",label:"Правила тревог"}].map(item=><button type="button" key={item.id} aria-current={detailView===item.id?"page":undefined} onClick={()=>setDetailView(item.id)}>{item.label}</button>)}</nav>
+        <section className="monitor-detail-section" hidden={detailView!=="temperature"} aria-label="Показания и графики"><label className="monitor-detail-sensor-filter">Показать датчики<select value={sensorFilter} onChange={e=>setSensorFilter(e.target.value)}><option value="all">Все датчики</option>{sensorViews.map(item=><option value={item.sensorId} key={item.sensorId}>{sensorDisplayName(item.sensor,item.index)}</option>)}</select></label>
         <section className="crm-section monitor-sensors">
           <div className="section-header">
             <div><div className="section-title">Датчики контроллера</div><div className="monitor-history-subtitle">Название можно изменить без смены технического ID и истории.</div></div>
             <span className="monitor-sensor-count">{sensorViews.length}</span>
           </div>
-          {sensorsLoading ? <div className="monitor-loading">Загружаем датчики…</div> : sensorViews.length === 0 ? (
+          {sensorError ? <div className="monitor-workspace-error" role="alert">{sensorError}</div> : sensorsBusy ? <div className="monitor-loading" role="status">Загружаем реестр и показания датчиков…</div> : sensorViews.length === 0 ? (
             <div className="monitor-rules-empty">Контроллер ещё не передал измерения.</div>
           ) : (
             <div className="monitor-sensor-grid">
-              {sensorViews.map((item) => {
-                const itemStatus = monitoringStatus(item.state, nowMs, threshold);
-                return <div key={item.sensorId} className="monitor-sensor-card">
+              {visibleSensors.map((item) => {
+                const itemStatus = {reading:monitorReading(item.state,nowMs,threshold)};
+                return <div key={item.sensorId} className="monitor-sensor-card" style={{"--monitor-sensor-color":monitorSensorColor(item.sensorId)} as CSSProperties}>
                   <div className="monitor-sensor-card-head"><span className="monitor-sensor-title"><SensorNameEditor deviceId={selectedDevice.id} sensor={item.sensor} displayName={sensorDisplayName(item.sensor, item.index)} canManage={canManageSettings} /></span><ReadingBadge status={itemStatus.reading} /></div>
                   <div className="monitor-sensor-select">
                     <strong className="monitor-sensor-temperature">{formatTemperature(item.state?.temperatureC)}</strong>
@@ -1058,17 +899,6 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
             </div>
           )}
         </section>
-
-        <DiagnosticsPanel status={controllerStatus} connection={connection} nowMs={nowMs} />
-
-        <TemperatureRulesPanel
-          deviceId={selectedDevice.id}
-          sensors={sensorViews.map((item) => ({ sensorId: item.sensorId, name: sensorDisplayName(item.sensor, item.index) }))}
-          rules={rules}
-          loading={rulesLoading}
-          error={rulesError}
-          canManage={canManageSettings}
-        />
 
         <section className="crm-section monitor-history">
           <div className="section-header monitor-history-header">
@@ -1091,111 +921,49 @@ export function MonitoringTab({ focusDeviceId }: { focusDeviceId?: string | null
               ))}
             </div>
           </div>
-          {sensorViews.length === 0 ? <div className="monitor-rules-empty">Контроллер ещё не передал датчики.</div> : (
+          {sensorError?<div className="monitor-workspace-error" role="alert">История недоступна без подтверждения датчиков: {sensorError}</div>:sensorsBusy?<div className="monitor-loading" role="status">Подтверждаем список датчиков…</div>:sensorViews.length === 0 ? <div className="monitor-rules-empty">Контроллер ещё не передал датчики.</div> : (
             <div className="monitor-sensor-history-list">
-              {sensorViews.map((item) => <SensorHistoryChart
+              {visibleSensors.map((item) => <SensorHistoryChart
                 key={item.sensorId}
                 sensorName={sensorDisplayName(item.sensor, item.index)}
                 sensorId={item.sensorId}
-                history={sensorHistories.get(item.sensorId) ?? EMPTY_HISTORY}
-                loading={loadingSensorHistories.has(item.sensorId)}
-                error={sensorHistoryErrors.get(item.sensorId)}
+                history={historyOwner===historyScope? sensorHistories.get(item.sensorId) ?? EMPTY_HISTORY:EMPTY_HISTORY}
+                loading={historyOwner!==historyScope||loadingSensorHistories.has(item.sensorId)}
+                error={historyOwner===historyScope?sensorHistoryErrors.get(item.sensorId):undefined}
                 period={period}
-                rules={rules}
+                rules={selectedRules}
               />)}
             </div>
           )}
         </section>
+        </section>
+        <section className="monitor-detail-section" hidden={detailView!=="connection"} aria-label="Связь и диагностика">{connection!=="online"&&<p className="monitor-workspace-error">Связь не подтверждена. Ниже — последний полученный диагностический снимок.</p>}
+        <DiagnosticsPanel status={controllerStatus} connection={connection} nowMs={nowMs} />
+
+
+        </section>
+        <section className="monitor-detail-section" hidden={detailView!=="rules"} aria-label="Правила тревог">
+        <TemperatureRulesPanel
+          deviceId={selectedDevice.id}
+          sensors={sensorViews.map((item) => ({ sensorId: item.sensorId, name: sensorDisplayName(item.sensor, item.index) }))}
+          rules={selectedRules}
+          loading={rulesLoading||rulesOwner!==selectedId}
+          error={rulesError}
+          canManage={canManageSettings&&!sensorsBusy&&!sensorError&&rulesOwner===selectedId}
+        />
+
+
+        </section>
+        </MonitoringSourceBoundary>
+        {renamingDevice&&<RenameMonitoringDeviceDialog device={renamingDevice} saving={renameSaving} blocked={!monitorSourcesReady(sourceStatus)} error={renameError} onClose={()=>!renameSaving&&setRenamingDevice(null)} onSave={name=>void saveDeviceName(name)}/>}
+
       </div>
     );
   }
 
-  return (
-    <div className="monitor-page">
-      <div className="monitor-page-intro">
-        <div>
-          <h2>Контроль температуры</h2>
-          <p>Текущие показания и состояние связи оборудования клиентов.</p>
-        </div>
-        <label className="monitor-threshold">
-          <span>Нет связи после</span>
-          <select
-            value={threshold}
-            disabled={!canManageSettings || thresholdSaving}
-            onChange={(event) => void changeThreshold(Number(event.target.value))}
-            title={canManageSettings ? "Настроить порог отсутствия связи" : "Настройка доступна менеджеру"}
-          >
-            {[2, 5, 10, 15, 30, 60].map((minutes) => (
-              <option key={minutes} value={minutes}>{minutes} мин.</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {overviewError && (
-        <div className="monitor-error">
-          <i className="ti ti-alert-triangle" />
-          <div><strong>Не удалось загрузить мониторинг</strong><span>{overviewError}</span></div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="monitor-loading"><i className="ti ti-loader-2" /> Загружаем устройства…</div>
-      ) : devices.length === 0 ? (
-        <div className="monitor-empty">
-          <i className="ti ti-device-desktop-off" />
-          <strong>Устройства ещё не добавлены</strong>
-          <span>На этом этапе реестр создаётся через защищённый Admin-процесс.</span>
-        </div>
-      ) : (
-        <>
-          <MonitoringSummary total={devices.length} online={onlineCount} attention={attentionCount} alarms={alarmCount} filter={monitoringFilter} onFilter={setMonitoringFilter} />
-          <div className="monitor-filter-bar">
-            <label className="monitor-search"><i className="ti ti-search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск устройства или клиента" aria-label="Поиск устройства или клиента" /></label>
-            <button type="button" className={`monitor-filter-button ${monitoringFilter === "alarms" ? "is-active" : ""}`} onClick={() => setMonitoringFilter(monitoringFilter === "alarms" ? "all" : "alarms")}><i className="ti ti-filter" /> Только аварии</button>
-          </div>
-          {filteredDeviceStatuses.length === 0 ? (
-            <div className="monitor-empty monitor-empty--filtered"><i className="ti ti-filter-off" /><strong>Устройства не найдены</strong><span>Измените поиск или выбранный фильтр.</span></div>
-          ) : (
-          <div className="monitor-device-grid">
-          {filteredDeviceStatuses.map(({ device, state, controllerStatus, status, activeAlertCount }) => {
-            const connection = controllerConnectionStatus(controllerStatus, nowMs, threshold);
-            const tone = temperatureTone(status.reading, connection);
-            return (
-              <div className="monitor-device-card-wrap" key={device.id}>
-              <button type="button" className="monitor-device-card" onClick={() => setSelectedId(device.id)}>
-                <div className="monitor-card-head">
-                  <div className="monitor-device-icon"><i className="ti ti-temperature" /></div>
-                  <div className="monitor-device-name">
-                    <strong>{device.name}</strong>
-                    <span>{objectLabel(device, clients)}</span>
-                  </div>
-                  <i className="ti ti-chevron-right monitor-card-arrow" />
-                </div>
-                <div className={`monitor-card-temperature monitor-card-temperature--${tone}`}>
-                  {formatTemperature(state?.temperatureC)}
-                </div>
-                <MiniTemperatureSparkline points={previewHistory.get(device.id) ?? []} tone={tone} />
-                <div className="monitor-card-badges">
-                  {device.isTest && <span className="monitor-test-badge">Тест</span>}
-                  {!device.enabled && <span className="monitor-badge monitor-badge--disabled">Отключено</span>}
-                  {activeAlertCount > 0 && <ActiveAlertBadge count={activeAlertCount} />}
-                </div>
-                <div className="monitor-card-meta">
-                  <div><span>Сеть</span><strong className={`monitor-card-meta-status monitor-card-meta-status--${connection}`}>{connection === "online" ? "На связи" : connection === "offline" ? "Нет связи" : "Нет статуса"}</strong></div>
-                  <div><span>Показание</span><strong>{status.reading === "fresh" ? "Актуально" : status.reading === "stale" ? "Устарело" : "Нет данных"}</strong></div>
-                  <div><span>Обновлено</span><strong>{relativeTime(state?.measuredAt, nowMs)}</strong></div>
-                </div>
-              </button>
-              {canManageSettings && <button type="button" className="monitor-device-rename" title="Переименовать контроллер" aria-label={`Переименовать контроллер ${device.name}`} onClick={() => { setRenameError(""); setRenamingDevice(device); }}><i className="ti ti-pencil" /></button>}
-              </div>
-            );
-          })}
-          </div>
-          )}
-        </>
-      )}
-      {renamingDevice && <RenameMonitoringDeviceDialog device={renamingDevice} saving={renameSaving} error={renameError} onClose={() => !renameSaving && setRenamingDevice(null)} onSave={(name) => void saveDeviceName(name)} />}
-    </div>
-  );
+  return <>
+    {selectedId&&sourceStatus.devices==="ready"&&!selectedDevice&&<p className="monitor-workspace-error" role="alert">Устройство не найдено в реестре. Возможно, запись была удалена или доступ изменился.</p>}
+    <MonitoringOverview filters={overviewFilters} onFiltersChange={setOverviewFilters} rows={rows} sourceStatus={sourceStatus} sourceErrors={sourceErrors} actionError={actionError} nowMs={nowMs} threshold={threshold} thresholdSaving={thresholdSaving} canManage={canManageSettings} onThreshold={value=>void changeThreshold(value)} onOpen={setSelectedId} onRename={device=>{setRenameError("");setRenamingDevice(device);}}/>
+    {renamingDevice&&<RenameMonitoringDeviceDialog device={renamingDevice} saving={renameSaving} blocked={!monitorSourcesReady(sourceStatus)} error={renameError} onClose={()=>!renameSaving&&setRenamingDevice(null)} onSave={name=>void saveDeviceName(name)}/>}
+  </>;
 }
