@@ -33,7 +33,7 @@ export function dashboardMechanics(repair: Repair): string[] {
 }
 export function dashboardPhase(repair: Repair): DashboardRepair["phase"] {
   if (repair.status === "cancelled") return "cancelled";
-  if (repair.closedByManager || repair.closedAt) return "closed";
+  if (repair.closedByManager === true || (repair.closedAt && repair.closedByManager !== false)) return "closed";
   return repairStatus(repair) === "done" ? "ready" : "active";
 }
 export function collectDashboardRepairs(clients: readonly Client[], intake: readonly IntakeRepair[]): DashboardRepair[] {

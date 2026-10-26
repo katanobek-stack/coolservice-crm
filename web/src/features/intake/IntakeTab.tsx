@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
-import { repairStatus, taskStatus } from "../../shared/utils/repair";
+import { taskStatus } from "../../shared/utils/repair";
 import { fmtDate } from "../../shared/utils/format";
 import { Modal } from "../../shared/ui/Modal";
 import { Button } from "../../shared/ui/Button";
 import { Input, Textarea, FormGroup } from "../../shared/ui/Input";
-import { InlinePhotoButton } from "../../shared/ui/PhotoUploader";
+import { PhotoGrid, InlinePhotoButton } from "../../shared/ui/PhotoUploader";
 import { CreatorLine } from "../../shared/ui/CreatorLine";
-import { RepairTaskWork, AddRepairTaskModal, intakeRepairEditor } from "../../shared/repair-work";
+import { RepairTaskWork, AddRepairTaskModal, intakeRepairEditor, Lightbox } from "../../shared/repair-work";
 import {
   createIntakeRepair,
   createChamberIntake,
@@ -17,6 +17,9 @@ import {
   deleteIntakeRepair,
 } from "../../shared/firebase/intake";
 import { intakeKind, type IntakeRepair, type IntakeServiceType } from "../../shared/types/intake";
+
+import {RequestWorkspace,RequestCard,RequestFilters,RequestStatusBar,RequestListState,useRequestOperation,OperationError} from "../../shared/requests/RequestWorkspace";
+import {requestStage,requestAssignees,selectIntakeRequests,type RequestScope} from "../../shared/requests/workspaceLogic";
 
 const SERVICE_TYPE_LABELS: Record<IntakeServiceType, string> = {
   refrigerator: "Рефрижератор",
@@ -81,6 +84,7 @@ function IntakeVehicleModal({ intake, onClose }: { intake?: IntakeRepair; onClos
   const editor = { uid: user?.uid ?? "", name: myProfile?.name ?? user?.email ?? "Неизвестно" };
 
   async function handleSave() {
+    if(saving)return;
     if (!plate.trim()) { setError("Укажите гос. номер"); return; }
     setSaving(true);
     setError("");
@@ -107,13 +111,13 @@ function IntakeVehicleModal({ intake, onClose }: { intake?: IntakeRepair; onClos
   }
 
   return (
-    <Modal title={isEdit ? "Изменить машину" : "Новая машина на ремонт"} onClose={onClose}>
+    <Modal title={isEdit ? "Изменить автомобиль" : "Принять автомобиль"} onClose={onClose}>
       <FormGroup label="Гос. номер *">
-        <Input placeholder="А123ВС 77" value={plate} onChange={(e) => setPlate(e.target.value)} autoFocus />
+        <Input aria-label="Госномер автомобиля" placeholder="А123ВС 125" value={plate} onChange={(e) => setPlate(e.target.value)} autoFocus />
       </FormGroup>
       <div className="flex gap-2">
-        <FormGroup label="Марка"><Input placeholder="Hyundai" value={brand} onChange={(e) => setBrand(e.target.value)} /></FormGroup>
-        <FormGroup label="Модель"><Input placeholder="Porter" value={model} onChange={(e) => setModel(e.target.value)} /></FormGroup>
+        <FormGroup label="Марка"><Input aria-label="Марка автомобиля" placeholder="Hyundai" value={brand} onChange={(e) => setBrand(e.target.value)} /></FormGroup>
+        <FormGroup label="Модель"><Input aria-label="Модель автомобиля" placeholder="Porter" value={model} onChange={(e) => setModel(e.target.value)} /></FormGroup>
       </div>
       <FormGroup label="Тип">
         <div className="flex gap-2">
@@ -135,7 +139,7 @@ function IntakeVehicleModal({ intake, onClose }: { intake?: IntakeRepair; onClos
         </div>
       </FormGroup>
       <PhotoField photo={photo} onPick={(u, p) => { setPhoto(u); setPhotoPath(p); }} onClear={() => { setPhoto(""); setPhotoPath(""); }} />
-      {error && <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600, marginBottom: 8 }}>⚠ {error}</div>}
+      <OperationError error={error}/>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "Сохранение..." : isEdit ? "Сохранить" : "Создать заявку"}
       </Button>
@@ -164,6 +168,7 @@ function IntakeChamberModal({ intake, onClose }: { intake?: IntakeRepair; onClos
   const editor = { uid: user?.uid ?? "", name: myProfile?.name ?? user?.email ?? "Неизвестно" };
 
   async function handleSave() {
+    if(saving)return;
     if (!label.trim()) { setError("Укажите метку (магазин / адрес / описание)"); return; }
     setSaving(true);
     setError("");
@@ -190,25 +195,25 @@ function IntakeChamberModal({ intake, onClose }: { intake?: IntakeRepair; onClos
   }
 
   return (
-    <Modal title={isEdit ? "Изменить камеру" : "Новая камера на ремонт"} onClose={onClose}>
+    <Modal title={isEdit ? "Изменить камеру" : "Принять камеру"} onClose={onClose}>
       <FormGroup label="Метка (магазин / адрес / описание) *">
-        <Input placeholder="Магазин на Светланской, склад №2" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+        <Input aria-label="Метка камеры" placeholder="Магазин на Светланской, склад №2" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
       </FormGroup>
       <FormGroup label="Размеры (Д × Ш × В), мм">
         <div className="flex gap-2">
-          <Input type="number" placeholder="Д" value={length} onChange={(e) => setLength(e.target.value)} />
-          <Input type="number" placeholder="Ш" value={width} onChange={(e) => setWidth(e.target.value)} />
-          <Input type="number" placeholder="В" value={height} onChange={(e) => setHeight(e.target.value)} />
+          <Input aria-label="Длина камеры, мм" type="number" min="1" placeholder="Длина" value={length} onChange={(e) => setLength(e.target.value)} />
+          <Input aria-label="Ширина камеры, мм" type="number" min="1" placeholder="Ширина" value={width} onChange={(e) => setWidth(e.target.value)} />
+          <Input aria-label="Высота камеры, мм" type="number" min="1" placeholder="Высота" value={height} onChange={(e) => setHeight(e.target.value)} />
         </div>
       </FormGroup>
       <FormGroup label="Толщина стенки, мм">
-        <Input type="number" placeholder="80" value={wall} onChange={(e) => setWall(e.target.value)} />
+        <Input aria-label="Толщина стенки, мм" type="number" min="1" placeholder="80" value={wall} onChange={(e) => setWall(e.target.value)} />
       </FormGroup>
       <FormGroup label="Примечание">
-        <Textarea placeholder="Что с камерой, что нужно сделать..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Textarea aria-label="Примечание о камере" placeholder="Что с камерой, что нужно сделать..." value={notes} onChange={(e) => setNotes(e.target.value)} />
       </FormGroup>
       <PhotoField photo={photo} onPick={(u, p) => { setPhoto(u); setPhotoPath(p); }} onClear={() => { setPhoto(""); setPhotoPath(""); }} />
-      {error && <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600, marginBottom: 8 }}>⚠ {error}</div>}
+      <OperationError error={error}/>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "Сохранение..." : isEdit ? "Сохранить" : "Создать заявку"}
       </Button>
@@ -218,189 +223,54 @@ function IntakeChamberModal({ intake, onClose }: { intake?: IntakeRepair; onClos
 
 // ─── Intake card ─────────────────────────────────────────────────────────────
 
-function IntakeCard({ intake }: { intake: IntakeRepair }) {
-  const { myProfile, user } = useAuth();
-  const [showAdd, setShowAdd] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-
-  const editor = intakeRepairEditor(intake.id, {
-    uid: user?.uid ?? "",
-    name: myProfile?.name ?? user?.email ?? "Неизвестно",
-  });
-
-  const kind = intakeKind(intake);
-  const isChamber = kind === "chamber";
-  const { repair } = intake;
-  const tasks = repair.tasks ?? [];
-  const doneTasks = tasks.filter((t) => taskStatus(t) === "done").length;
-  const allDone = tasks.length > 0 && doneTasks === tasks.length;
-  const stripe = allDone ? "var(--green)" : "var(--accent)";
-  const photo = isChamber ? intake.chamber?.photo : intake.vehicle?.photo;
-
-  const title = isChamber
-    ? (intake.chamber?.label || "Камера")
-    : ([intake.vehicle?.brand, intake.vehicle?.model].filter(Boolean).join(" ") || "Автомобиль");
-
-  async function handleDelete() {
-    const what = isChamber ? `камере «${intake.chamber?.label}»` : `машине ${intake.vehicle?.plate}`;
-    if (!confirm(`Удалить заявку по ${what}? Все задачи и фото будут удалены.`)) return;
-    await deleteIntakeRepair(intake);
-  }
-
-  return (
-    <div style={{
-      background: "var(--bg2)", border: "1px solid var(--border)", borderLeft: `3px solid ${stripe}`,
-      borderRadius: 14, overflow: "hidden", marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
-    }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px 10px" }}>
-        {photo ? (
-          <img src={photo} alt="" style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
-        ) : (
-          <div style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0, background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-            {isChamber ? "🧊" : "🚚"}
-          </div>
-        )}
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 5 }}>{title}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-            {isChamber ? (
-              chamberSummary(intake.chamber) && (
-                <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>{chamberSummary(intake.chamber)}</span>
-              )
-            ) : (
-              <>
-                <span style={{
-                  fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#3b82f6",
-                  background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", padding: "2px 8px", borderRadius: 6,
-                }}>
-                  {intake.vehicle?.plate}
-                </span>
-                {intake.vehicle && (
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "rgba(139,92,246,0.12)", color: "#7c3aed" }}>
-                    {SERVICE_TYPE_LABELS[intake.vehicle.serviceType]}
-                  </span>
-                )}
-              </>
-            )}
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "rgba(139,92,246,0.12)", color: "#7c3aed" }}>
-              {isChamber ? "Камера" : "Машина"}
-            </span>
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
-              background: allDone ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)",
-              color: allDone ? "#16a34a" : "var(--accent2)",
-            }}>
-              {allDone ? "✓ Задачи закрыты" : "В работе"}
-            </span>
-            {tasks.length > 0 && (
-              <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "JetBrains Mono, monospace" }}>{doneTasks}/{tasks.length}</span>
-            )}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text3)" }}>Клиент назначит менеджер при закрытии</div>
-          <CreatorLine name={intake.createdByName} date={intake.createdAt} style={{ marginTop: 2 }} />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-          {repair.date && <span style={{ fontSize: 11, color: "var(--text3)" }}>{fmtDate(repair.date)}</span>}
-          <div style={{ display: "flex", gap: 4 }}>
-            <button type="button" onClick={() => setShowEdit(true)} title="Изменить" style={{ padding: "5px 7px", borderRadius: 8, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text2)", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>
-              <i className="ti ti-pencil" />
-            </button>
-            <button type="button" onClick={() => void handleDelete()} title="Удалить заявку" style={{ padding: "5px 7px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "#dc2626", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>
-              <i className="ti ti-trash" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <RepairTaskWork repair={repair} tasks={tasks} editor={editor} canManageTasks />
-
-      <div style={{ padding: "4px 12px 12px" }}>
-        <button
-          type="button"
-          onClick={() => setShowAdd(true)}
-          style={{
-            alignSelf: "flex-start", padding: "5px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-            background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text2)", cursor: "pointer",
-          }}
-        >
-          <i className="ti ti-plus" style={{ fontSize: 12 }} /> Задача
-        </button>
-      </div>
-
-      {showAdd && (
-        <AddRepairTaskModal editor={editor} repairFreonType={repair.freonType} onClose={() => setShowAdd(false)} />
-      )}
-      {showEdit && (isChamber
-        ? <IntakeChamberModal intake={intake} onClose={() => setShowEdit(false)} />
-        : <IntakeVehicleModal intake={intake} onClose={() => setShowEdit(false)} />)}
-    </div>
-  );
+function IntakeCard({intake}:{intake:IntakeRepair}){
+ const {myProfile,user}=useAuth();const {staff}=useData();
+ const [showAdd,setShowAdd]=useState(false),[showEdit,setShowEdit]=useState(false),[lightbox,setLightbox]=useState<string|null>(null);
+ const operation=useRequestOperation();
+ const editor=intakeRepairEditor(intake.id,{uid:user?.uid||"",name:myProfile?.name||user?.email||"Неизвестно"});
+ const isChamber=intakeKind(intake)==="chamber",repair=intake.repair,tasks=repair.tasks??[],stage=requestStage(repair),archived=stage==="closed"||stage==="cancelled";
+ const photo=isChamber?intake.chamber?.photo:intake.vehicle?.photo;
+ const title=isChamber?intake.chamber?.label||"Холодильная камера":[intake.vehicle?.brand,intake.vehicle?.model].filter(Boolean).join(" ")||"Автомобиль";
+ const names=requestAssignees(repair).map(id=>staff.find(s=>s.id===id)?.name||id).join(", ");
+ async function handleDelete(){const what=isChamber?`камере «${intake.chamber?.label}»`:`автомобилю ${intake.vehicle?.plate}`;if(!confirm(`Удалить заявку по ${what}? Все задачи и фото будут удалены.`))return;await deleteIntakeRepair(intake);}
+ return <RequestCard title={title} subtitle={isChamber?"Холодильная камера":[intake.vehicle?.plate,intake.vehicle?SERVICE_TYPE_LABELS[intake.vehicle.serviceType]:"Автомобиль"].filter(Boolean).join(" · ")} description={intake.chamber?.notes||repair.description} photo={photo} stage={stage} meta={[repair.date?`Приём: ${fmtDate(repair.date)}`:"Дата не указана",names||"Исполнитель не назначен",isChamber?chamberSummary(intake.chamber):""]} progress={{done:tasks.filter(t=>taskStatus(t)==="done").length,total:tasks.length}}>
+  <CreatorLine name={intake.createdByName} date={intake.createdAt}/>
+  <p className="request-work-note">{stage==="ready"?"Работы выполнены. Менеджер назначает клиента и подтверждает закрытие в «Отчётах».":"Клиент будет назначен менеджером при закрытии заявки в «Отчётах»."}</p>
+  {(repair.description||intake.chamber?.notes)&&<p>{[repair.description,intake.chamber?.notes].filter(Boolean).join("\n")}</p>}
+  {isChamber&&intake.chamber?.wallThickness&&<p>Толщина стенки: {intake.chamber.wallThickness} мм</p>}
+  {archived?<div className="request-history">{tasks.map(task=><section key={task.id}><h3>{task.description}</h3><p>{taskStatus(task)==="done"?"Выполнено":"Не выполнено"}</p>{task.workComment&&<p>{task.workComment}</p>}<PhotoGrid photos={task.photos??[]} readOnly onView={setLightbox}/></section>)}</div>:<RepairTaskWork repair={repair} tasks={tasks} editor={editor} canManageTasks/>}
+  <PhotoGrid photos={repair.photos??[]} readOnly onView={setLightbox}/>
+  <OperationError error={operation.error}/>
+  <div className="request-card-actions">
+   {!archived&&<button type="button" className="is-primary" onClick={()=>setShowAdd(true)}>Добавить работу</button>}
+   <button type="button" onClick={()=>setShowEdit(true)}>Изменить {isChamber?"камеру":"автомобиль"}</button>
+   <button type="button" className="is-danger" disabled={operation.busy} onClick={()=>void operation.run(handleDelete)}>Удалить заявку</button>
+  </div>
+  {showAdd&&<AddRepairTaskModal editor={editor} repairFreonType={repair.freonType} onClose={()=>setShowAdd(false)}/>}
+  {showEdit&&(isChamber?<IntakeChamberModal intake={intake} onClose={()=>setShowEdit(false)}/>:<IntakeVehicleModal intake={intake} onClose={()=>setShowEdit(false)}/>)}
+  {lightbox&&<Lightbox url={lightbox} onClose={()=>setLightbox(null)}/>}
+ </RequestCard>;
 }
 
-// ─── Tab ─────────────────────────────────────────────────────────────────────
-
-export function IntakeTab() {
-  const { intakeRepairs } = useData();
-  const [newKind, setNewKind] = useState<null | "vehicle" | "chamber">(null);
-
-  const sorted = useMemo(
-    () => [...intakeRepairs]
-      .filter((i) => i && i.repair && (i.vehicle || i.chamber))
-      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
-    [intakeRepairs],
-  );
-  const ready = sorted.filter((i) => repairStatus(i.repair) === "done");
-  const active = sorted.filter((i) => repairStatus(i.repair) !== "done");
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
-        <div className="section-header">
-          <i className="ti ti-car-garage" style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">Приёмка</span>
-          {sorted.length > 0 && <span className="section-count">{sorted.length}</span>}
-          <div className="section-actions" style={{ display: "flex", gap: 6 }}>
-            <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setNewKind("vehicle")}>
-              <i className="ti ti-plus" /> Машина
-            </button>
-            <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setNewKind("chamber")}>
-              <i className="ti ti-plus" /> Камера
-            </button>
-          </div>
-        </div>
-
-        {sorted.length === 0 ? (
-          <div style={{ padding: "36px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет заявок в приёмке.<br />Нажмите «Машина» или «Камера», когда объект заедет на ремонт.
-          </div>
-        ) : (
-          <div style={{ padding: "10px 12px 12px" }}>
-            {ready.length > 0 && (
-              <>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.6px", margin: "4px 2px 8px" }}>
-                  Задачи закрыты — ждут менеджера ({ready.length})
-                </div>
-                {ready.map((i) => <IntakeCard key={i.id} intake={i} />)}
-              </>
-            )}
-            {active.length > 0 && (
-              <>
-                {ready.length > 0 && (
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.6px", margin: "10px 2px 8px" }}>
-                    В работе ({active.length})
-                  </div>
-                )}
-                {active.map((i) => <IntakeCard key={i.id} intake={i} />)}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {newKind === "vehicle" && <IntakeVehicleModal onClose={() => setNewKind(null)} />}
-      {newKind === "chamber" && <IntakeChamberModal onClose={() => setNewKind(null)} />}
-    </div>
-  );
+export function IntakeTab(){
+ const {intakeRepairs,staff,sourceStatus}=useData();const {myProfile}=useAuth();
+ const [newKind,setNewKind]=useState<null|"vehicle"|"chamber">(null);
+ const [filters,setFilters]=useState({search:"",employee:"",mine:false,status:"open" as RequestScope["status"],sort:"newest" as RequestScope["sort"],kind:"all"});
+ const ids=new Set(intakeRepairs.flatMap(item=>item.repair?requestAssignees(item.repair):[]));
+ const options=[...staff,...[...ids].filter(id=>!staff.some(s=>s.id===id)).map(id=>({id,name:`Сотрудник ${id}`}))];
+ const scope:RequestScope={...filters,uid:myProfile?.id||"",manager:["owner","admin","manager"].includes(myProfile?.role||""),staff:options};
+ const patch=(value:Partial<RequestScope>)=>setFilters(current=>({...current,...value}));
+ const reset=()=>setFilters({search:"",employee:"",mine:false,status:"open",sort:"newest",kind:"all"});
+ const rows=selectIntakeRequests(intakeRepairs,scope),confirmed=sourceStatus.intakeRepairs==="ready";
+ const count=(status:RequestScope["status"])=>confirmed?selectIntakeRequests(intakeRepairs,{...scope,status}).length:undefined;
+ return <RequestWorkspace title="Приёмка" description="Автомобили и холодильные камеры до назначения клиента. Примите технику, добавьте работы и передайте результат менеджеру." actions={<><button type="button" className="btn-primary" onClick={()=>setNewKind("vehicle")}>Принять автомобиль</button><button type="button" className="btn-secondary" onClick={()=>setNewKind("chamber")}>Принять камеру</button></>}>
+  <RequestFilters scope={scope} onChange={patch} onReset={reset} kinds={[{id:"all",label:"Все объекты"},{id:"vehicle",label:"Автомобили"},{id:"chamber",label:"Камеры"},{id:"ac",label:"Автокондиционеры"}]}/>
+  <RequestStatusBar value={scope.status} items={[{id:"open",label:"Все открытые",count:count("open")},{id:"active",label:"В работе",count:count("active")},{id:"ready",label:"Ждут менеджера",count:count("ready")},{id:"archive",label:"Архив и отказы",count:count("archive")}]} onChange={status=>patch({status})}/>
+  <div className="request-results-line"><strong>{confirmed?`Найдено: ${rows.length}`:"Данные не подтверждены"}</strong><p>Выполнение работ не закрывает заявку автоматически. Назначение клиента и закрытие остаются в «Отчётах».</p></div>
+  <RequestListState statuses={[sourceStatus.intakeRepairs]} count={rows.length} filtered={!!(scope.search||scope.employee||scope.mine||scope.kind!=="all"||scope.status!=="open")} empty="В приёмке пока нет открытых заявок">
+   {rows.map(item=><IntakeCard key={item.id} intake={item}/>)}
+  </RequestListState>
+  {newKind==="vehicle"&&<IntakeVehicleModal onClose={()=>setNewKind(null)}/>}
+  {newKind==="chamber"&&<IntakeChamberModal onClose={()=>setNewKind(null)}/>}
+ </RequestWorkspace>;
 }

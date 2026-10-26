@@ -82,3 +82,7 @@ test("detail status distinguishes work completion from confirmed closure",()=>{
  assert.equal((logic as unknown as {dashboardStatusLabel(r:Repair):string}).dashboardStatusLabel(repair("ready",{tasks:[{id:"t",description:"Done",assignees:["a"],doneBy:["a"],status:"done"}]})),"Работы выполнены · ожидает закрытия");
  assert.equal((logic as unknown as {dashboardStatusLabel(r:Repair):string}).dashboardStatusLabel(repair("closed",{closedByManager:true})),"Закрыто");
 });
+test("dashboard respects explicitly reopened repairs with historical closure timestamps",()=>{
+ const rows=api.collectDashboardRepairs([client("c",[repair("returned",{closedByManager:false,closedAt:"2026-10-01T01:00:00Z",status:"in_progress",tasks:[{id:"t",description:"Повторная проверка",assignees:["a"],doneBy:[],status:"in_progress"}]})])],[]);
+ assert.equal(rows[0].phase,"active");
+});
