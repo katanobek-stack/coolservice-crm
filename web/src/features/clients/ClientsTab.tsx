@@ -97,7 +97,7 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
   }
 
   return (
-    <Modal title="Редактировать" onClose={onClose}>
+    <Modal className="client-form-modal" title="Редактировать" onClose={onClose}>
       <FormGroup label="ФИО / Название"><Input value={name} onChange={(e) => setName(e.target.value)} /></FormGroup>
       <FormGroup label="Телефон"><Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></FormGroup>
       {isLegal && (
@@ -154,11 +154,11 @@ function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: (
   }
 
   return (
-    <Modal title="Перевести в юр. лицо" onClose={onClose}>
+    <Modal className="client-form-modal" title="Перевести в юр. лицо" onClose={onClose}>
       <div style={{
         background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.25)",
         borderRadius: 12, padding: "10px 14px", marginBottom: 16,
-        fontSize: 12.5, color: "#fcd34d", lineHeight: 1.5,
+        fontSize: 12.5, color: "#82521b", lineHeight: 1.5,
       }}>
         ⚠️ Все заявки и машины клиента будут сохранены и привязаны к новому юр. лицу
       </div>
@@ -229,7 +229,7 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
     }
   }
   return (
-    <Modal title={type === "phys" ? "Новый клиент" : "Новая компания"} onClose={onClose}>
+    <Modal className="client-form-modal" title={type === "phys" ? "Новый клиент" : "Новая компания"} onClose={onClose}>
       <FormGroup label="ФИО / Название"><Input placeholder={type === "phys" ? "Иван Иванов" : "ООО «Пример»"} value={name} onChange={(e) => setName(e.target.value)} /></FormGroup>
       <FormGroup label="Телефон"><Input type="tel" placeholder="+7 924 000 00 00" value={phone} onChange={(e) => setPhone(e.target.value)} /></FormGroup>
       {type === "legal" && (<><FormGroup label="ИНН"><Input value={inn} onChange={(e) => setInn(e.target.value)} /></FormGroup><FormGroup label="Контакт"><Input value={contact} onChange={(e) => setContact(e.target.value)} /></FormGroup></>)}
@@ -326,7 +326,7 @@ function VehicleModal({ client, vehicle, onClose }: { client: Client; vehicle?: 
   };
 
   return (
-    <Modal title={isEdit ? "Редактировать авто" : "Добавить авто"} onClose={onClose}>
+    <Modal className="client-form-modal" title={isEdit ? "Редактировать авто" : "Добавить авто"} onClose={onClose}>
 
       {/* Photo */}
       <div style={{ marginBottom: 16 }}>
@@ -506,7 +506,7 @@ function ChamberModal({ client, chamber, onClose }: { client: Client; chamber?: 
   const dimRow: CSSProperties = { display: "flex", gap: 8 };
 
   return (
-    <Modal title={isEdit ? "Редактировать камеру" : "Добавить камеру"} onClose={onClose}>
+    <Modal className="client-form-modal" title={isEdit ? "Редактировать камеру" : "Добавить камеру"} onClose={onClose}>
 
       {/* Photo */}
       <div style={{ marginBottom: 16 }}>
@@ -657,7 +657,7 @@ function AddAppointmentModal({ client, onClose }: { client: Client; onClose: () 
   }
 
   return (
-    <Modal title="Новая запись" onClose={onClose}>
+    <Modal className="client-form-modal" title="Новая запись" onClose={onClose}>
       <FormGroup label="Дата"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></FormGroup>
       <FormGroup label="Время"><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></FormGroup>
       {(client.vehicles ?? []).length > 0 && (
@@ -764,7 +764,7 @@ function AddRepairModal({ client, preVehicleId, preChamber, onClose }: { client:
     .join(", ");
 
   return (
-    <Modal title="Новый ремонт" onClose={onClose}>
+    <Modal className="client-form-modal" title="Новый ремонт" onClose={onClose}>
       {preChamber ? (
         <div style={{ marginBottom: 14, padding: "10px 14px", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.25)", borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 22 }}>🧊</span>
@@ -948,7 +948,7 @@ function EditRepairModal({ client, repair, onClose }: { client: Client; repair: 
   }
 
   return (
-    <Modal title="Редактировать наряд" onClose={onClose}>
+    <Modal className="client-form-modal" title="Редактировать наряд" onClose={onClose}>
       {(repair.closedByManager || repair.status === "cancelled") && (
         <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100 text-xs text-blue-600">
           ℹ️ Редактирование закрытого/отменённого наряда
@@ -1339,7 +1339,7 @@ function ObjectPickerModal({ client, onPick, onClose }: {
   };
 
   return (
-    <Modal title="Выберите объект ремонта" onClose={onClose}>
+    <Modal className="client-form-modal" title="Выберите объект ремонта" onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
         {vehicles.length > 0 && (
@@ -1451,7 +1451,7 @@ function VehicleHistoryModal({ client, vehicle, onClose }: {
   const repairWord = repairs.length === 1 ? "ремонт" : repairs.length < 5 ? "ремонта" : "ремонтов";
 
   return (
-    <Modal title={`${vehicle.plate}${brand ? ` · ${brand}` : ""}`} onClose={onClose}>
+    <Modal className="client-form-modal" title={`${vehicle.plate}${brand ? ` · ${brand}` : ""}`} onClose={onClose}>
 
       {/* Vehicle photo */}
       {vehicle.photo && (
@@ -1643,7 +1643,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
       <nav className="client-profile-nav" aria-label="Разделы карточки клиента">{[{id:"overview",label:"Обзор"},{id:"equipment",label:`Техника · ${vehicles.length+chambers.length}`},{id:"work",label:`Работы · ${activeRepairs.length}`},{id:"history",label:"История"},{id:"appointments",label:"Записи"}].map(item=><button type="button" key={item.id} aria-current={profileView===item.id?"page":undefined} onClick={()=>setProfileView(item.id)}>{item.label}</button>)}</nav>
       <section className="client-profile-panel" hidden={profileView!=="overview"} aria-label="Обзор клиента"><div className="client-profile-overview"><div>
       {/* ── КОНТАКТЫ ── */}
-      <div style={{ background: "var(--bg2)", borderRadius: 14, padding: "12px 14px", marginBottom: 20, border: "1px solid var(--border)" }}>
+      <div className="client-profile-contacts">
         {client.phone && (
           <a href={`tel:${client.phone}`} style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", marginBottom: 5 }}>
             <span style={{ fontSize: 13 }}>📞</span>
@@ -1715,7 +1715,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
       </div><div>
       {/* ── ДЕЙСТВИЯ ── */}
       {isAdmin && (
-        <div style={sec}>
+        <div className="client-profile-actions" style={sec}>
           <SectionHeader title="Действия" />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button
@@ -1762,7 +1762,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
       </details>}</section>
       <section className="client-profile-panel client-profile-equipment" hidden={profileView!=="equipment"} aria-label="Техника клиента">
       {/* ── АВТОМОБИЛИ ── */}
-      <div style={sec}>
+      <div className="client-profile-equipment-block is-vehicles" style={sec}>
         <SectionHeader title="Автомобили" count={vehicles.length} />
         {vehicles.map((v) => (
           <VehicleRow key={v.id} vehicle={v} onEdit={isAdmin ? () => setVehicleEdit(v) : undefined} onView={() => setHistoryVehicle(v)} />
@@ -1790,7 +1790,7 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
 
       {/* ── КАМЕРЫ ── */}
       {(chambers.length > 0 || isAdmin) && (
-        <div style={sec}>
+        <div className="client-profile-equipment-block is-chambers" style={sec}>
           <SectionHeader title="Камеры (изготовление)" count={chambers.length > 0 ? chambers.length : undefined} />
           {chambers.map((c) => (
             <ChamberRow key={c.id} chamber={c} onEdit={isAdmin ? () => setChamberEdit(c) : undefined} />

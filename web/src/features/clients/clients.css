@@ -11,3 +11,75 @@
 @media(max-width:700px){.client-directory-heading{flex-direction:column;gap:18px}.client-directory-heading h1{font-size:27px}.client-profile-overview,.client-profile-equipment{grid-template-columns:1fr}.crm-modal.client-profile-modal{padding:20px 18px 30px}.client-profile-nav{gap:18px}.client-profile-nav>button{font-size:11px;padding-bottom:12px}}
 @media(max-width:600px){.client-directory{gap:18px}.client-directory-heading h1{font-size:25px;margin-bottom:8px;letter-spacing:-.7px}.client-directory-heading p{font-size:12px}.client-directory-create{width:100%}.client-directory-create>button{flex:1}.client-directory-types{gap:20px;flex-wrap:nowrap}.client-directory-types>button{font-size:11px;gap:6px;padding:12px 0 14px}.client-directory-types>button>span{font-size:9px;padding:2px 5px}.client-directory-toolbar{padding:18px;gap:16px}.client-directory-controls{gap:14px 10px}.client-directory-controls select{font-size:11px!important;padding-inline:10px!important}.client-directory-toolbar-footer{font-size:9px;gap:12px}.client-directory-toolbar-footer>button{font-size:10px;white-space:nowrap}.client-directory-results{gap:12px}.client-directory-results>p{font-size:11px}.client-directory-results button{font-size:10px;padding-inline:11px}.client-directory-grid{grid-template-columns:1fr;gap:12px}.client-directory-card{padding:18px;gap:16px}.client-directory-identity>strong{font-size:15px}.client-directory-group>h2{font-size:16px}.client-directory-groups{gap:24px}.client-directory-message{padding:25px 18px;font-size:12px}.client-directory-message strong{font-size:14px}.client-directory-table-scroll table{min-width:760px}.client-profile{gap:18px}.client-profile-nav{gap:16px}.client-profile-nav>button{font-size:10px}.client-profile .client-profile-action-note{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.client-directory *,.client-profile *{animation:none!important;transition:none!important}}
+
+/* Local palette: clear surfaces and fields without changing other CRM screens. */
+.client-directory,.crm-modal.client-profile-modal,.crm-modal.client-form-modal{
+ --bg2:#fff;--bg3:#edf3f9;--border:#b8cadb;--border2:#7e93a8;
+ --text:#18334b;--text2:#405b73;--text3:#526b81;--accent:#2465a7;--accent2:#275d98;
+}
+.client-directory{padding:24px;background:#eaf1f8;border:1px solid #c3d3e3;border-radius:18px}
+.client-directory-heading{padding:24px;background:#14324a;border:1px solid #264d6a;border-radius:12px;color:#fff}
+.client-directory-heading p{color:#d0e1ef}
+.client-directory-heading .client-directory-primary{background:#e4f1ff;border-color:#c6dff7;color:#153f67}
+.client-directory-heading .client-directory-secondary{background:#254b68;border-color:#91b1c9;color:#fff}
+.client-directory-types{gap:8px;padding:6px;background:#fff;border:1px solid #b8cadb;border-radius:11px}
+.client-directory-types>button{flex:1;justify-content:center;padding:12px 10px;border:1px solid transparent;border-radius:7px;line-height:1.5}
+.client-directory-types>button[aria-current=page]{background:#e1edfb;border-color:#9cbade;color:#234f87}
+.client-directory-types>button:last-child[aria-current=page]{background:#def2ef;border-color:#83b9b1;color:#185f5f}
+.client-directory-types>button>span{background:#e7eef5;color:#334f67}
+.client-directory-toolbar{background:#f6faff;border-color:#b2c7db;border-top:3px solid #4b78aa}
+.client-directory-toolbar label{color:#344f68;font-size:12px}
+.client-directory-toolbar-footer{padding-top:12px;border-top:1px solid #c5d6e5;color:#465f77}
+.client-directory :is(input,select),.crm-modal.client-form-modal :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=file]){
+ background:#fff!important;border:1.5px solid #7e93a8!important;color:#18334b!important;box-shadow:0 1px 2px #17344d08;
+}
+.client-directory input::placeholder,.crm-modal.client-form-modal :is(input,textarea)::placeholder{color:#526b81!important;opacity:1}
+.client-directory :is(input,select):focus,.crm-modal.client-form-modal :is(input,select,textarea):focus{
+ border-color:#2465a7!important;outline:3px solid #bfd9f3!important;outline-offset:2px;
+}
+.client-directory :is(input,select):disabled,.crm-modal.client-form-modal :is(input,select,textarea):disabled{background:#e7eef5!important;color:#526b81!important;box-shadow:none}
+.client-directory-results>div{border-color:#9fb7cf;background:#f8fbff}
+.client-directory-results button[aria-pressed=true]{background:#dceafb;color:#204e86;box-shadow:inset 0 0 0 1px #a4bfe0}
+.client-directory-group>h2{padding:11px 14px;border:1px solid #b1c8df;border-left:4px solid #4b78aa;background:#dce9f6;border-radius:8px;color:#204867}
+.client-directory-group>h2>small{background:#fff;color:#38566f;border:1px solid #b7cbdf}
+.client-directory-card{border-color:#a9bfd4;border-top:4px solid #3267a9;box-shadow:0 2px 5px #17344d08;gap:16px}
+.client-directory-card[data-client-type=legal]{border-top-color:#147b7e}
+.client-directory-card-header{padding:12px;background:#edf4fd;border:1px solid #c6d8ed;border-radius:8px}
+.client-directory-card[data-client-type=legal] .client-directory-card-header{background:#e9f5f2;border-color:#b9dad3}
+.client-directory-avatar{background:#dceafb;border-color:#9ebcde;color:#234f87}
+.client-directory-avatar.is-company{background:#d9efeb;border-color:#99c7bf;color:#185f5f}
+.client-directory-contact{padding:0 2px}
+.client-directory-equipment{gap:8px}
+.client-directory-equipment>span{flex:1;padding:9px 10px;border:1px solid #c2d2e2;border-radius:7px;background:#f0f5fb;white-space:nowrap}
+.client-directory-equipment>span:last-child{background:#ebf5f4;border-color:#bbd6d3}
+.client-directory-card-footer{padding-top:13px;border-top:1px solid #c7d6e4}
+.client-directory-activity{padding:5px 9px;border:1px solid #c2cfdd;border-radius:6px;background:#eef3f7;color:#405b73}
+.client-directory-activity.is-active{background:#e5effb;border-color:#a6c1e0;color:#244f82}
+.client-directory-activity.is-ready{background:#e3f3e9;border-color:#9bc8ac;color:#1c6241}
+.client-directory-open{background:#eaf2fd;border-color:#9dbbde;color:#244f82}
+.client-directory-card[data-client-type=legal] .client-directory-open{background:#e8f4f1;border-color:#9ac8bd;color:#185f5f}
+.client-directory-open:hover{background:#dceafb;border-color:#3267a9}
+.client-directory-card[data-client-type=legal] .client-directory-open:hover{background:#d8ede7;border-color:#147b7e}
+.client-directory-table-scroll{border-color:#a5bdd3}
+.client-directory-table-scroll thead th{background:#dce9f6;color:#294d6c;border-bottom:1px solid #a5bdd3}
+.client-directory-table-scroll tbody tr:nth-child(even){background:#f0f6fc}
+.client-directory-table-scroll tbody tr:hover{background:#e4eef9}
+.client-directory-table-scroll tbody tr:focus-within{background:#e4eef9}
+.crm-modal.client-profile-modal,.crm-modal.client-form-modal{background:#edf3f9;border-color:#9fb8d0}
+.crm-modal.client-profile-modal>div:first-child,.crm-modal.client-form-modal>div:first-child{padding:16px 18px;background:#14324a;border:1px solid #264d6a;border-radius:10px}
+.crm-modal.client-profile-modal>div:first-child h2,.crm-modal.client-form-modal>div:first-child h2{color:#fff!important;line-height:1.6;overflow-wrap:anywhere}
+.crm-modal.client-profile-modal>div:first-child>button,.crm-modal.client-form-modal>div:first-child>button{flex-shrink:0;background:#e1edf8!important;border-color:#b1c9df!important;color:#234b6b!important;min-height:36px;min-width:36px}
+.client-profile-nav{padding:6px;gap:6px;background:#fff;border:1px solid #b8cadb;border-radius:10px}
+.client-profile-nav>button{padding:11px 14px;border:1px solid transparent;border-radius:7px}
+.client-profile-nav>button[aria-current=page]{background:#deebfa;border-color:#9cbade;color:#234f87}
+.client-profile-contacts{padding:18px;margin-bottom:20px;background:#fff;border:1px solid #a9bfd4;border-left:4px solid #3267a9;border-radius:10px;line-height:1.8}
+.client-profile-actions{padding:18px;background:#e1edf9;border:1px solid #a8c3de;border-radius:10px}
+.client-profile .client-profile-action-note{background:#e8f3f1;border-color:#aacfc5;color:#285c53}
+.client-profile-equipment-block{padding:18px;background:#e8f0fa;border:1px solid #afc6e0;border-top:3px solid #3267a9;border-radius:10px}
+.client-profile-equipment-block.is-chambers{background:#e5f3ef;border-color:#a8cfc2;border-top-color:#147b7e}
+.client-profile-empty{background:#fff;border-color:#b2c6da}
+.client-profile-danger{background:#fbf2f0;border:1px solid #dfbcb5;padding:8px 14px;border-radius:9px;color:#80483f}
+.crm-modal.client-form-modal label{color:#344f68!important;text-transform:none!important;letter-spacing:0!important;font-size:12px!important}
+.crm-modal.client-form-modal button:focus-visible{outline:3px solid #5d8fc2;outline-offset:3px}
+@media(max-width:700px){.client-directory{padding:16px}.client-directory-heading{padding:20px}.client-directory-types>button{padding:10px 6px;flex-wrap:wrap}.client-profile-nav>button{padding:10px 11px}.client-profile-contacts,.client-profile-actions,.client-profile-equipment-block{padding:16px}}
+@media(max-width:600px){.client-directory{padding:12px;border-radius:13px;gap:16px}.client-directory-types{gap:3px}.client-directory-card{padding:16px}.client-directory-card-header{padding:10px}.client-directory-toolbar{padding:16px}.client-directory-heading{gap:16px}.client-profile-nav{gap:4px}.client-profile-nav>button{font-size:11px}}
