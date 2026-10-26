@@ -35,9 +35,9 @@ Interfaces: shared workspace header, filters, source feedback and RequestCard wi
 - [x] Typecheck, unit tests, production build and diff review.
 
 ### Task 3: Verification and delivery
-- [ ] Fresh whole-diff review and resolve concrete regressions.
-- [ ] Full web emulator suite, synthetic browser preview with actual components desktop and 480.
-- [ ] Commit/push/publish, verify CI/deploy, remove QA pages, record limitations.
+- [x] Fresh whole-diff review and resolve concrete regressions.
+- [x] Full web emulator suite, synthetic browser preview with actual components desktop and 480.
+- [x] Commit/push/publish, verify CI/deploy, remove QA pages, record limitations.
 
 ## Verification and decisions
 - Baseline: 121 unit tests passed on c9cbec3.
@@ -47,3 +47,11 @@ Interfaces: shared workspace header, filters, source feedback and RequestCard wi
 - Existing Firebase mutation contracts and all-assignee service completion rules are unchanged. Intake's existing authenticated-worker management rights remain unchanged. Explicit historical staff ids are retained in filter options.
 - Creation input is retained on errors, optional service fields omit undefined, subtask retries retain the same id. This does not promise idempotency for legacy addDoc/intake create APIs; those persistence contracts remain unchanged.
 - UI preview bundles the actual route components with synthetic context and a Firebase accessor that throws before any network write. No credentials or real records are included.
+
+## Delivery evidence
+- Full final web Firestore emulator run: 234 checks (132 unit/SSR, 2 indexes, 44 rules, 26 appointments, 17 concurrency, 13 intake), all passed; emulator script exited 0.
+- GitHub Pages deployment e0b17f5 succeeded. Browser QA used actual MyTasksTab and IntakeTab bundled against synthetic providers and blocked Firebase accessors.
+- Desktop verified: plate lookalike search, native disclosure of existing report, search by chamber label combined with equipment type, source-error feedback, mechanic scope and manager action hiding. Both service task and intake creation retain input after an explicit blocked-write error.
+- Mobile QA: both routes at exactly 480 CSS px, document width/scrollWidth 480/480; no horizontal overflow; screenshots inspected. Native keyboard activation also verified. No 320/390 checks.
+- Temporary noindex QA pages removed in follow-up commit. Existing production app login/deployment verified. Authenticated production record changes were not tested; no real test records or notifications were created.
+- Screenshots represent synthetic data, not the production database. Schema, existing collections/IDs and transactional editors were preserved.
