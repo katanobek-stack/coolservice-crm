@@ -13,19 +13,8 @@ import {
 import { fmtDate } from "../../shared/utils/format";
 import { FREEZER_TYPES } from "../../shared/types/freezer";
 import type { Freezer } from "../../shared/types/freezer";
-import { FreezerCard } from "./FreezerCard";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function isRented(f: Freezer): boolean {
-  if (f.rented === true) return true;
-  if (f.status === "rented") return true;
-  return false;
-}
-
-function getRentAmount(f: Freezer): number {
-  return parseFloat(String(f.rentAmount ?? 0)) || 0;
-}
+import { WarehouseWorkspace } from "./WarehouseWorkspace";
+import { businessDate, isRented, money, paymentLabel, paymentState, rentAmount, rentalTerms, rentalRateInput } from "./warehouseLogic";
 
 // ─── Info cell ────────────────────────────────────────────────────────────────
 
@@ -50,18 +39,26 @@ function FreezerFormModal({ freezer, onClose }: { freezer?: Freezer; onClose: ()
   const [notes,    setNotes]    = useState(freezer?.notes  ?? "");
   const [tenant, setTenant] = useState(freezer?.tenant ?? "");
   const [tenantPhone, setTenantPhone] = useState(freezer?.tenantPhone ?? "");
+  const [rentRate, setRentRate] = useState(rentalRateInput(freezer));
+  const [paidUntil, setPaidUntil] = useState(freezer?.paidUntil ?? "");
   const [saving,   setSaving]   = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSave() {
+    if (saving) return;
+    setError("");
+    if (volume && (!Number.isFinite(Number(volume)) || Number(volume) <= 0)) { setError("Укажите объём больше нуля или оставьте поле пустым."); return; }
+    if (freezer && isRented(freezer) && (!tenant.trim() || (rentRate && (!Number.isFinite(Number(rentRate)) || Number(rentRate) <= 0)))) { setError("Укажите арендатора и корректную стоимость аренды."); return; }
     setSaving(true);
+    try {
     const data: Partial<Freezer> = {
       type,
-      name:     name.trim()     || undefined,
+      name:     name.trim(),
       volume:   parseFloat(volume) || undefined,
-      location: location.trim() || undefined,
-      temp:     temp.trim()     || undefined,
-      notes:    notes.trim()    || undefined,
-      ...(freezer && isRented(freezer) ? { tenant: tenant.trim(), tenantPhone: tenantPhone.trim() } : {}),
+      location: location.trim(),
+      temp:     temp.trim(),
+      notes:    notes.trim(),
+      ...(freezer && isRented(freezer) ? { tenant: tenant.trim(), tenantPhone: tenantPhone.trim(), ...rentalTerms(rentRate, paidUntil) } : {}),
     };
     if (isEdit && freezer) {
       await updateDocumentFieldsIfUnchanged("freezers", freezer, data);
@@ -69,35 +66,41 @@ function FreezerFormModal({ freezer, onClose }: { freezer?: Freezer; onClose: ()
       await addFreezer({ ...data, rented: false, rentHistory: [] } as Omit<Freezer, "id" | "createdAt">);
     }
     onClose();
+    } catch (err) { setError(err instanceof Error ? err.message : "Не удалось сохранить камеру. Проверьте подключение и повторите."); }
+    finally { setSaving(false); }
   }
 
   return (
-    <Modal title={isEdit ? "Редактировать камеру" : "Добавить камеру"} onClose={onClose}>
+    <Modal className="warehouse-modal" title={isEdit ? "Редактировать камеру" : "Добавить камеру"} onClose={onClose}>
+      {error && <div className="warehouse-error" role="alert">{error}</div>}
       <FormGroup label="Тип оборудования">
-        <Select value={type} onChange={(e) => setType(e.target.value)}>
+        <Select aria-label="Тип оборудования" value={type} onChange={(e) => setType(e.target.value)}>
+          {!FREEZER_TYPES.includes(type) && <option value={type}>{type || "Тип не указан"}</option>}
           {FREEZER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
         </Select>
       </FormGroup>
       <FormGroup label="Название (необязательно)">
-        <Input placeholder="Камера №1" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input aria-label="Название камеры" placeholder="Камера №1" value={name} onChange={(e) => setName(e.target.value)} />
       </FormGroup>
       <div className="grid grid-cols-2 gap-2">
         <FormGroup label="Объём (м³)">
-          <Input type="number" step="0.1" placeholder="20" value={volume} onChange={(e) => setVolume(e.target.value)} />
+          <Input aria-label="Объём камеры в кубических метрах" type="number" min="0.1" step="0.1" placeholder="20" value={volume} onChange={(e) => setVolume(e.target.value)} />
         </FormGroup>
         <FormGroup label="Темп-ра">
-          <Input placeholder="-18°C" value={temp} onChange={(e) => setTemp(e.target.value)} />
+          <Input aria-label="Заданная температура" placeholder="-18°C" value={temp} onChange={(e) => setTemp(e.target.value)} />
         </FormGroup>
       </div>
       <FormGroup label="Адрес / расположение">
-        <Input placeholder="ул. Ленина, 1" value={location} onChange={(e) => setLocation(e.target.value)} />
+        <Input aria-label="Адрес или расположение" placeholder="ул. Ленина, 1" value={location} onChange={(e) => setLocation(e.target.value)} />
       </FormGroup>
       <FormGroup label="Заметки">
-        <Textarea placeholder="..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Textarea aria-label="Заметки об оборудовании" placeholder="..." value={notes} onChange={(e) => setNotes(e.target.value)} />
       </FormGroup>
       {freezer && isRented(freezer) && <>
-        <FormGroup label="Имя / название арендатора"><Input value={tenant} onChange={(e) => setTenant(e.target.value)} /></FormGroup>
-        <FormGroup label="Телефон арендатора"><Input type="tel" autoComplete="tel" maxLength={64} placeholder="+7 …" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} /></FormGroup>
+        <h3 style={{fontSize:12,fontWeight:800,color:"#245e9f",margin:"18px 0 12px"}}>Условия действующей аренды</h3>
+        <FormGroup label="Имя / название арендатора"><Input aria-label="Арендатор" value={tenant} onChange={(e) => setTenant(e.target.value)} /></FormGroup>
+        <FormGroup label="Телефон арендатора"><Input aria-label="Телефон арендатора" type="tel" autoComplete="tel" maxLength={64} placeholder="+7 …" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} /></FormGroup>
+        <div className="grid grid-cols-2 gap-2"><FormGroup label="Стоимость, ₽/мес"><Input aria-label="Стоимость аренды в месяц" type="number" step="0.01" min="0.01" value={rentRate} onChange={e => setRentRate(e.target.value)} /></FormGroup><FormGroup label="Оплачено до"><Input aria-label="Оплачено до" type="date" value={paidUntil} onChange={e => setPaidUntil(e.target.value)} /></FormGroup></div>
       </>}
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "..." : isEdit ? "Сохранить" : "Добавить камеру"}
@@ -109,7 +112,7 @@ function FreezerFormModal({ freezer, onClose }: { freezer?: Freezer; onClose: ()
 // ─── Start rent modal ─────────────────────────────────────────────────────────
 
 function StartRentModal({ freezer, onClose }: { freezer: Freezer; onClose: () => void }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDate();
   const [tenant,    setTenant]    = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
   const [amount,    setAmount]    = useState("");
@@ -117,10 +120,16 @@ function StartRentModal({ freezer, onClose }: { freezer: Freezer; onClose: () =>
   const [paidUntil, setPaidUntil] = useState("");
   const [meter,     setMeter]     = useState("");
   const [saving,    setSaving]    = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSave() {
-    if (!tenant.trim() || !amount) return;
+    if (saving) return;
+    setError("");
+    if (!tenant.trim() || !Number.isFinite(Number(amount)) || Number(amount) <= 0) { setError("Укажите арендатора и стоимость аренды больше нуля."); return; }
+    if (!from || (paidUntil && paidUntil < from)) { setError("Проверьте даты: оплата не может предшествовать началу аренды."); return; }
+    if (meter && (!Number.isFinite(Number(meter)) || Number(meter) < 0)) { setError("Показания счётчика должны быть неотрицательным числом."); return; }
     setSaving(true);
+    try {
     await updateDocumentFieldsIfUnchanged("freezers", freezer, {
       rented:      true,
       tenant:      tenant.trim(),
@@ -133,29 +142,33 @@ function StartRentModal({ freezer, onClose }: { freezer: Freezer; onClose: () =>
       status:      "rented",
     });
     onClose();
+    } catch (err) { setError(err instanceof Error ? err.message : "Не удалось оформить аренду. Проверьте подключение и повторите."); }
+    finally { setSaving(false); }
   }
 
   return (
-    <Modal title="Сдать в аренду" onClose={onClose}>
+    <Modal className="warehouse-modal" title="Сдать в аренду" onClose={onClose}>
+      <p style={{fontSize:12, marginBottom:16, color:"#52687c"}}>{freezer.name || freezer.type || "Камера"} · условия новой аренды</p>
+      {error && <div className="warehouse-error" role="alert">{error}</div>}
       <FormGroup label="Арендатор">
-        <Input placeholder="ООО «Ромашка»" value={tenant} onChange={(e) => setTenant(e.target.value)} />
+        <Input aria-label="Арендатор" placeholder="ООО «Ромашка»" value={tenant} onChange={(e) => setTenant(e.target.value)} />
       </FormGroup>
       <FormGroup label="Телефон арендатора (необязательно)">
-        <Input type="tel" autoComplete="tel" maxLength={64} placeholder="+7 …" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} />
+        <Input aria-label="Телефон арендатора" type="tel" autoComplete="tel" maxLength={64} placeholder="+7 …" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} />
       </FormGroup>
       <FormGroup label="Оплата (₽/мес)">
-        <Input type="number" placeholder="5000" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <Input aria-label="Стоимость аренды в месяц" type="number" min="0.01" step="0.01" placeholder="5000" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </FormGroup>
       <div className="grid grid-cols-2 gap-2">
         <FormGroup label="С даты">
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input aria-label="Дата начала аренды" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </FormGroup>
         <FormGroup label="Оплачено до">
-          <Input type="date" value={paidUntil} onChange={(e) => setPaidUntil(e.target.value)} />
+          <Input aria-label="Оплачено до" type="date" value={paidUntil} onChange={(e) => setPaidUntil(e.target.value)} />
         </FormGroup>
       </div>
       <FormGroup label="Нач. показания счётчика (кВт·ч)">
-        <Input type="number" step="0.1" placeholder="0.0" value={meter} onChange={(e) => setMeter(e.target.value)} />
+        <Input aria-label="Начальные показания счётчика" min="0" type="number" step="0.1" placeholder="0.0" value={meter} onChange={(e) => setMeter(e.target.value)} />
       </FormGroup>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
         {saving ? "..." : "Сдать в аренду"}
@@ -167,47 +180,63 @@ function StartRentModal({ freezer, onClose }: { freezer: Freezer; onClose: () =>
 // ─── Freezer detail modal ─────────────────────────────────────────────────────
 
 function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => void }) {
-  const { finance } = useData();
+  const { finance, sourceStatus } = useData();
   const { myProfile } = useAuth();
   const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
   const rented    = isRented(freezer);
-  const rentAmt   = getRentAmount(freezer);
+  const rentAmt   = rentAmount(freezer);
   const [showEdit,    setShowEdit]    = useState(false);
   const [showRent,    setShowRent]    = useState(false);
   const [meterInput,  setMeterInput]  = useState(String(freezer.meterCurrent ?? ""));
   const [savingMeter, setSavingMeter] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   // Electricity calculation
-  const kwPrice = parseFloat(String((finance as Record<string, unknown>).kwPrice ?? 0)) || 0;
+  const kwPrice = sourceStatus.finance === "ready" ? rentAmount({id: "tariff", rentAmount: finance.kwPrice as number}) : 0;
   const meterUsed = (freezer.meterCurrent != null && freezer.meterStart != null)
     ? Math.max(0, Number(freezer.meterCurrent) - Number(freezer.meterStart))
     : null;
   const elecCost = meterUsed != null && kwPrice > 0 ? Math.round(meterUsed * kwPrice) : null;
 
   async function saveMeter() {
-    const val = parseFloat(meterInput);
-    if (isNaN(val)) return;
+    if (savingMeter || busy) return;
+    const val = Number(meterInput);
+    setError("");
+    if (!meterInput.trim() || !Number.isFinite(val) || val < 0 || (freezer.meterStart != null && val < freezer.meterStart)) {
+      setError("Укажите корректные показания, не меньше начальных."); return;
+    }
     setSavingMeter(true);
-    await updateDocumentFieldsIfUnchanged("freezers", freezer, { meterCurrent: val });
-    setSavingMeter(false);
+    try { await updateDocumentFieldsIfUnchanged("freezers", freezer, { meterCurrent: val }); }
+    catch (err) { setError(err instanceof Error ? err.message : "Не удалось сохранить показания. Повторите попытку."); }
+    finally { setSavingMeter(false); }
   }
 
   async function endRent() {
+    if (busy || savingMeter) return;
     if (!confirm("Завершить аренду? Камера будет отмечена как свободная.")) return;
-    await endFreezerRental(freezer.id, new Date().toISOString().slice(0, 10));
-    onClose();
+    setBusy(true); setError("");
+    try { await endFreezerRental(freezer.id, businessDate()); onClose(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Не удалось завершить аренду. Повторите попытку."); }
+    finally { setBusy(false); }
   }
 
   async function handleDelete() {
+    if (busy || savingMeter) return;
     if (!confirm(`Удалить камеру «${freezer.name ?? freezer.type}»?`)) return;
-    await removeDocumentIfUnchanged("freezers", freezer);
-    onClose();
+    setBusy(true); setError("");
+    try { await removeDocumentIfUnchanged("freezers", freezer); onClose(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Не удалось удалить камеру. Повторите попытку."); }
+    finally { setBusy(false); }
   }
 
   const title = `${freezer.type ?? "Камера"}${freezer.name ? " · " + freezer.name : ""}`;
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal className="warehouse-modal" title={title} onClose={onClose}>
+      {error && <div className="warehouse-error" role="alert">{error}</div>}
+      <div className="warehouse-detail-heading"><span className={`warehouse-badge ${rented ? "warehouse-badge--blue" : ""}`}>{rented ? "В аренде" : "Свободна для аренды"}</span><p className={`warehouse-payment--${paymentState(freezer)}`}>{paymentLabel(freezer)}</p></div>
+      <section className="warehouse-detail-section"><h3>Оборудование</h3>
       {/* Basic info */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         {freezer.volume && <InfoCell label="Объём" value={`${freezer.volume} м³`} />}
@@ -218,17 +247,18 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
           </div>
         )}
       </div>
+      </section>
 
       {/* Rental block */}
       {rented && (
-        <div className="bg-green-50 rounded-xl p-3.5 border border-green-100 mb-3">
+        <section className="warehouse-detail-section warehouse-detail-section--rental">
           <div className="text-xs font-bold text-green-700 uppercase tracking-wide mb-2.5">
-            🟢 Аренда активна
+            Условия аренды
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <InfoCell label="Арендатор"   value={freezer.tenant ?? ""}                  color="#7C3AED" />
             <InfoCell label="Телефон арендатора" value={freezer.tenantPhone ?? "Не указан"} />
-            <InfoCell label="Оплата/мес"  value={rentAmt ? `${rentAmt.toLocaleString("ru-RU")} ₽` : "—"} color="#15803D" />
+            <InfoCell label="Оплата/мес"  value={rentAmt ? money(rentAmt) : "Не указана"} color="#15803D" />
             <InfoCell label="С даты"      value={fmtDate(freezer.rentFrom)}            color="#0284C7" />
             <InfoCell label="Оплачено до" value={fmtDate(freezer.paidUntil)}           color="#D97706" />
           </div>
@@ -240,20 +270,21 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
               <InfoCell label="Начало (кВт·ч)"   value={freezer.meterStart != null ? String(freezer.meterStart) : "—"} color="#EA580C" />
               <InfoCell label="Расход (кВт·ч)"   value={meterUsed != null ? meterUsed.toFixed(1) : "—"} color="#EA580C" />
               <InfoCell label="Тек. показания"   value={freezer.meterCurrent != null ? String(freezer.meterCurrent) : "—"} color="#D97706" />
-              <InfoCell label="Стоим. электро"   value={elecCost != null ? `${elecCost.toLocaleString("ru-RU")} ₽` : kwPrice ? "—" : "Нет тарифа"} color="#DC2626" />
+              <InfoCell label="Стоимость электроэнергии" value={sourceStatus.finance !== "ready" ? "Тариф недоступен" : elecCost != null ? money(elecCost) : kwPrice ? "—" : "Нет тарифа"} color="#9b5620" />
             </div>
             {isAdmin && (
-              <div className="flex gap-2">
+              <div className="warehouse-detail-action">
                 <Input
                   type="number"
                   step="0.1"
                   placeholder="Текущие показания кВт·ч"
+                  aria-label="Текущие показания счётчика, кВт·ч"
                   value={meterInput}
                   onChange={(e) => setMeterInput(e.target.value)}
                   className="flex-1 !min-h-0 !py-2 !text-sm"
                 />
-                <Button size="sm" onClick={() => void saveMeter()} disabled={savingMeter}>
-                  {savingMeter ? "..." : "💾"}
+                <Button size="sm" onClick={() => void saveMeter()} disabled={savingMeter || busy}>
+                  {savingMeter ? "Сохраняем…" : "Сохранить показания"}
                 </Button>
               </div>
             )}
@@ -263,12 +294,13 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
             <button
               type="button"
               onClick={() => void endRent()}
+              disabled={busy || savingMeter}
               className="mt-3 w-full py-2 rounded-xl border border-red-200 bg-red-50 text-red-500 text-sm font-semibold cursor-pointer"
             >
               Завершить аренду
             </button>
           )}
-        </div>
+        </section>
       )}
 
       {/* Free camera — start rent */}
@@ -285,7 +317,7 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
 
       {/* Rent history */}
       {(freezer.rentHistory ?? []).length > 0 && (
-        <div className="mb-3">
+        <section className="warehouse-detail-section">
           <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">
             История аренды ({freezer.rentHistory!.length})
           </div>
@@ -310,7 +342,7 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Notes */}
@@ -323,15 +355,17 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
       {/* Admin actions */}
       {isAdmin && (
         <div className="flex gap-2 pt-3 border-t border-[#E2E8F0]">
-          <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowEdit(true)}>
+          <Button variant="secondary" size="sm" className="flex-1" disabled={busy || savingMeter} onClick={() => setShowEdit(true)}>
             ✏️ Редактировать
           </Button>
           <button
             type="button"
             onClick={() => void handleDelete()}
+            disabled={busy || savingMeter}
+            aria-label="Удалить камеру"
             className="text-xs text-red-400 cursor-pointer bg-transparent border-none px-3"
           >
-            🗑
+            Удалить
           </button>
         </div>
       )}
@@ -346,83 +380,17 @@ function FreezerDetail({ freezer, onClose }: { freezer: Freezer; onClose: () => 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function FreezersTab() {
-  const { freezers } = useData();
+  const { freezers, sourceStatus } = useData();
   const { myProfile } = useAuth();
   const isAdmin = (myProfile?.role ?? "mechanic") !== "mechanic";
-  const [showAdd,  setShowAdd]  = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState<Freezer | null>(null);
-
-  const totalRentIncome = freezers
-    .filter((f) => isRented(f))
-    .reduce((s, f) => s + getRentAmount(f), 0);
-
-  const rentedCount  = freezers.filter((f) => isRented(f)).length;
-  const freeCount    = freezers.filter((f) => !isRented(f)).length;
-
-  // Keep selected live
-  const selectedLive = selected ? (freezers.find((f) => f.id === selected.id) ?? selected) : null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-      {/* KPI */}
-      <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
-        <div className="kpi-card blue">
-          <i className="ti ti-package kpi-icon" />
-          <div className="kpi-label">Всего камер</div>
-          <div className="kpi-value" style={{ color: "var(--accent2)" }}>{freezers.length}</div>
-        </div>
-        <div className="kpi-card green">
-          <i className="ti ti-home kpi-icon" />
-          <div className="kpi-label">Сдаётся</div>
-          <div className="kpi-value" style={{ color: "#16a34a" }}>{rentedCount}</div>
-        </div>
-        <div className="kpi-card" style={{ borderTop: "2px solid var(--text3)" }}>
-          <i className="ti ti-lock-open kpi-icon" />
-          <div className="kpi-label">Свободно</div>
-          <div className="kpi-value" style={{ color: "var(--text2)" }}>{freeCount}</div>
-        </div>
-        {isAdmin && totalRentIncome > 0 && (
-          <div className="kpi-card yellow">
-            <i className="ti ti-currency-ruble kpi-icon" />
-            <div className="kpi-label">Аренда / мес</div>
-            <div className="kpi-value" style={{ color: "#b45309" }}>
-              {totalRentIncome.toLocaleString("ru-RU")}₽
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Freezer list */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
-        <div className="section-header">
-          <i className="ti ti-snowflake" style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">Холодильные камеры</span>
-          <span className="section-count">{freezers.length} ед.</span>
-          {isAdmin && (
-            <div className="section-actions">
-              <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
-                <i className="ti ti-plus" /> Камера
-              </button>
-            </div>
-          )}
-        </div>
-
-        {freezers.length === 0 ? (
-          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет камер на балансе
-          </div>
-        ) : (
-          <div className="freezer-grid">
-            {freezers.map((f) => (
-              <FreezerCard key={f.id} freezer={f} onClick={() => setSelected(f)} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showAdd       && <FreezerFormModal onClose={() => setShowAdd(false)} />}
-      {selectedLive  && <FreezerDetail freezer={selectedLive} onClose={() => setSelected(null)} />}
-    </div>
-  );
+  const selectedLive = selected ? freezers.find(f => f.id === selected.id) : null;
+  return <>
+    <WarehouseWorkspace freezers={freezers} status={sourceStatus.freezers} manager={isAdmin} onOpen={setSelected} onAdd={() => setShowAdd(true)} />
+    {showAdd && sourceStatus.freezers === "ready" && <FreezerFormModal onClose={() => setShowAdd(false)} />}
+    {selected && sourceStatus.freezers !== "ready" && <Modal className="warehouse-modal" title="Камера недоступна" onClose={() => setSelected(null)}><p role="alert">Данные склада временно недоступны. Закройте карточку и повторите после загрузки.</p></Modal>}
+    {selected && sourceStatus.freezers === "ready" && !selectedLive && <Modal className="warehouse-modal" title="Камера не найдена" onClose={() => setSelected(null)}><p role="status">Запись удалена или больше недоступна. Обновлённый каталог находится за этим окном.</p></Modal>}
+    {selectedLive && sourceStatus.freezers === "ready" && <FreezerDetail key={selectedLive.id} freezer={selectedLive} onClose={() => setSelected(null)} />}
+  </>;
 }
