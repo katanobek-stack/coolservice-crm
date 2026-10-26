@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import {
@@ -35,6 +35,11 @@ import { legacyAppointmentsForDisplay } from "../../shared/appointments/legacy";
 import { uploadPhoto, getStorageErrorMessage, deletePhotoObjects, repairPhotos } from "../../shared/utils/photos";
 import type { PhotoData } from "../../shared/utils/photos";
 
+import {ClientDirectory} from "./ClientDirectory";
+import {resolveClientLink} from "./directoryLogic";
+import {requestStage} from "../../shared/requests/workspaceLogic";
+import {OperationError,useRequestOperation} from "../../shared/requests/RequestWorkspace";
+
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
@@ -66,9 +71,12 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
   // clientType — поле в старом Firebase; type — в новом коде
   const isLegal = (client.clientType ?? client.type ?? "phys") === "legal";
 
+  const [error,setError]=useState("");
+
   async function handleSave() {
-    if (!name.trim()) return;
-    setSaving(true);
+    if(saving)return;
+    if (!name.trim()) {setError("Укажите имя клиента или название компании.");return;}
+    setSaving(true);setError("");
     try {
       // Firestore rejects undefined values — build update without them
       const data: Record<string, unknown> = { name: name.trim() };
@@ -83,7 +91,7 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
       await updateDocumentFieldsIfUnchanged("clients", client, data as Partial<Client>);
       onClose();
     } catch (err) {
-      console.error("[EditClientModal] handleSave failed:", err);
+      setError(err instanceof Error?err.message:"Не удалось сохранить клиента. Введённые данные остались в форме.");
       setSaving(false);
     }
   }
@@ -100,6 +108,7 @@ function EditClientModal({ client, onClose }: { client: Client; onClose: () => v
         </>
       )}
       <FormGroup label="Примечание"><Textarea value={note} onChange={(e) => setNote(e.target.value)} /></FormGroup>
+      <OperationError error={error}/>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : "Сохранить"}</Button>
     </Modal>
   );
@@ -116,9 +125,12 @@ function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: (
   const [comment,      setComment]      = useState("");
   const [saving,       setSaving]       = useState(false);
 
+  const [error,setError]=useState("");
+
   async function handleConvert() {
-    if (!companyName.trim()) return;
-    setSaving(true);
+    if(saving)return;
+    if (!companyName.trim()) {setError("Укажите название компании.");return;}
+    setSaving(true);setError("");
     try {
       const data: Record<string, unknown> = {
         clientType: "legal",
@@ -136,7 +148,7 @@ function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: (
       await updateDocumentFieldsIfUnchanged("clients", client, data as Partial<Client>);
       onClose();
     } catch (err) {
-      console.error("[ConvertToCompanyModal] handleConvert failed:", err);
+      setError(err instanceof Error?err.message:"Не удалось изменить тип клиента. Данные остались в форме.");
       setSaving(false);
     }
   }
@@ -165,6 +177,7 @@ function ConvertToCompanyModal({ client, onClose }: { client: Client; onClose: (
       <FormGroup label="Комментарий">
         <Textarea placeholder="бывший ИП Иванов С.А." value={comment} onChange={(e) => setComment(e.target.value)} />
       </FormGroup>
+      <OperationError error={error}/>
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
         <button
           type="button"
@@ -193,9 +206,12 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
   const [note, setNote] = useState(""); const [inn,   setInn]   = useState("");
   const [contact, setContact] = useState(""); const [saving, setSaving] = useState(false);
 
+  const [error,setError]=useState("");
+
   async function handleSave() {
-    if (!name.trim()) return;
-    setSaving(true);
+    if(saving)return;
+    if (!name.trim()) {setError("Укажите имя клиента или название компании.");return;}
+    setSaving(true);setError("");
     try {
       const data: Record<string, unknown> = {
         name: name.trim(), clientType: type,
@@ -208,7 +224,7 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
       await addClient(data as Omit<Client, "id" | "createdAt">);
       onClose();
     } catch (err) {
-      console.error("[AddClientModal] handleSave failed:", err);
+      setError(err instanceof Error?err.message:"Не удалось создать клиента. Данные остались в форме.");
       setSaving(false);
     }
   }
@@ -218,6 +234,7 @@ function AddClientModal({ type, onClose }: { type: ClientType; onClose: () => vo
       <FormGroup label="Телефон"><Input type="tel" placeholder="+7 924 000 00 00" value={phone} onChange={(e) => setPhone(e.target.value)} /></FormGroup>
       {type === "legal" && (<><FormGroup label="ИНН"><Input value={inn} onChange={(e) => setInn(e.target.value)} /></FormGroup><FormGroup label="Контакт"><Input value={contact} onChange={(e) => setContact(e.target.value)} /></FormGroup></>)}
       <FormGroup label="Примечание"><Textarea value={note} onChange={(e) => setNote(e.target.value)} /></FormGroup>
+      <OperationError error={error}/>
       <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "..." : "Создать"}</Button>
     </Modal>
   );
@@ -1137,7 +1154,7 @@ function RepairCard({ client, repair, isAdmin, isHistory }: {
 // ─── History grouped by date ──────────────────────────────────────────────────
 
 function RepairHistory({ client, isAdmin }: { client: Client; isAdmin: boolean }) {
-  const doneRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) !== "in_progress");
+  const doneRepairs = (client.repairs ?? []).filter((r) => ["closed","cancelled"].includes(requestStage(r)));
   if (!doneRepairs.length) return null;
 
   // Group by date key (YYYY-MM)
@@ -1579,7 +1596,9 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
     ? (staff.find((s) => s.id === client.convertedBy)?.name ?? client.convertedBy)
     : null;
 
-  const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress");
+  const activeRepairs = (client.repairs ?? []).filter((r) => ["active","ready"].includes(requestStage(r)));
+  const [profileView,setProfileView]=useState("overview");
+  const deletion=useRequestOperation();
   const vehicles      = client.vehicles ?? [];
   const chambers      = client.chambers ?? [];
 
@@ -1619,8 +1638,10 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
   const sec: CSSProperties = { marginBottom: 20 };
 
   return (
-    <Modal title={client.name} onClose={onClose}>
-
+    <Modal title={client.name} className="client-profile-modal" onClose={onClose}>
+     <div className="client-profile">
+      <nav className="client-profile-nav" aria-label="Разделы карточки клиента">{[{id:"overview",label:"Обзор"},{id:"equipment",label:`Техника · ${vehicles.length+chambers.length}`},{id:"work",label:`Работы · ${activeRepairs.length}`},{id:"history",label:"История"},{id:"appointments",label:"Записи"}].map(item=><button type="button" key={item.id} aria-current={profileView===item.id?"page":undefined} onClick={()=>setProfileView(item.id)}>{item.label}</button>)}</nav>
+      <section className="client-profile-panel" hidden={profileView!=="overview"} aria-label="Обзор клиента"><div className="client-profile-overview"><div>
       {/* ── КОНТАКТЫ ── */}
       <div style={{ background: "var(--bg2)", borderRadius: 14, padding: "12px 14px", marginBottom: 20, border: "1px solid var(--border)" }}>
         {client.phone && (
@@ -1658,6 +1679,88 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
         </div>
       </div>
 
+      {/* ── ИСТОРИЯ ИЗМЕНЕНИЙ ── */}
+      {client.convertedFrom === "individual" && (
+        <div style={sec}>
+          <SectionHeader title="История изменений" />
+          <div style={{ background: "var(--bg2)", borderRadius: 12, border: "1px solid var(--border)", padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>🏢</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>Конвертация из физлица</span>
+            </div>
+            {client.previousName && (
+              <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 4 }}>
+                <span style={{ color: "var(--text3)" }}>Ранее: </span>{client.previousName}
+              </div>
+            )}
+            {client.convertedAt && (
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
+                Дата: {fmtDate(client.convertedAt)}
+              </div>
+            )}
+            {convertedByName && (
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
+                Кто: {convertedByName}
+              </div>
+            )}
+            {client.comment && (
+              <div style={{ fontSize: 12, color: "var(--text3)", fontStyle: "italic" }}>
+                {client.comment}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      </div><div>
+      {/* ── ДЕЙСТВИЯ ── */}
+      {isAdmin && (
+        <div style={sec}>
+          <SectionHeader title="Действия" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleNewRepair}
+              style={{
+                width: "100%", padding: "14px 0", borderRadius: 14,
+                background: "var(--accent)", border: "none",
+                color: "#fff", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              <i className="ti ti-tools" style={{ fontSize: 16 }} /> + Новый ремонт
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddAppt(true)}
+              style={{
+                width: "100%", padding: "13px 0", borderRadius: 14,
+                background: "var(--bg2)", border: "1px solid var(--border2)",
+                color: "var(--text)", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "Manrope, sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              <i className="ti ti-calendar" style={{ fontSize: 16 }} /> Записать на приём
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p className="client-profile-action-note">Автомобилей: {vehicles.length}. Камер: {chambers.length}. Открытых заявок: {activeRepairs.length}. Полная история остаётся в карточке клиента.</p>
+      </div></div>{isAdmin&&<details className="client-profile-danger"><summary>Действия с клиентом</summary><OperationError error={deletion.error}/>
+      {/* ── УДАЛИТЬ ── */}
+      {isAdmin && (
+        <div style={{ marginTop: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <button type="button" disabled={deletion.busy} onClick={() => void deletion.run(handleDeleteClient)} style={{ fontSize: 12, color: "var(--red)", background: "transparent", border: "none", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
+            🗑 Удалить клиента
+          </button>
+        </div>
+      )}
+
+      </details>}</section>
+      <section className="client-profile-panel client-profile-equipment" hidden={profileView!=="equipment"} aria-label="Техника клиента">
       {/* ── АВТОМОБИЛИ ── */}
       <div style={sec}>
         <SectionHeader title="Автомобили" count={vehicles.length} />
@@ -1711,41 +1814,8 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
         </div>
       )}
 
-      {/* ── ДЕЙСТВИЯ ── */}
-      {isAdmin && (
-        <div style={sec}>
-          <SectionHeader title="Действия" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              type="button"
-              onClick={handleNewRepair}
-              style={{
-                width: "100%", padding: "14px 0", borderRadius: 14,
-                background: "var(--accent)", border: "none",
-                color: "#fff", fontSize: 14, fontWeight: 700,
-                cursor: "pointer", fontFamily: "Manrope, sans-serif",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}
-            >
-              <i className="ti ti-tools" style={{ fontSize: 16 }} /> + Новый ремонт
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddAppt(true)}
-              style={{
-                width: "100%", padding: "13px 0", borderRadius: 14,
-                background: "var(--bg2)", border: "1px solid var(--border2)",
-                color: "var(--text)", fontSize: 14, fontWeight: 700,
-                cursor: "pointer", fontFamily: "Manrope, sans-serif",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}
-            >
-              <i className="ti ti-calendar" style={{ fontSize: 16 }} /> Записать на приём
-            </button>
-          </div>
-        </div>
-      )}
-
+      </section>
+      <section className="client-profile-panel" hidden={profileView!=="work"} aria-label="Работы клиента"><p className="client-profile-action-note">Выполненные работы, ожидающие подтверждения менеджером, остаются открытыми. Подтверждение закрытия доступно в «Отчётах».</p>
       {/* ── В РАБОТЕ ── */}
       {activeRepairs.length > 0 && (
         <div style={sec}>
@@ -1756,56 +1826,20 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
         </div>
       )}
 
+      {!activeRepairs.length&&<div className="client-profile-empty">Открытых заявок нет.</div>}</section>
+      <section className="client-profile-panel" hidden={profileView!=="history"} aria-label="История клиента">
       {/* ── ИСТОРИЯ ── */}
       <div style={sec}>
         <RepairHistory client={client} isAdmin={isAdmin} />
       </div>
 
+      {!(client.repairs??[]).some(r=>["closed","cancelled"].includes(requestStage(r)))&&<div className="client-profile-empty">Закрытых заявок и отказов пока нет.</div>}</section>
+      <section className="client-profile-panel" hidden={profileView!=="appointments"} aria-label="Записи клиента">
       {/* ── ЗАПИСИ ── */}
       <AppointmentsList client={client} appointments={appointments} isAdmin={isAdmin} />
 
-      {/* ── ИСТОРИЯ ИЗМЕНЕНИЙ ── */}
-      {client.convertedFrom === "individual" && (
-        <div style={sec}>
-          <SectionHeader title="История изменений" />
-          <div style={{ background: "var(--bg2)", borderRadius: 12, border: "1px solid var(--border)", padding: "12px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 16 }}>🏢</span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>Конвертация из физлица</span>
-            </div>
-            {client.previousName && (
-              <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 4 }}>
-                <span style={{ color: "var(--text3)" }}>Ранее: </span>{client.previousName}
-              </div>
-            )}
-            {client.convertedAt && (
-              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
-                Дата: {fmtDate(client.convertedAt)}
-              </div>
-            )}
-            {convertedByName && (
-              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>
-                Кто: {convertedByName}
-              </div>
-            )}
-            {client.comment && (
-              <div style={{ fontSize: 12, color: "var(--text3)", fontStyle: "italic" }}>
-                {client.comment}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── УДАЛИТЬ ── */}
-      {isAdmin && (
-        <div style={{ marginTop: 8, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-          <button type="button" onClick={() => void handleDeleteClient()} style={{ fontSize: 12, color: "var(--red)", background: "transparent", border: "none", cursor: "pointer", fontFamily: "Manrope, sans-serif" }}>
-            🗑 Удалить клиента
-          </button>
-        </div>
-      )}
-
+      </section>
+     </div>
       {showPickObj    && <ObjectPickerModal client={client} onPick={handleObjPicked} onClose={() => setShowPickObj(false)} />}
       {showRepair     && <AddRepairModal
         client={client}
@@ -1825,360 +1859,25 @@ function ClientDetail({ client, initialVehicleId, onClose }: { client: Client; i
   );
 }
 
-// ─── Client cards ─────────────────────────────────────────────────────────────
-
-const AVATAR_PALETTES = [
-  { bg: "rgba(59,130,246,0.20)",  border: "rgba(59,130,246,0.40)",  text: "#3b82f6" },
-  { bg: "rgba(16,185,129,0.18)",  border: "rgba(16,185,129,0.38)",  text: "#16a34a" },
-  { bg: "rgba(245,158,11,0.18)",  border: "rgba(245,158,11,0.38)",  text: "#fcd34d" },
-  { bg: "rgba(239,68,68,0.18)",   border: "rgba(239,68,68,0.38)",   text: "#fca5a5" },
-  { bg: "rgba(139,92,246,0.18)",  border: "rgba(139,92,246,0.38)",  text: "#6d28d9" },
-  { bg: "rgba(6,182,212,0.18)",   border: "rgba(6,182,212,0.38)",   text: "#0e7490"  },
-  { bg: "rgba(249,115,22,0.18)",  border: "rgba(249,115,22,0.38)",  text: "#fdba74" },
-  { bg: "rgba(236,72,153,0.18)",  border: "rgba(236,72,153,0.38)",  text: "#f9a8d4" },
-];
-
-function avatarPalette(name: string) {
-  const sum = (name || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  return AVATAR_PALETTES[sum % AVATAR_PALETTES.length];
-}
-
-function getInitials(name: string): string {
-  return (name || "").split(" ").map((w) => w[0] ?? "").join("").toUpperCase().slice(0, 2) || "?";
-}
-
-const cardBase: CSSProperties = {
-  display: "flex", gap: 12, padding: "12px 14px",
-  background: "var(--bg3)", borderRadius: 16,
-  cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.22)",
-  transition: "background 0.12s",
-};
-
-function PhysClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
-  const [pressed, setPressed] = useState(false);
-  const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress").length;
-  const lastDate = (client.repairs ?? []).map((r) => r.date ?? "").filter(Boolean).sort().at(-1);
-  const days     = daysAgo(lastDate);
-  const palette  = avatarPalette(client.name);
-  const vehicles = client.vehicles ?? [];
-
-  return (
-    <div
-      onClick={onClick}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      style={{
-        ...cardBase,
-        background: pressed ? "var(--bg2)" : "var(--bg3)",
-        border: activeRepairs > 0 ? "1px solid rgba(59,130,246,0.22)" : "1px solid var(--border)",
-      }}
-    >
-      {/* Avatar */}
-      <div style={{
-        width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-        background: palette.bg, border: `1.5px solid ${palette.border}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 14, fontWeight: 800, color: palette.text, marginTop: 1,
-      }}>
-        {getInitials(client.name)}
-      </div>
-
-      {/* Right side */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Name row */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {client.name}
-          </div>
-          {activeRepairs > 0 && (
-            <span style={{
-              fontSize: 9.5, fontWeight: 700, flexShrink: 0,
-              color: "#b45309", background: "rgba(251,191,36,0.12)",
-              border: "1px solid rgba(251,191,36,0.22)",
-              padding: "2px 6px", borderRadius: 6,
-            }}>
-              В работе: {activeRepairs}
-            </span>
-          )}
-        </div>
-
-        {/* Phone */}
-        {client.phone && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>📞</span>
-            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.phone}</span>
-          </div>
-        )}
-
-        {/* Vehicles */}
-        {vehicles.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
-            {vehicles.slice(0, 3).map((v) => {
-              const brand = v.brand ?? v.model;
-              return (
-                <div key={v.id} style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.18)",
-                  borderRadius: 8, padding: "2px 7px 2px 3px",
-                }}>
-                  {v.photo ? (
-                    <img src={v.photo} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
-                  ) : (
-                    <span style={{ fontSize: 13, flexShrink: 0 }}>{vehicleTypeIcon(v.serviceType)}</span>
-                  )}
-                  <span style={{ fontSize: 10.5, fontFamily: "monospace", fontWeight: 700, color: "#3b82f6" }}>{v.plate}</span>
-                  {brand && <span style={{ fontSize: 10, color: "var(--text3)" }}>{brand}</span>}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Last visit */}
-        {lastDate && (
-          <div style={{ textAlign: "right", marginTop: 5 }}>
-            <span style={{ fontSize: 10, color: days > 60 ? "#f59e0b" : "var(--text3)" }}>
-              {days === 0 ? "Сегодня" : days === 1 ? "Вчера" : `${days} дн. назад`}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LegalClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
-  const [pressed, setPressed] = useState(false);
-  const activeRepairs = (client.repairs ?? []).filter((r) => repairStatus(r) === "in_progress").length;
-
-  return (
-    <div
-      onClick={onClick}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      style={{
-        ...cardBase,
-        background: pressed ? "var(--bg2)" : "var(--bg3)",
-        border: activeRepairs > 0 ? "1px solid rgba(139,92,246,0.25)" : "1px solid var(--border)",
-      }}
-    >
-      {/* Building icon */}
-      <div style={{
-        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-        background: "rgba(139,92,246,0.15)", border: "1.5px solid rgba(139,92,246,0.30)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 20, marginTop: 1,
-      }}>
-        🏢
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {client.name}
-          </div>
-          {activeRepairs > 0 && (
-            <span style={{
-              fontSize: 9.5, fontWeight: 700, flexShrink: 0,
-              color: "#b45309", background: "rgba(251,191,36,0.12)",
-              border: "1px solid rgba(251,191,36,0.22)",
-              padding: "2px 6px", borderRadius: 6,
-            }}>
-              В работе: {activeRepairs}
-            </span>
-          )}
-        </div>
-        {client.inn && (
-          <div style={{ fontSize: 10.5, color: "var(--text3)", marginTop: 2 }}>ИНН: {client.inn}</div>
-        )}
-        {client.contactPerson && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>👤</span>
-            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.contactPerson}</span>
-          </div>
-        )}
-        {client.phone && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>📞</span>
-            <span style={{ fontSize: 11.5, color: "var(--text2)" }}>{client.phone}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ClientCard({ client, onClick }: { client: Client; onClick: () => void }) {
-  const isLegal = (client.clientType ?? client.type ?? "phys") === "legal";
-  return isLegal
-    ? <LegalClientCard client={client} onClick={onClick} />
-    : <PhysClientCard  client={client} onClick={onClick} />;
-}
-
-// ─── Main Tab ─────────────────────────────────────────────────────────────────
-
-export function ClientsTab({ type, openClientId, openVehicleId, onClientOpened }: {
-  type:            ClientType;
-  openClientId?:   string | null;
-  openVehicleId?:  string | null;
-  onClientOpened?: () => void;
-}) {
-  const { clients }   = useData();
-  const { myProfile } = useAuth();
-  const isAdmin = (myProfile?.role ?? "mechanic") !== "mechanic";
-
-  const [activeType, setActiveType] = useState<ClientType>(type);
-  const [search,     setSearch]     = useState("");
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [selected,   setSelected]   = useState<Client | null>(null);
-
-  useEffect(() => { setActiveType(type); setSearch(""); }, [type]);
-
-  // Open a specific client's card when navigated here from another tab (e.g. clicking a vehicle link)
-  useEffect(() => {
-    if (!openClientId) return;
-    const c = clients.find((cl) => cl.id === openClientId);
-    if (c) {
-      setActiveType((c.clientType ?? c.type ?? "phys") as ClientType);
-      setSelected(c);
-    }
-    onClientOpened?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openClientId, clients]);
-
-  const searchQuery = search.trim().toLowerCase();
-
-  // Unified search across both types
-  const searchResults = useMemo(() => {
-    if (!searchQuery) return [];
-    return clients.filter((c) =>
-      c.name.toLowerCase().includes(searchQuery) ||
-      (c.phone ?? "").includes(searchQuery) ||
-      (c.companyName ?? "").toLowerCase().includes(searchQuery) ||
-      (c.vehicles ?? []).some((v) =>
-        v.plate.toLowerCase().includes(searchQuery) ||
-        (v.brand ?? v.model ?? "").toLowerCase().includes(searchQuery),
-      )
-    );
-  }, [clients, searchQuery]);
-
-  // Per-tab list (used only when search is empty)
-  const tabClients = useMemo(
-    () => clients.filter((c) => (c.clientType ?? c.type ?? "phys") === activeType),
-    [clients, activeType],
-  );
-
-  const selectedLive = selected ? (clients.find((c) => c.id === selected.id) ?? selected) : null;
-
-  const isSearching = !!searchQuery;
-
-  const typeBadge = (c: Client) => {
-    const isLegal = (c.clientType ?? c.type ?? "phys") === "legal";
-    return (
-      <span style={{
-        alignSelf: "flex-start",
-        fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 5,
-        background: isLegal ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.10)",
-        color:      isLegal ? "#6d28d9"                 : "#3b82f6",
-        border:     `1px solid ${isLegal ? "rgba(139,92,246,0.22)" : "rgba(59,130,246,0.18)"}`,
-      }}>
-        {isLegal ? "🏢 Компания" : "👤 Физлицо"}
-      </span>
-    );
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
-        <div className="section-header">
-          <i className="ti ti-search" style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">
-            {isSearching ? "Результаты поиска" : activeType === "phys" ? "Клиенты" : "Компании"}
-          </span>
-          <span className="section-count">
-            {isSearching ? `${searchResults.length} записей` : `${tabClients.length} записей`}
-          </span>
-          {isAdmin && !isSearching && (
-            <div className="section-actions">
-              <button className="btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setShowAdd(true)}>
-                <i className="ti ti-plus" /> {activeType === "phys" ? "Клиент" : "Компания"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Unified search — always above tabs */}
-        <div style={{ padding: "10px 16px", borderBottom: isSearching ? "1px solid var(--border)" : "none" }}>
-          <Input
-            placeholder="Поиск по имени, телефону, авто, компании..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {isSearching ? (
-          /* ── UNIFIED SEARCH RESULTS ── */
-          searchResults.length === 0 ? (
-            <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-              Ничего не найдено
-            </div>
-          ) : (
-            <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-              {searchResults.map((c) => (
-                <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {typeBadge(c)}
-                  <ClientCard client={c} onClick={() => setSelected(c)} />
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          /* ── NORMAL TABS VIEW ── */
-          <>
-            {/* Физ. лица / Компании switcher */}
-            <div style={{ padding: "10px 14px 0" }}>
-              <div style={{
-                display: "flex", background: "var(--bg2)",
-                border: "1px solid var(--border)", borderRadius: 12, padding: 3,
-              }}>
-                {(["phys", "legal"] as ClientType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setActiveType(t)}
-                    style={{
-                      flex: 1, padding: "7px 0", borderRadius: 9, border: "none",
-                      cursor: "pointer", fontFamily: "Manrope, sans-serif",
-                      fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
-                      background: activeType === t ? "var(--accent)" : "transparent",
-                      color: activeType === t ? "#fff" : "var(--text2)",
-                    }}
-                  >
-                    {t === "phys" ? "👤 Физ. лица" : "🏢 Компании"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {tabClients.length === 0 ? (
-              <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-                {`Нет ${activeType === "phys" ? "клиентов" : "компаний"}`}
-              </div>
-            ) : (
-              <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                {tabClients.map((c) => <ClientCard key={c.id} client={c} onClick={() => setSelected(c)} />)}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {showAdd      && <AddClientModal type={activeType} onClose={() => setShowAdd(false)} />}
-      {selectedLive && <ClientDetail client={selectedLive} initialVehicleId={openVehicleId} onClose={() => setSelected(null)} />}
-    </div>
-  );
+// ─── Client directory integration ──────────────────────────────────────────
+export function ClientsTab({type,openClientId,openVehicleId,onClientOpened}:{type:ClientType;openClientId?:string|null;openVehicleId?:string|null;onClientOpened?:()=>void}){
+ const {clients,sourceStatus}=useData();const {myProfile}=useAuth();
+ const canManage=["owner","admin","manager"].includes(myProfile?.role||"");
+ const [addType,setAddType]=useState<ClientType|null>(null),[selectedId,setSelectedId]=useState<string|null>(null),[initialVehicle,setInitialVehicle]=useState<string|null>(null),[linkError,setLinkError]=useState("");
+ useEffect(()=>{setSelectedId(null);setInitialVehicle(null);setLinkError("");},[type]);
+ useEffect(()=>{
+  if(!openClientId)return;
+  const client=resolveClientLink(clients,sourceStatus.clients,openClientId);
+  if(client===undefined)return;
+  if(client){setSelectedId(client.id);setInitialVehicle(openVehicleId||null);setLinkError("");}
+  else setLinkError("Клиент больше не найден в базе. Возможно, запись была удалена или доступ к ней изменился.");
+  onClientOpened?.();
+ },[openClientId,openVehicleId,clients,sourceStatus.clients,onClientOpened]);
+ const selected=selectedId?clients.find(c=>c.id===selectedId):undefined;
+ return <>
+  {linkError&&<p className="client-directory-message is-error" role="alert">{linkError}</p>}
+  <ClientDirectory clients={clients} status={sourceStatus.clients} initialType={type} canManage={canManage} onAdd={setAddType} onOpen={client=>{setSelectedId(client.id);setInitialVehicle(null);setLinkError("");}}/>
+  {addType&&canManage&&<AddClientModal type={addType} onClose={()=>setAddType(null)}/>}
+  {selected&&sourceStatus.clients==="ready"&&<ClientDetail key={selected.id} client={selected} initialVehicleId={initialVehicle} onClose={()=>{setSelectedId(null);setInitialVehicle(null);}}/>}
+ </>;
 }

@@ -3,17 +3,18 @@ import type { ReactNode } from "react";
 
 interface ModalProps {
   title: string;
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }
 
-export function Modal({ title, onClose, children }: ModalProps) {
+export function Modal({ title, className, onClose, children }: ModalProps) {
   return createPortal(
     <div
       className="crm-modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="crm-modal">
+      <div className={className ? `crm-modal ${className}` : "crm-modal"}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.2px" }}>{title}</h2>
           <button
