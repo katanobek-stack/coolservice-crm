@@ -46,7 +46,6 @@ const TABS: TabDef[] = [
   { id: "mytasks",  label: "Заявки",    icon: "ti-clipboard-list",   emoji: "🔧", group: "main" },
   { id: "intake",   label: "Приёмка",   icon: "ti-car-garage",       emoji: "📥", group: "main" },
   { id: "phys",     label: "Клиенты",   icon: "ti-users",            emoji: "👤", group: "main" },
-  { id: "legal",    label: "Компании",  icon: "ti-building",         emoji: "🏢", group: "main" },
   { id: "calendar", label: "Записи",    icon: "ti-calendar",         emoji: "📅", group: "service" },
   { id: "schedule", label: "График",    icon: "ti-calendar-user",    emoji: "🗓", group: "service" },
   { id: "monitoring", label: "Мониторинг", icon: "ti-device-desktop-analytics", emoji: "🌡️", group: "service" },
@@ -69,8 +68,8 @@ const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   stats:    { title: "Дашборд",   sub: "главные показатели" },
   mytasks:  { title: "Заявки",    sub: "ремонты и задачи" },
   intake:   { title: "Приёмка",   sub: "машины без клиента" },
-  phys:     { title: "Клиенты",   sub: "физические лица" },
-  legal:    { title: "Компании",  sub: "юридические лица" },
+  phys:     { title: "Клиенты",   sub: "частные клиенты и компании" },
+  legal:    { title: "Клиенты",   sub: "частные клиенты и компании" },
   calendar: { title: "Записи",    sub: "предстоящие визиты" },
   schedule: { title: "График",    sub: "расписание сотрудников" },
   monitoring: { title: "Мониторинг", sub: "температура и связь" },
@@ -172,7 +171,7 @@ function Sidebar({ tab, onTab, myProfile, onSignOut, activeRepairs, intakeCount,
           <div key={g.key}>
             <div className="nav-group-label">{g.label}</div>
             {g.tabs.map((t) => {
-              const isActive = tab === t.id;
+              const isActive = tab === t.id || (t.id === "phys" && tab === "legal");
               const badge    = getBadge(t.id);
               return (
                 <button
@@ -271,7 +270,7 @@ function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hide
       {/* Прокручиваемые вкладки */}
       <div className="mobile-nav-tabs">
         {visibleTabs.map((t) => {
-          const isActive     = tab === t.id;
+          const isActive     = tab === t.id || (t.id === "phys" && tab === "legal");
           const showRepairs  = t.id === "mytasks"  && activeMine > 0;
           const showAppts    = t.id === "calendar" && pendingAppts > 0;
           return (
