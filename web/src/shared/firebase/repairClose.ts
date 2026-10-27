@@ -3,7 +3,7 @@ import {assertFieldsUnchanged,ConcurrentMutationError} from './concurrency';
 import {closureIssue,parseClosureAmount} from '../utils/repairClosure';
 /** Called inside the existing transaction, against the freshly read repair. */
 export function prepareRepairClose(current:Repair,expected:Repair,sum:string,closedAt:string,uid:string):Repair{
- assertFieldsUnchanged(current,expected,['cost','status','closedByManager','closedAt','tasks','freonType','freonAmount','vehicleId','chamberId','description','date'],'Ремонт');
+ assertFieldsUnchanged(current,expected,['cost','status','closedByManager','closedAt','tasks','freonType','freonAmount','vehicleId','chamberId','description','date','photos'],'Ремонт');
  const issue=closureIssue(current);if(issue)throw new ConcurrentMutationError(issue);
  const cost=parseClosureAmount(sum);if(cost===null)throw new Error('Укажите корректную сумму: 0 или больше, не более двух знаков после запятой.');
  return {...current,cost,status:'done',closedByManager:true,closedAt,editedBy:uid,editedAt:closedAt};

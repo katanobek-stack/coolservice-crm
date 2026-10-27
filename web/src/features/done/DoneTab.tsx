@@ -34,8 +34,8 @@ import type { PhotoData } from "../../shared/utils/photos";
 import {closureIssue,parseClosureAmount} from "../../shared/utils/repairClosure";
 import {prepareRepairClose,createRepairReview} from "../../shared/firebase/repairClose";
 import {requestStage,selectServiceRequests} from "../../shared/requests/workspaceLogic";
-import {ReportModal as Modal,ReportsWorkspace,ReportQueueCard,ReportSourceBoundary,ReportCloseReview,useReportWriteBlocked,type ReportView} from "./ReportsWorkspace";
-import {selectReportItems,selectReportIntake,reportScope,confirmedReportData,reportArchiveMonths,reportTaskMonth,DEFAULT_REPORT_FILTERS,type ReportFilters,type DoneItem} from "./reportsLogic";
+import {ReportModal as Modal,ReportsWorkspace,ReportWorkComment,ReportQueueCard,ReportSourceBoundary,ReportCloseReview,useReportWriteBlocked,type ReportView} from "./ReportsWorkspace";
+import {selectReportItems,selectReportIntake,reportScope,confirmedReportData,reportArchiveMonths,reportTaskMonth,reportClosedTotal,DEFAULT_REPORT_FILTERS,type ReportFilters,type DoneItem} from "./reportsLogic";
 
 const FREON_TYPES = ["R134a", "R404A", "R410A", "R507", "R22", "R507a"];
 
@@ -479,6 +479,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                     {names && (
                       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
                     )}
+                    <ReportWorkComment comment={t.workComment}/>
                     <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 1 }} />
                     {taskPhotos.length > 0 && (
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
@@ -522,6 +523,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
           </div>
         )}
 
+        {(repair.photos??[]).length>0&&<section className="reports-repair-photos"><strong>Фотографии заявки</strong><PhotoGrid photos={repair.photos??[]} readOnly onView={src=>setGallery({photos:repair.photos??[],index:Math.max(0,(repair.photos??[]).findIndex(p=>(p.url??p.data)===src))})}/></section>}
         {/* Freon warning */}
         {unresolvedFreon && (
           <div style={{
@@ -1110,7 +1112,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
   const [open, setOpen] = useState(false);
 
   const totalCost = isAdmin && showAmounts
-    ? items.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0)
+    ? reportClosedTotal(items)
     : 0;
 
   return (
@@ -1678,7 +1680,7 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
     doneTasks.forEach(t=>{const mk=reportTaskMonth(t);if(filters.month!=='all'&&filters.month!==mk)return;const bucket=map.get(mk)||{items:[],tasks:[]};bucket.tasks.push(t);map.set(mk,bucket);});
     return [...map.entries()].sort(([a],[b])=>b.localeCompare(a));
   },[filteredClosed,doneTasks,filters.month]);
-  const totalRevenue=closedItems.filter(i=>requestStage(i.repair)==='closed').reduce((sum,i)=>sum+(parseFloat(i.repair.cost||'0')||0),0);
+  const totalRevenue=reportClosedTotal(closedItems);
   const archiveMonths=useMemo(()=>reportArchiveMonths(closedItems,tasks),[closedItems,tasks]);
   const exportMonths=useMemo(()=>[...new Set(closedItems.filter(i=>requestStage(i.repair)==='closed').map(i=>i.mk).filter(m=>m!=='0000-00'))].sort().reverse(),[closedItems]);
   const selectedExport=exportMonths.includes(exportMK)?exportMK:exportMonths[0]||'';

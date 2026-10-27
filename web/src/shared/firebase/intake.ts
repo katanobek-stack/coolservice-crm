@@ -383,7 +383,7 @@ export async function assignIntakeRepairToClient(
       throw new ConcurrentMutationError("Ремонт в приёмке изменился — обновите страницу");
     }
     if (target.requireReady) {
-      assertFieldsUnchanged(current.repair, intake.repair, ["tasks", "cost", "status", "closedByManager", "closedAt", "freonType", "freonAmount"], "Ремонт в приёмке");
+      assertFieldsUnchanged(current.repair, intake.repair, ["tasks", "cost", "status", "closedByManager", "closedAt", "freonType", "freonAmount", "photos"], "Ремонт в приёмке");
       assertFieldsUnchanged(current, intake, ["vehicle", "chamber", "kind"], "Оборудование приёмки");
       const issue = closureIssue(current.repair);
       if (issue) throw new ConcurrentMutationError(issue);

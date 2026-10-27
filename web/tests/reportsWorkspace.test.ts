@@ -50,3 +50,15 @@ test('archive periods include completed standalone task months',()=>{
 test('portal body hides unconfirmed contents without discarding editor fields',()=>{
  const Body=(ui as any).ReportModalBody;assert.equal(typeof Body,'function');const html=renderToStaticMarkup(createElement(Body,{blocked:true},createElement('input',{defaultValue:'Черновик'})));assert.match(html,/role="alert"/);assert.match(html,/hidden/);assert.match(html,/Черновик/);
 });
+test('monthly closed totals exclude cancellations while retaining legacy closedAt repairs',()=>{
+ assert.equal(typeof r.reportClosedTotal,'function');const items=[{repair:ready({closedAt:'2026-10-01',cost:'8500'})},{repair:ready({status:'cancelled',cost:'999'})},{repair:ready({cost:'12000'})}];assert.equal(r.reportClosedTotal(items),8500);
+});
+test('close review shows exact kopecks rather than rounding the approved amount',()=>{
+ const html=renderToStaticMarkup(createElement((ui as any).ReportCloseReview,{name:'Клиент',amount:'12500,50',busy:false,blocked:false,onConfirm(){},onCancel(){}}));assert.match(html,/12[^0-9]?500,50/);assert.doesNotMatch(html,/12[^0-9]?501/);
+});
+test('closing review conflicts if repair photographs change after inspection',()=>{
+ const original=ready({photos:[{id:'p',url:'old'}]});assert.throws(()=>s.prepareRepairClose({...original,photos:[{id:'p',url:'new'}]},original,'100','2026-10-27','owner'));
+});
+test('mechanic report preserves full multiline text for closing inspection',()=>{
+ const Work=(ui as any).ReportWorkComment;assert.equal(typeof Work,'function');const html=renderToStaticMarkup(createElement(Work,{comment:'Компрессор установлен.\nГерметичность проверена.'}));assert.match(html,/Отчёт механика/);assert.match(html,/Компрессор установлен/);assert.match(html,/Герметичность проверена/);
+});

@@ -1,7 +1,7 @@
 import type {Client,Repair,Vehicle} from '../../shared/types/client';
 import type {IntakeRepair} from '../../shared/types/intake';
 import type {StaffMember} from '../../shared/types/staff';
-import {selectClientRequests,selectIntakeRequests,requestAssignees,type RequestScope} from '../../shared/requests/workspaceLogic';
+import {selectClientRequests,selectIntakeRequests,requestAssignees,requestStage,type RequestScope} from '../../shared/requests/workspaceLogic';
 import {repairFinancialMonth} from '../../shared/utils/repair';
 export interface ReportFilters{origin?:'all'|'client'|'intake';search:string;employee:string;kind:string;month:string;status:string;sort:'newest'|'oldest'}
 export const DEFAULT_REPORT_FILTERS:ReportFilters={search:'',employee:'',kind:'all',month:'all',status:'all',sort:'oldest'};
@@ -24,3 +24,4 @@ export function reportTaskMonth(task:import('../../shared/types/task').ServiceTa
  return typeof date==='string'?date.slice(0,7):date&&typeof date==='object'&&'seconds' in date?new Date((date as {seconds:number}).seconds*1000).toISOString().slice(0,7):'0000-00';
 }
 export function reportArchiveMonths(items:DoneItem[],tasks:import('../../shared/types/task').ServiceTask[]):string[]{return [...new Set([...items.map(i=>i.mk),...tasks.filter(t=>t.status==='done').map(reportTaskMonth)])].sort().reverse();}
+export function reportClosedTotal(items:Pick<DoneItem,'repair'>[]):number{return items.filter(i=>requestStage(i.repair)==='closed').reduce((sum,i)=>sum+(parseFloat(i.repair.cost||'0')||0),0);}
