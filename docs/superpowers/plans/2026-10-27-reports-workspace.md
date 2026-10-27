@@ -28,8 +28,8 @@ No real QA writes; no dependencies/schema/rules changes; keep financial month an
 - [x] Close review clearly names object/client/amount and does not imply payment. Unit/SSR red-green, typecheck/build, full web emulator suite.
 
 ### Task 3 — review and release
-- [ ] Fresh review, regression fixes, actual-component synthetic browser QA desktop/480.
-- [ ] Publish with lease on observed main; CI/Pages success, remove synthetic pages, verify production login/assets. Record limits.
+- [x] Fresh review, regression fixes, actual-component synthetic browser QA desktop/480.
+- [x] Publish implementation and browser fixes with a lease on observed main; CI and Pages passed for 43b1803. Remove synthetic QA pages in the final cleanup commit and verify its deployment.
 
 ## Ledger
 - Base30294ee includes newer warehouse work from another session; preserved by branching from current origin/main. User requests same delegated workflow and has standing commit/publish authorization.
@@ -38,3 +38,8 @@ No real QA writes; no dependencies/schema/rules changes; keep financial month an
 - Independent review: fixed Important live-prop review baseline loss by capturing reviewed repair/intake; fixed portal visibility using ReportModalBody retaining hidden editor inputs; fixed cleared-list draft loss by rendering last confirmed data while source is blocked. Each is covered by a failing regression before implementation, followed by177 green unit/SSR checks.
 - Also fixed task-only archive month selection. Existing shared modal focus trapping/Escape/restoration remains a pre-existing accessibility follow-up; Reports adds native queue disclosures and native archive-detail buttons.
 - Typecheck and build pass. Full emulator web suite282 checks (177unit,2indexes,44rules,26appointments,18concurrency,15intake) exits0. Real transaction tests confirm stale review rejection and successful fresh close, including intake atomic move. Existing unrelated warehouse/navigation work preserved.
+
+- Final regression evidence: 181 unit/SSR tests pass, typecheck and production build pass. Focused final emulator rerun: 18 concurrency and 15 intake tests pass. CI and Pages for 43b1803 completed successfully.
+- Browser checks on actual components with fictional records and all real writes blocked: multiword search; intake including chambers; exact 12 500,50 RUB close review; mechanic work report; stale-review conflict; amount and new-client drafts survive cleared read sources; owner edit portal blocks while unavailable and restores its draft; admin amount permissions and mechanic view-only controls; task-only archive month; real monthly Excel download with correct repair sum and three sheets. 480px iframe body width and scroll width both 480px.
+- Browser fixes: preserve cents in final review, include mechanic work comments and repair photos, reject stale review when repair-level photos change. Added failing regression tests before changes.
+- Limits: live authenticated production workflows were not exercised; no production records were created or edited. The pre-existing shared-modal focus trap/Escape/focus restoration follow-up remains outside this scoped change.
