@@ -10,10 +10,12 @@ import {
 import { getFirebaseDb } from "./app";
 import {
   ConcurrentMutationError,
+  assertFieldsUnchanged,
   cleanForFirestore,
   findEntityIndex,
   runSafeTransaction,
 } from "./concurrency";
+import { closureIssue, parseClosureAmount } from "../utils/repairClosure";
 import { genId } from "../utils/format";
 import { normalizePlate, platesMatch } from "../utils/plate";
 import { deletePhoto, deletePhotoObjects, repairPhotos } from "../utils/photos";
@@ -341,6 +343,8 @@ export interface NewClientData {
 }
 
 export interface AssignIntakeTarget {
+  /** Reports requires a fresh completed review; legacy callers retain their existing contract. */
+  requireReady?: boolean;
   /** Attach to an existing client, or create a new one. */
   client: { existingId: string } | { create: NewClientData };
   /** Attach to an existing car/chamber of the client, or create a new one from the intake. */
@@ -378,6 +382,13 @@ export async function assignIntakeRepairToClient(
     if (current.repair.id !== intake.repair.id) {
       throw new ConcurrentMutationError("Ремонт в приёмке изменился — обновите страницу");
     }
+    if (target.requireReady) {
+      assertFieldsUnchanged(current.repair, intake.repair, ["tasks", "cost", "status", "closedByManager", "closedAt", "freonType", "freonAmount"], "Ремонт в приёмке");
+      assertFieldsUnchanged(current, intake, ["vehicle", "chamber", "kind"], "Оборудование приёмки");
+      const issue = closureIssue(current.repair);
+      if (issue) throw new ConcurrentMutationError(issue);
+      if (parseClosureAmount(target.cost) === null) throw new Error("Укажите корректную сумму: 0 или больше, не более двух знаков после запятой.");
+    }
     const kind = intakeKind(current);
 
     let existingClient: Client | null = null;
@@ -392,7 +403,7 @@ export async function assignIntakeRepairToClient(
     const chambers: Chamber[] = [...(existingClient?.chambers ?? [])];
     const movedRepair: Repair = {
       ...current.repair,
-      cost: target.cost.trim(),
+      cost: target.requireReady ? parseClosureAmount(target.cost)! : target.cost.trim(),
       status: "done",
       closedByManager: true,
       closedAt: now,

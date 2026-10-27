@@ -369,3 +369,14 @@ describe("entity addressing helpers", () => {
     );
   });
 });
+
+// Reports closes through the same transactional array mutation used by the UI.
+import {prepareRepairClose} from '../src/shared/firebase/repairClose';
+test('reports close rejects a stale task review then atomically stores a fresh close',async()=>{
+ const original=repair('report-close',[{...task('checked'),status:'done',doneBy:['worker-a','worker-b']}]);await seedClient([original]);
+ await mutateRepairTask('client-1',original,original.tasks[0],t=>({...t,workComment:'Новые сведения'}),dbFor('worker-a'));
+ await assert.rejects(mutateClientRepair('client-1',original,current=>prepareRepairClose(current,original,'1500','2026-10-27T01:00:00Z','manager'),dbFor('manager')),ConcurrentMutationError);
+ const fresh=(await currentRepairs())[0];assert.equal(fresh.closedByManager,undefined);
+ await mutateClientRepair('client-1',fresh,current=>prepareRepairClose(current,fresh,'1 500,50','2026-10-27T01:00:00Z','manager'),dbFor('manager'));
+ const closed=(await currentRepairs())[0];assert.equal(closed.cost,'1500.50');assert.equal(closed.closedByManager,true);assert.equal(closed.tasks[0].workComment,'Новые сведения');assert.equal(closed.closedAt,'2026-10-27T01:00:00Z');
+});
