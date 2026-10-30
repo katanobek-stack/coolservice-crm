@@ -19,8 +19,10 @@ import {
   removeEntityIfUnchanged,
   replaceEntity,
   updateClientArrayEntity,
+  updateDocumentFieldsIfUnchanged,
 } from "../src/shared/firebase/concurrency";
 import type { Client, Repair, RepairTask } from "../src/shared/types/client";
+import type { StaffMember } from "../src/shared/types/staff";
 
 const PROJECT_ID = "coolservice-crm-concurrency-test";
 const RULES_PATH = new URL("../../firestore.rules", import.meta.url);
@@ -81,6 +83,33 @@ before(async () => {
 
 beforeEach(async () => {
   await testEnv.clearFirestore();
+});
+
+test("staff profile edit preserves concurrent email changes and rejects a stale name", async () => {
+  const original: StaffMember = { id: 'staff-editor', name: 'Before', email: 'before@example.test', role: 'admin' };
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'staff/staff-editor'), { name: original.name, email: 'new@example.test', role: 'admin' });
+  });
+  await updateDocumentFieldsIfUnchanged('staff', original, { name: 'After' }, dbFor('staff-editor'));
+  let saved = (await getDoc(doc(dbFor('staff-editor'), 'staff/staff-editor'))).data();
+  assert.equal(saved?.email, 'new@example.test');
+  assert.equal(saved?.name, 'After');
+  await assert.rejects(updateDocumentFieldsIfUnchanged('staff', original, { name: 'Overwrite' }, dbFor('staff-editor')), ConcurrentMutationError);
+  saved = (await getDoc(doc(dbFor('staff-editor'), 'staff/staff-editor'))).data();
+  assert.equal(saved?.name, 'After');
+});
+
+test("owner saves permissions atomically and stale permission editors cannot undo them", async () => {
+  const permissions = { dashboard_financials: true, reports_amounts: true, pl_panel: true };
+  const original: StaffMember = { id: 'staff-admin', name: 'Admin', email: 'admin@example.test', role: 'admin', permissions };
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'staff/staff-owner'), { name: 'Owner', role: 'owner' });
+    await setDoc(doc(context.firestore(), 'staff/staff-admin'), { name: original.name, email: original.email, role: original.role, permissions });
+  });
+  await updateDocumentFieldsIfUnchanged('staff', original, { permissions: { ...permissions, pl_panel: false } }, dbFor('staff-owner'));
+  await assert.rejects(updateDocumentFieldsIfUnchanged('staff', original, { permissions: { ...permissions, reports_amounts: false } }, dbFor('staff-owner')), ConcurrentMutationError);
+  const saved = (await getDoc(doc(dbFor('staff-owner'), 'staff/staff-admin'))).data();
+  assert.deepEqual(saved?.permissions, { dashboard_financials: true, reports_amounts: true, pl_panel: false });
 });
 
 test("ending rental snapshots contact phone and clears it for the next tenant", async () => {
