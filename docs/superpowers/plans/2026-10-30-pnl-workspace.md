@@ -33,8 +33,8 @@ Interfaces: pure month data from Task1, PnlSettings captures finance at editor o
 
 ### Task 3 — review and release
 - [x] Fresh whole-branch review and one RED/GREEN fix pass for important findings.
-- [ ] Actual-component synthetic browser QA desktop/480: period consistency, filters, forms, draft recovery, export and settings.
-- [ ] Publish with lease on current main, verify CI/Pages, remove QA pages, verify actual login/assets. Record evidence/limits.
+- [x] Actual-component synthetic browser QA desktop/480: period consistency, filters, forms, draft recovery, export and settings.
+- [x] Publish with lease on current main, verify CI/Pages, remove QA pages, verify actual login/assets. Record evidence/limits.
 
 ## Ledger
 - Clean base dd99afd, baseline181 unit tests pass. Dedicated branch codex/pnl-workspace in existing session checkout; preserve unrelated work.
@@ -43,3 +43,11 @@ Interfaces: pure month data from Task1, PnlSettings captures finance at editor o
 - Independent review: no critical findings. Fixed both important workflows: a new completed operation starts in the selected period while an unfinished draft retains its period; edited uncertain retries keep one ID and transactional addPnlPurchase rejects a changed committed payload instead of duplicating it. Three unit regressions failed before the fix; a new emulator regression failed before purchase implementation.
 - Export fallback finding regraded Important: a standalone financial workbook must identify actual current-value fields, without needing the app. Export now lists precise fallback fields; regression RED→GREEN. Pending bill replacement was already guarded by billLock when review ran; disabled button added for visible feedback. No deferred findings.
 - Baseline and completed-repair revenue rules intentionally retained. This may differ from payment or manager-closed-only reporting; the screen and workbook label that basis explicitly. No changes to financial source data or backend role permissions.
+
+- Verification: 196 unit/SSR + 2 index + 44 rules + 26 appointment + 23 concurrency + 15 intake checks = 306 checks, all passed in the final full Firestore emulator run (/workspace/scratch/pnl-emulator-final.log), exit0. Typecheck and production build passed. CI/Pages for 703893d both completed successfully.
+- Synthetic browser evidence: September and October amounts/rows follow the selected period; draft date2026-09-01 and amount7777,25 survive changing report month, emptying sources and restoring them; blocked purchase save retains fields and releases button; fresh-bill conflict retains14000,25 while actual bill changes19000; failed deletion retains exact target; settings27000,25 survives failure/recovery; admin explicit panel=false and mechanic both show no financial data.
+- Actual browser Excel download verified numeric result98800.50 with three operation rows and two repair rows even while the journal displays only one filtered commission. Workbook sheets P&L/Операции/Ремонты.
+- Mobile browser found a real flex-root overflow: body480, scroll580. Added width100% and min-width0 boundaries so only the monthly table scrolls; browser GREEN verified after ee253a5: body480/scroll480 in overview and journal, formwidth404 inside480 frame. Child-frame URL was versioned only to refresh its independent browser cache. This visual regression does not change financial logic.
+- Limits: no authenticated production financial writes or account mutations; all browser records are fictional and Firebase writes are blocked. Existing production login and exact deployed assets are verified separately. No database migrations or schema/rules changes.
+
+- Release cleanup removes both temporary preview HTMLs. No runtime QA routes remain. Final production source CSS index-bOLpDfvD.css; production app remains authenticated and no live writes were attempted.
