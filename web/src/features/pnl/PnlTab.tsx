@@ -1,657 +1,186 @@
-﻿import { useMemo, useState } from "react";
-import { useData } from "../../shared/context/DataContext";
-import { useAuth } from "../auth";
-import { repairStatus, repairFinancialMonth } from "../../shared/utils/repair";
-import { fmtMoney, fmtDate, genId } from "../../shared/utils/format";
-import { Button } from "../../shared/ui/Button";
-import { Input, FormGroup } from "../../shared/ui/Input";
-import { addExpense, deleteExpense } from "../../shared/firebase/firestore";
-import {
-  addFinancePurchase,
-  removeFinancePurchase,
-  saveFinanceConfiguration,
-  setFinanceMapValue,
-} from "../../shared/firebase/concurrency";
-
-// ─── Types for finance document ───────────────────────────────────────────────
-
-interface Box      { id: string; name: string; cost: number }
-interface Salary   { uid: string; name: string; salary: number }
-interface Purchase { id: string; date: string; addedAt: string; amount: number; comment: string; addedByName?: string }
-type ElecBills = Record<string, number>;
-
-interface FinanceDoc {
-  boxes?:     Box[];
-  salaries?:  Salary[];
-  kwPrice?:   number;
-  elecBills?: ElecBills;
-  purchases?: Purchase[];
-  // Per-month frozen fixed costs, written on each config change (see finance.ts).
-  fixedCostHistory?: Record<string, { boxCost?: number; salCost?: number; rentalIncome?: number }>;
-}
-
-// ─── Month names ──────────────────────────────────────────────────────────────
-
-const MONTH_NAMES = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-const MONTH_NAMES_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-
-function mkLabel(mk: string): string {
-  const [y, m] = mk.split("-");
-  return `${MONTH_NAMES_FULL[parseInt(m)-1]} ${y}`;
-}
-
-// ─── Section card ─────────────────────────────────────────────────────────────
-
-function SectionCard({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-[18px] p-4 border border-[#E2E8F0] shadow-sm mb-3">
-      <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-3">
-        {icon && <span className="mr-1">{icon}</span>}{title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── Expenses settings modal ──────────────────────────────────────────────────
-
-function ExpensesModal({ finance, rentalIncome, onClose }: { finance: FinanceDoc; rentalIncome: number; onClose: () => void }) {
-  const [boxes,    setBoxes]    = useState<Box[]>(finance.boxes?.length ? [...finance.boxes] : [{ id: genId(), name: "", cost: 0 }]);
-  const [salaries, setSalaries] = useState<Salary[]>(finance.salaries?.length ? [...finance.salaries] : [{ uid: genId(), name: "", salary: 0 }]);
-  const [kwPrice,  setKwPrice]  = useState(String(finance.kwPrice ?? ""));
-  const [saving,   setSaving]   = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    await saveFinanceConfiguration({
-      boxes: finance.boxes,
-      salaries: finance.salaries,
-      kwPrice: finance.kwPrice,
-    }, {
-      boxes:    boxes.map((b) => ({ id: b.id || genId(), name: b.name, cost: parseFloat(String(b.cost)) || 0 })),
-      salaries: salaries.map((s) => ({ uid: s.uid || genId(), name: s.name, salary: parseFloat(String(s.salary)) || 0 })),
-      kwPrice:  parseFloat(kwPrice) || 0,
-    }, rentalIncome);
-    onClose();
-  }
-
-  function updateBox(i: number, field: keyof Box, value: string | number) {
-    setBoxes((prev) => prev.map((b, j) => j === i ? { ...b, [field]: value } : b));
-  }
-
-  function updateSalary(i: number, field: keyof Salary, value: string | number) {
-    setSalaries((prev) => prev.map((s, j) => j === i ? { ...s, [field]: value } : s));
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,23,42,.38)", backdropFilter: "blur(8px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-[560px] rounded-t-[28px] overflow-y-auto bg-white"
-        style={{ maxHeight: "92vh", padding: "20px 18px 40px", boxShadow: "0 -20px 60px rgba(15,23,42,.20)", borderBottom: "none" }}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-[#172033]">⚙️ Настройки расходов</h2>
-          <button type="button" onClick={onClose} className="text-2xl text-[#8A96A8] leading-none cursor-pointer bg-transparent border-none">×</button>
-        </div>
-
-        {/* Boxes */}
-        <div className="mb-4">
-          <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">Аренда боксов</div>
-          {boxes.map((b, i) => (
-            <div key={b.id} className="flex gap-2 mb-2">
-              <Input placeholder="Название бокса" value={b.name} onChange={(e) => updateBox(i, "name", e.target.value)} className="flex-[2]" />
-              <Input type="number" placeholder="₽/мес" value={b.cost > 0 ? b.cost : ""} onChange={(e) => updateBox(i, "cost", e.target.value)} className="flex-1 !min-h-0" />
-              <button type="button" onClick={() => setBoxes((prev) => prev.filter((_, j) => j !== i))}
-                className="text-red-400 bg-white border border-red-100 rounded-xl px-2.5 cursor-pointer text-sm flex-shrink-0">×</button>
-            </div>
-          ))}
-          <button type="button" onClick={() => setBoxes((prev) => [...prev, { id: genId(), name: "", cost: 0 }])}
-            className="w-full py-2 rounded-xl border border-dashed border-[#7CB7EA] text-[#185FA5] text-xs font-semibold cursor-pointer bg-white">
-            + Добавить бокс
-          </button>
-        </div>
-
-        {/* Salaries */}
-        <div className="mb-4">
-          <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">Зарплаты и услуги</div>
-          {salaries.map((s, i) => (
-            <div key={s.uid} className="flex gap-2 mb-2">
-              <Input placeholder="Имя / должность" value={s.name} onChange={(e) => updateSalary(i, "name", e.target.value)} className="flex-[2]" />
-              <Input type="number" placeholder="₽/мес" value={s.salary > 0 ? s.salary : ""} onChange={(e) => updateSalary(i, "salary", e.target.value)} className="flex-1 !min-h-0" />
-              <button type="button" onClick={() => setSalaries((prev) => prev.filter((_, j) => j !== i))}
-                className="text-red-400 bg-white border border-red-100 rounded-xl px-2.5 cursor-pointer text-sm flex-shrink-0">×</button>
-            </div>
-          ))}
-          <button type="button" onClick={() => setSalaries((prev) => [...prev, { uid: genId(), name: "", salary: 0 }])}
-            className="w-full py-2 rounded-xl border border-dashed border-[#7CB7EA] text-[#185FA5] text-xs font-semibold cursor-pointer bg-white">
-            + Добавить
-          </button>
-        </div>
-
-        {/* kWh price */}
-        <div className="mb-4">
-          <div className="text-xs font-bold text-[#667085] uppercase tracking-wide mb-2">Цена электричества (₽/кВт·ч)</div>
-          <Input type="number" step="0.01" placeholder="6.50" value={kwPrice} onChange={(e) => setKwPrice(e.target.value)} />
-        </div>
-
-        <Button size="lg" onClick={() => void handleSave()} disabled={saving}>{saving ? "Сохранение..." : "💾 Сохранить"}</Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main tab ─────────────────────────────────────────────────────────────────
-
-export function PnlTab() {
-  const { clients, freezers, finance: rawFinance, expenses } = useData();
-  const { user } = useAuth();
-  const finance = rawFinance as unknown as FinanceDoc;
-  const now     = new Date();
-  const curMK   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-
-  const [showExpenses, setShowExpenses] = useState(false);
-  const [elecInput,    setElecInput]    = useState("");
-  const [elecMK,       setElecMK]       = useState(curMK);
-  const [newPurAmt,    setNewPurAmt]    = useState("");
-  const [newPurCmt,    setNewPurCmt]    = useState("");
-  const [savingPur,    setSavingPur]    = useState(false);
-  const [savingElec,   setSavingElec]   = useState(false);
-  const [newComMK,     setNewComMK]     = useState(curMK);
-  const [newComAmt,    setNewComAmt]    = useState("");
-  const [newComCmt,    setNewComCmt]    = useState("");
-  const [savingCom,    setSavingCom]    = useState(false);
-
-  // ── Revenue ──────────────────────────────────────────────────────────────
-  const allDone = useMemo(
-    () => clients.flatMap((c) => (c.repairs ?? []).filter((r) => repairStatus(r) === "done")
-      .map((r) => ({ ...r, clientId: c.id, clientName: c.name }))),
-    [clients],
-  );
-
-  const monthStats = useMemo(() => {
-    const map = new Map<string, { revenue: number; repairs: number; label: string }>();
-    for (let i = 11; i >= 0; i--) {
-      const d  = new Date(now.getFullYear(), now.getMonth()-i, 1);
-      const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      map.set(mk, { revenue: 0, repairs: 0, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` });
+import * as XLSX from 'xlsx';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useData } from '../../shared/context/DataContext';
+import { useAuth } from '../auth';
+import { genId, fmtDate } from '../../shared/utils/format';
+import { shiftMonth } from '../../shared/utils/finance';
+import { removeDocumentIfUnchanged } from '../../shared/firebase/concurrency';
+import { savePnlElectricity, addPnlPurchase, addPnlCommission, removePnlPurchase, type PnlCommissionInput } from '../../shared/firebase/pnl';
+import { buildPnlMonth, pnlMonths, preparePnlAttempt, pnlEntryPeriodOnOpen, type PnlAttempt, pnlMonthLabel, pnlMoney, localPnlDate, parsePnlAmount, selectPnlJournal, pnlExportRows, pnlAccess, validPnlMonth, type PnlData, type PnlFinance, type PnlOperation, type PnlPurchase, type PnlKind } from './pnlLogic';
+import { PnlSourceBoundary, PnlSummary, PnlPanel, PnlFeedback, pnlError } from './PnlWorkspace';
+import { PnlSettings } from './PnlSettings';
+import './pnl.css';
+type View = 'overview' | 'journal' | 'income' | 'settings';
+export function PnlTab() { const { myProfile, isOwner } = useAuth(); return pnlAccess(isOwner ? 'owner' : myProfile?.role, myProfile?.permissions?.pl_panel) ? <PnlContent /> : <div className="pnl-notice" role="status">Раздел P&L доступен сотрудникам с разрешением на финансовую панель.</div>; }
+function PnlContent() {
+    const source = useData(), { user, myProfile } = useAuth();
+    const current = localPnlDate().slice(0, 7), [month, setMonth] = useState(current), [view, setView] = useState<View>('overview');
+    const [kind, setKind] = useState<'all' | PnlKind>('all'), [search, setSearch] = useState(''), [sort, setSort] = useState<'newest' | 'oldest' | 'amount'>('newest');
+    const [purchaseInitial, setPurchaseInitial] = useState<string | null>(null), [commissionInitial, setCommissionInitial] = useState<string | null>(null);
+    const [purchaseOpen, setPurchaseOpen] = useState(false), [commissionOpen, setCommissionOpen] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
+    const [bill, setBill] = useState<{
+        month: string;
+        expected: unknown;
+        value: string;
+    } | null>(null), [billError, setBillError] = useState(''), [billBusy, setBillBusy] = useState(false);
+    const [removal, setRemoval] = useState<PnlOperation | null>(null), [deleteBusy, setDeleteBusy] = useState(false), [deleteError, setDeleteError] = useState('');
+    const [notice, setNotice] = useState(''), [exportError, setExportError] = useState(''), [exporting, setExporting] = useState(false);
+    const billLock = useRef(false), deleteLock = useRef(false), removalRef = useRef<HTMLElement>(null);
+    useEffect(() => { if (removal)
+        removalRef.current?.focus(); }, [removal]);
+    const required = ['clients', 'freezers', 'finance', 'expenses'] as const;
+    const ready = required.every(k => source.sourceStatus[k] === 'ready'), error = required.some(k => source.sourceStatus[k] === 'error');
+    const data: PnlData = { clients: source.clients, freezers: source.freezers, finance: source.finance as PnlFinance, expenses: source.expenses };
+    // Retain settings and month lists during listener failures without displaying stale totals.
+    const last = useRef<PnlData | null>(null);
+    if (ready)
+        last.current = data;
+    const confirmed = ready ? data : last.current;
+    const report = useMemo(() => confirmed ? buildPnlMonth(confirmed, month) : null, [confirmed, month]);
+    const history = useMemo(() => confirmed ? Array.from({ length: 12 }, (_, i) => buildPnlMonth(confirmed, shiftMonth(month, -i))) : [], [confirmed, month]);
+    const months = confirmed ? pnlMonths(confirmed, current) : [current];
+    if (!months.includes(month))
+        months.push(month);
+    months.sort().reverse();
+    const journal = selectPnlJournal(report?.journal ?? [], { kind, search, sort });
+    const liveRental = confirmed ? buildPnlMonth({ ...confirmed, finance: { ...confirmed.finance, fixedCostHistory: {} } }, current).rentalIncome : 0;
+    function changeMonth(value: string) { if (validPnlMonth(value)) {
+        setMonth(value);
+        setNotice('');
+    } }
+    function openEntry(entry: PnlKind) { setView('journal'); if (entry === 'purchase') {
+        setPurchaseInitial(v => v ?? month);
+        setPurchaseOpen(true);
     }
-    allDone.forEach((r) => {
-      const mk = repairFinancialMonth(r);
-      if (!mk || !map.has(mk)) return;
-      const prev = map.get(mk)!;
-      map.set(mk, { ...prev, revenue: prev.revenue + (parseFloat(r.cost ?? "0") || 0), repairs: prev.repairs + 1 });
-    });
-    return Array.from(map.entries()).map(([mk, v]) => ({ month: mk, ...v })).sort((a,b) => b.month.localeCompare(a.month));
-  }, [allDone]);
-
-  const totalRevenue = allDone.reduce((s,r) => s + (parseFloat(r.cost ?? "0") || 0), 0);
-
-  // ── Rental income ─────────────────────────────────────────────────────────
-  const rentalIncome = freezers
-    .filter((f) => f.rented === true || f.status === "rented")
-    .reduce((s, f) => s + (parseFloat(String(f.rentAmount ?? 0)) || 0), 0);
-
-  // ── Expenses ──────────────────────────────────────────────────────────────
-  const boxCost  = (finance.boxes    ?? []).reduce((s, b) => s + (parseFloat(String(b.cost))   || 0), 0);
-  const salCost  = (finance.salaries ?? []).reduce((s, s2) => s + (parseFloat(String(s2.salary)) || 0), 0);
-  const elecBills = finance.elecBills ?? {};
-  const curElec  = parseFloat(String(elecBills[curMK] ?? 0)) || 0;
-  const totalExpenses = boxCost + salCost + curElec;
-
-  // ── Purchases (current month) ─────────────────────────────────────────────
-  const purchases = finance.purchases ?? [];
-  const curPurchases = purchases.filter((p) => p.date?.slice(0,7) === curMK);
-  const curPurTotal  = curPurchases.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0);
-
-  // ── Commissions (current month) ───────────────────────────────────────────
-  const commissions    = expenses.filter((e) => e.category === "commission");
-  const curCommissions = commissions.filter((e) => e.month === curMK);
-  const curCommTotal   = curCommissions.reduce((s, e) => s + (parseFloat(String(e.amount)) || 0), 0);
-
-  // ── P&L ──────────────────────────────────────────────────────────────────
-  const curMonthRev = monthStats.find((m) => m.month === curMK)?.revenue ?? 0;
-  const curIncome   = curMonthRev + rentalIncome;
-  const curProfit   = curIncome - totalExpenses - curPurTotal - curCommTotal;
-
-  async function addCommission() {
-    const amt = parseFloat(newComAmt);
-    if (isNaN(amt) || amt <= 0) return;
-    setSavingCom(true);
-    await addExpense({
-      category:  "commission",
-      month:     newComMK,
-      amount:    amt,
-      comment:   newComCmt.trim(),
-      createdBy: user?.uid ?? "",
-    });
-    setNewComAmt("");
-    setNewComCmt("");
-    setSavingCom(false);
-  }
-
-  async function saveElecBill() {
-    const val = parseFloat(elecInput);
-    if (isNaN(val)) return;
-    setSavingElec(true);
-    await setFinanceMapValue("elecBills", elecMK, val);
-    setSavingElec(false);
-    setElecInput("");
-  }
-
-  async function addPurchase() {
-    const amt = parseFloat(newPurAmt);
-    if (isNaN(amt) || amt <= 0 || !newPurCmt.trim()) return;
-    setSavingPur(true);
-    const newP: Purchase = {
-      id:         genId(),
-      date:       now.toISOString().slice(0,10),
-      addedAt:    now.toISOString(),
-      amount:     amt,
-      comment:    newPurCmt.trim(),
-    };
-    await addFinancePurchase(newP);
-    setNewPurAmt("");
-    setNewPurCmt("");
-    setSavingPur(false);
-  }
-
-  async function deletePurchase(id: string) {
-    await removeFinancePurchase(id);
-  }
-
-  const CURMONTH_LABEL = `${MONTH_NAMES_FULL[now.getMonth()]} ${now.getFullYear()}`;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-      {/* ── KPI: Доходы / Расходы / Прибыль ─────────────────────────────── */}
-      <div className="kpi-grid" style={{ animation: "fadeUp 0.45s ease 0.1s both" }}>
-        <div className="kpi-card green">
-          <i className="ti ti-trending-up kpi-icon" />
-          <div className="kpi-label">Доходы / {MONTH_NAMES[now.getMonth()]}</div>
-          <div className="kpi-value" style={{ color: "#16a34a" }}>{fmtMoney(curIncome)}</div>
-          <div className="kpi-delta muted">
-            Рем. {fmtMoney(curMonthRev)} + Аренда {fmtMoney(rentalIncome)}
-          </div>
-        </div>
-        <div className="kpi-card" style={{ borderTop: "2px solid var(--red)" }}>
-          <i className="ti ti-trending-down kpi-icon" />
-          <div className="kpi-label">Расходы</div>
-          <div className="kpi-value" style={{ color: "#dc2626" }}>{fmtMoney(totalExpenses + curPurTotal + curCommTotal)}</div>
-          <div className="kpi-delta muted">Пост. + закупки + ком.</div>
-        </div>
-        <div className="kpi-card blue" style={{ gridColumn: "span 2" }}>
-          <i className={`ti ${curProfit >= 0 ? "ti-trophy" : "ti-alert-circle"} kpi-icon`} />
-          <div className="kpi-label">Прибыль / {CURMONTH_LABEL}</div>
-          <div className="kpi-value" style={{ color: curProfit >= 0 ? "#16a34a" : "#dc2626" }}>
-            {curProfit >= 0 ? "+" : ""}{fmtMoney(curProfit)}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowExpenses(true)}
-            style={{
-              marginTop: 6, padding: "4px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600,
-              background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text2)",
-              cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
-            }}
-          >
-            <i className="ti ti-settings" style={{ fontSize: 12 }} /> Настроить расходы
-          </button>
-        </div>
-      </div>
-
-      {/* ── Закупки и материалы ──────────────────────────────────────────── */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.2s both" }}>
-        <div className="section-header" style={{ background: "rgba(139,92,246,0.06)" }}>
-          <i className="ti ti-shopping-cart" style={{ fontSize: 17, color: "#7c3aed" }} />
-          <span className="section-title">Закупки и материалы</span>
-          <span className="section-count">{CURMONTH_LABEL}</span>
-          {curPurTotal > 0 && (
-            <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace" }}>
-                {fmtMoney(curPurTotal)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Add form */}
-        <div style={{ display: "flex", gap: 8, padding: "12px 16px", flexWrap: "wrap" as const, borderBottom: "1px solid var(--border)" }}>
-          <input
-            type="number"
-            placeholder="Сумма ₽"
-            value={newPurAmt}
-            onChange={(e) => setNewPurAmt(e.target.value)}
-            style={{
-              width: 120, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-              outline: "none", fontFamily: "JetBrains Mono, monospace",
-            }}
-            onKeyDown={(e) => e.key === "Enter" && void addPurchase()}
-          />
-          <input
-            type="text"
-            placeholder="Что закупили..."
-            value={newPurCmt}
-            onChange={(e) => setNewPurCmt(e.target.value)}
-            style={{
-              flex: 1, minWidth: 140, padding: "8px 12px", borderRadius: 8, fontSize: 13,
-              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-              outline: "none",
-            }}
-            onKeyDown={(e) => e.key === "Enter" && void addPurchase()}
-          />
-          <button
-            type="button"
-            onClick={() => void addPurchase()}
-            disabled={savingPur}
-            style={{
-              padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-              background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.3)",
-              color: "#7c3aed", cursor: savingPur ? "not-allowed" : "pointer",
-            }}
-          >
-            {savingPur ? "..." : "+ Добавить"}
-          </button>
-        </div>
-
-        {/* Purchases list */}
-        {curPurchases.length === 0 ? (
-          <div style={{ padding: "20px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет закупок в этом месяце
-          </div>
-        ) : (
-          <div style={{ maxHeight: 280, overflowY: "auto" }}>
-            {[...curPurchases].sort((a,b) => b.addedAt.localeCompare(a.addedAt)).map((p, i) => (
-              <div
-                key={p.id}
-                className="tr-animate"
-                style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  padding: "11px 16px", borderBottom: "1px solid var(--border)",
-                  animationDelay: `${i * 0.06}s`,
-                }}
-              >
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                  background: "rgba(139,92,246,0.12)", color: "#7c3aed",
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
-                }}>
-                  🛒
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {p.comment}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>
-                    {fmtDate(p.date)}{p.addedByName ? ` · ${p.addedByName}` : ""}
-                  </div>
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
-                  {fmtMoney(p.amount)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void deletePurchase(p.id)}
-                  style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text3)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            {curPurTotal > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderTop: "1px solid var(--border2)" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Итого закупки</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: "#7c3aed", fontFamily: "JetBrains Mono, monospace" }}>
-                  {fmtMoney(curPurTotal)}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Комиссионные ────────────────────────────────────────────────── */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.25s both" }}>
-        <div className="section-header" style={{ background: "rgba(245,158,11,0.06)" }}>
-          <i className="ti ti-handshake" style={{ fontSize: 17, color: "#b45309" }} />
-          <span className="section-title">Комиссионные</span>
-          <span className="section-count">{CURMONTH_LABEL}</span>
-          {curCommTotal > 0 && (
-            <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#b45309", fontFamily: "JetBrains Mono, monospace" }}>
-                {fmtMoney(curCommTotal)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Add form */}
-        <div style={{ display: "flex", gap: 8, padding: "12px 16px", flexWrap: "wrap" as const, borderBottom: "1px solid var(--border)" }}>
-          <select
-            value={newComMK}
-            onChange={(e) => setNewComMK(e.target.value)}
-            style={{
-              padding: "8px 10px", borderRadius: 8, fontSize: 13,
-              background: "var(--bg3)", border: "1px solid var(--border2)",
-              color: "var(--text)", outline: "none", cursor: "pointer", flexShrink: 0,
-            }}
-          >
-            {Array.from({ length: 6 }, (_, i) => {
-              const d  = new Date(now.getFullYear(), now.getMonth() - i, 1);
-              const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-              return <option key={mk} value={mk}>{MONTH_NAMES[d.getMonth()]} {d.getFullYear()}</option>;
-            })}
-          </select>
-          <input
-            type="number"
-            placeholder="Сумма ₽"
-            value={newComAmt}
-            onChange={(e) => setNewComAmt(e.target.value)}
-            style={{
-              width: 110, padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-              outline: "none", fontFamily: "JetBrains Mono, monospace",
-            }}
-            onKeyDown={(e) => e.key === "Enter" && void addCommission()}
-          />
-          <input
-            type="text"
-            placeholder="Комментарий (необязательно)"
-            value={newComCmt}
-            onChange={(e) => setNewComCmt(e.target.value)}
-            style={{
-              flex: 1, minWidth: 130, padding: "8px 12px", borderRadius: 8, fontSize: 13,
-              background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-              outline: "none",
-            }}
-            onKeyDown={(e) => e.key === "Enter" && void addCommission()}
-          />
-          <button
-            type="button"
-            onClick={() => void addCommission()}
-            disabled={savingCom}
-            style={{
-              padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-              background: "rgba(245,158,11,0.18)", border: "1px solid rgba(245,158,11,0.35)",
-              color: "#b45309", cursor: savingCom ? "not-allowed" : "pointer",
-            }}
-          >
-            {savingCom ? "..." : "+ Добавить"}
-          </button>
-        </div>
-
-        {/* Commission list */}
-        {commissions.length === 0 ? (
-          <div style={{ padding: "18px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет записей о комиссионных
-          </div>
-        ) : (
-          <div style={{ maxHeight: 280, overflowY: "auto" }}>
-            {[...commissions].sort((a, b) => b.month.localeCompare(a.month)).map((e, i) => (
-              <div
-                key={e.id}
-                className="tr-animate"
-                style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  padding: "11px 16px", borderBottom: "1px solid var(--border)",
-                  animationDelay: `${i * 0.05}s`,
-                }}
-              >
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                  background: "rgba(245,158,11,0.12)", color: "#b45309",
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
-                }}>
-                  🤝
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>
-                    {mkLabel(e.month)}
-                  </div>
-                  {e.comment && (
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {e.comment}
-                    </div>
-                  )}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#b45309", fontFamily: "JetBrains Mono, monospace", flexShrink: 0 }}>
-                  {fmtMoney(e.amount)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void deleteExpense(e.id)}
-                  style={{ width: 24, height: 24, borderRadius: 6, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text3)", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Постоянные расходы ──────────────────────────────────────────── */}
-      {((finance.boxes ?? []).some((b) => b.cost > 0) || (finance.salaries ?? []).some((s) => s.salary > 0)) && (
-        <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.3s both" }}>
-          <div className="section-header">
-            <i className="ti ti-receipt" style={{ fontSize: 17, color: "var(--text2)" }} />
-            <span className="section-title">Постоянные расходы</span>
-            <span className="section-count">{fmtMoney(boxCost + salCost)}/мес</span>
-          </div>
-          <div style={{ padding: "8px 16px 12px" }}>
-            {(finance.boxes ?? []).filter((b) => b.cost > 0).map((b) => (
-              <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                <span style={{ fontSize: 13.5, color: "var(--text)" }}>🏠 {b.name || "Бокс"}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(b.cost)}/мес</span>
-              </div>
-            ))}
-            {(finance.salaries ?? []).filter((s) => s.salary > 0).map((s) => (
-              <div key={s.uid} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                <span style={{ fontSize: 13.5, color: "var(--text)" }}>👤 {s.name || "Сотрудник"}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(s.salary)}/мес</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Электричество ──────────────────────────────────────────────── */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.35s both" }}>
-        <div className="section-header">
-          <i className="ti ti-bolt" style={{ fontSize: 17, color: "var(--yellow)" }} />
-          <span className="section-title">Электричество</span>
-        </div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" as const }}>
-            <select
-              value={elecMK}
-              onChange={(e) => setElecMK(e.target.value)}
-              style={{
-                flex: 1, minWidth: 120, padding: "8px 12px", borderRadius: 8, fontSize: 13,
-                background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-                outline: "none", cursor: "pointer",
-              }}
-            >
-              {Array.from({ length: 6 }, (_, i) => {
-                const d  = new Date(now.getFullYear(), now.getMonth()-i, 1);
-                const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-                return <option key={mk} value={mk}>{MONTH_NAMES[d.getMonth()]} {d.getFullYear()}</option>;
-              })}
-            </select>
-            <input
-              type="number"
-              placeholder="Сумма ₽"
-              value={elecInput}
-              onChange={(e) => setElecInput(e.target.value)}
-              style={{
-                width: 120, padding: "8px 12px", borderRadius: 8, fontSize: 13,
-                background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--text)",
-                outline: "none", fontFamily: "JetBrains Mono, monospace",
-              }}
-            />
-            <Button size="sm" onClick={() => void saveElecBill()} disabled={savingElec}>💾</Button>
-          </div>
-          {Object.entries(elecBills).filter(([, v]) => v > 0).sort(([a],[b]) => b.localeCompare(a)).slice(0, 4).map(([mk, v]) => (
-            <div key={mk} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: 13, color: "var(--text2)" }}>{mkLabel(mk)}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", fontFamily: "JetBrains Mono, monospace" }}>{fmtMoney(v as number)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Выручка по месяцам ──────────────────────────────────────────── */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.4s both" }}>
-        <div className="section-header">
-          <i className="ti ti-chart-bar" style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">Выручка по месяцам</span>
-          <div className="section-actions">
-            <span style={{ fontSize: 12, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
-              {fmtMoney(totalRevenue)}
-            </span>
-          </div>
-        </div>
-
-        {monthStats.filter((m) => m.revenue > 0).length === 0 ? (
-          <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            Нет данных — закрывайте наряды через «Закрыть наряд»
-          </div>
-        ) : (
-          monthStats.filter((m) => m.revenue > 0).map((m, i, arr) => (
-            <div
-              key={m.month}
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "11px 20px",
-                borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{m.label}</div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                  <i className="ti ti-tools" style={{ fontSize: 10 }} /> {m.repairs} ремонтов
-                </div>
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
-                {fmtMoney(m.revenue)}
-              </span>
-            </div>
-          ))
-        )}
-        <div style={{
-          display: "flex", justifyContent: "space-between", padding: "10px 20px",
-          borderTop: "1px solid var(--border2)", background: "rgba(0,0,0,0.1)",
-        }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text2)" }}>Всего выручка</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
-            {fmtMoney(totalRevenue)}
-          </span>
-        </div>
-      </div>
-
-      {showExpenses && (
-        <ExpensesModal finance={finance} rentalIncome={rentalIncome} onClose={() => setShowExpenses(false)} />
-      )}
-    </div>
-  );
+    else {
+        setCommissionInitial(v => v ?? month);
+        setCommissionOpen(true);
+    } }
+    async function saveBill() { if (!ready || !bill || billLock.current)
+        return; const amount = parsePnlAmount(bill.value); if (amount === null) {
+        setBillError('Введите сумму от 0 с точностью до копеек. Например: 1 250,50.');
+        return;
+    } billLock.current = true; setBillBusy(true); setBillError(''); try {
+        await savePnlElectricity(bill.month, amount, bill.expected);
+        setNotice(`Счёт за ${pnlMonthLabel(bill.month)} сохранён: ${pnlMoney(amount)}.`);
+        setBill(null);
+    }
+    catch (e) {
+        setBillError(pnlError(e));
+    }
+    finally {
+        billLock.current = false;
+        setBillBusy(false);
+    } }
+    async function remove() { if (!ready || !removal || deleteLock.current)
+        return; deleteLock.current = true; setDeleteBusy(true); setDeleteError(''); try {
+        if (removal.kind === 'purchase' && removal.purchase)
+            await removePnlPurchase(removal.purchase);
+        else if (removal.expense)
+            await removeDocumentIfUnchanged('expenses', removal.expense);
+        setNotice('Операция удалена из учёта.');
+        setRemoval(null);
+    }
+    catch (e) {
+        setDeleteError(pnlError(e));
+    }
+    finally {
+        deleteLock.current = false;
+        setDeleteBusy(false);
+    } }
+    async function exportMonth() { if (!ready || !report || exporting)
+        return; setExporting(true); setExportError(''); try {
+        const rows = pnlExportRows(report), book = XLSX.utils.book_new();
+        for (const [name, values] of [['P&L', rows.summary], ['Операции', rows.operations], ['Ремонты', rows.repairs]] as const) {
+            const sheet = XLSX.utils.aoa_to_sheet(values);
+            sheet['!cols'] = [{ wch: 35 }, { wch: 30 }, { wch: 40 }, { wch: 42 }, { wch: 18 }];
+            XLSX.utils.book_append_sheet(book, sheet, name);
+        }
+        XLSX.writeFile(book, `РефСервисДВ_PnL_${report.month}.xlsx`);
+    }
+    catch (e) {
+        setExportError(pnlError(e));
+    }
+    finally {
+        setExporting(false);
+    } }
+    return <div className="pnl-workspace">
+  <header className="pnl-hero"><div><h1>P&L: доходы и расходы</h1><p>От выручки до результата — все статьи выбранного месяца в одном месте.</p></div><span>Финансы РефСервисДВ</span></header>
+  <div className="pnl-toolbar"><div className="pnl-period"><button className="pnl-btn" type="button" aria-label="Предыдущий месяц" onClick={() => changeMonth(shiftMonth(month, -1))}>←</button><label>Период отчёта<select value={month} onChange={e => changeMonth(e.target.value)}>{months.map(m => <option value={m} key={m}>{pnlMonthLabel(m)}</option>)}</select></label><button className="pnl-btn" type="button" aria-label="Следующий месяц" onClick={() => changeMonth(shiftMonth(month, 1))} disabled={month >= current}>→</button>{month !== current && <button className="pnl-btn" onClick={() => changeMonth(current)}>Текущий месяц</button>}</div><button className="pnl-btn" disabled={!ready || exporting} onClick={() => void exportMonth()}>{exporting ? 'Готовим файл…' : 'Скачать Excel за месяц'}</button></div>
+  <PnlSummary report={ready ? report : null} onIncome={() => setView('income')} onExpenses={() => setView('journal')}/>
+  <p className="pnl-accounting-note">Доходы от ремонтов учитываются по выполненным заявкам, в том числе до подтверждения менеджером. Месяц — по дате закрытия, а для старых записей — по дате заявки. Это не подтверждение оплаты. Аренда и постоянные расходы учитываются помесячно.</p>
+  <PnlFeedback success={notice} error={exportError}/>
+  <PnlSourceBoundary ready={ready} error={error}>
+   <nav className="pnl-tabs" aria-label="Разделы P&L">{([['overview', 'Обзор'], ['journal', 'Расходы и операции'], ['income', 'Доходы по заявкам'], ['settings', 'Постоянные расходы']] as const).map(([id, label]) => <button type="button" key={id} aria-current={view === id ? 'page' : undefined} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}</nav>
+   {report && <div className="pnl-period-caption">{pnlMonthLabel(month)}{month > current ? ' · будущий период' : ''}<span>Все итоги и Excel относятся к этому месяцу</span></div>}
+   {ready && report && month !== current && report.liveFixedFields.length > 0 && <div className="pnl-notice">Для этого периода не сохранены отдельные исторические суммы: {report.liveFixedFields.map(k => ({ boxCost: 'аренда боксов', salCost: 'зарплаты и услуги', rentalIncome: 'аренда камер' }[k])).join(', ')}. Для них используются текущие настройки. Остальные сохранённые суммы периода учтены.</div>}
+   <div hidden={view !== 'overview' || !ready}>
+    {report && <PnlPanel title="Как получился результат" description="Полная расшифровка выбранного месяца"><div className="pnl-calculation"><div className="pnl-calc-income"><h3>Доходы</h3><dl><dt>Выполненные ремонты</dt><dd>{pnlMoney(report.repairRevenue)}</dd><dt>Аренда камер</dt><dd>{pnlMoney(report.rentalIncome)}</dd></dl><strong>Итого {pnlMoney(report.income)}</strong></div><div className="pnl-calc-expense"><h3>Расходы</h3><dl>{[['Аренда боксов', report.boxCost], ['Зарплаты и услуги', report.salCost], ['Электричество', report.electricity], ['Закупки и материалы', report.purchases], ['Комиссионные', report.commissions]].map(([label, amount]) => <div className="pnl-dl-row" key={label}><dt>{label}</dt><dd>{pnlMoney(amount as number)}</dd></div>)}</dl><strong>Итого {pnlMoney(report.totalExpenses)}</strong></div></div><footer className={`pnl-equation ${report.profit < 0 ? 'pnl-loss' : ''}`}><span>Доходы − расходы = {report.profit < 0 ? 'убыток' : 'прибыль'}</span><strong>{pnlMoney(report.profit)}</strong></footer></PnlPanel>}
+    <div className="pnl-quick-actions"><button className="pnl-btn pnl-primary" onClick={() => openEntry('purchase')}>Добавить закупку</button><button className="pnl-btn" onClick={() => openEntry('commission')}>Добавить комиссионные</button><button className="pnl-btn" onClick={() => { setView('journal'); if (billLock.current) return; setBillError(''); setBill({ month, expected: confirmed?.finance.elecBills?.[month], value: String(confirmed?.finance.elecBills?.[month] ?? '') }); }}>Внести счёт за электричество</button></div>
+    <PnlPanel title="Динамика по месяцам" description="12 месяцев до выбранного периода включительно. Нажмите на месяц для расшифровки."><div className="pnl-table-scroll"><table className="pnl-table"><thead><tr><th>Месяц</th><th className="pnl-numeric">Доходы</th><th className="pnl-numeric">Расходы</th><th className="pnl-numeric">Результат</th></tr></thead><tbody>{history.map(m => <tr className={m.month === month ? 'selected' : ''} key={m.month}><th><button className="pnl-link" onClick={() => changeMonth(m.month)}>{pnlMonthLabel(m.month)}</button>{m.month !== current && m.liveFixedFields.length > 0 && <small>Есть суммы из текущих настроек</small>}</th><td className="pnl-numeric pnl-text-income">{pnlMoney(m.income)}</td><td className="pnl-numeric">{pnlMoney(m.totalExpenses)}</td><td className={`pnl-numeric ${m.profit < 0 ? 'pnl-text-expense' : 'pnl-text-income'}`}>{pnlMoney(m.profit)}</td></tr>)}</tbody></table></div></PnlPanel>
+   </div>
+   <div hidden={view !== 'journal'}>
+    <PnlPanel title="Расходы и операции" description="Закупки и комиссионные выбранного месяца. Электричество и постоянные расходы входят в общие итоги отдельно." action={<div className="pnl-form-actions"><button className="pnl-btn pnl-primary" onClick={() => { setPurchaseInitial(v => v ?? month); setPurchaseOpen(v => !v); }}>Добавить закупку</button><button className="pnl-btn" onClick={() => { setCommissionInitial(v => v ?? month); setCommissionOpen(v => !v); }}>Добавить комиссионные</button></div>}>
+     <div hidden={!purchaseOpen}>{purchaseInitial && <PnlEntryForm kind="purchase" initialMonth={month} open={purchaseOpen} blocked={!ready} author={myProfile?.name ?? ''} uid={user?.uid ?? ''} onClose={() => setPurchaseOpen(false)} onSuccess={setNotice}/>}</div>
+     <div hidden={!commissionOpen}>{commissionInitial && <PnlEntryForm kind="commission" initialMonth={month} open={commissionOpen} blocked={!ready} author={myProfile?.name ?? ''} uid={user?.uid ?? ''} onClose={() => setCommissionOpen(false)} onSuccess={setNotice}/>}</div>
+     <div className="pnl-journal-filters"><label>Поиск операций<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Описание, сотрудник, дата…"/></label><label>Статья<select value={kind} onChange={e => setKind(e.target.value as typeof kind)}><option value="all">Все операции</option><option value="purchase">Закупки и материалы</option><option value="commission">Комиссионные</option></select></label><label>Порядок<select value={sort} onChange={e => setSort(e.target.value as typeof sort)}><option value="newest">Сначала новые</option><option value="oldest">Сначала давние</option><option value="amount">Сначала крупные</option></select></label></div>
+     <div hidden={!ready}><div className="pnl-list-caption">Найдено: {journal.length} из {report?.journal.length ?? 0}<span>Фильтры не меняют общие итоги и Excel</span></div>{journal.length === 0 ? <div className="pnl-empty">{search || kind !== 'all' ? 'Операций по этим условиям нет. Измените поиск или статью.' : 'В этом месяце ещё нет закупок и комиссионных. Добавьте первую операцию выше.'}</div> : <div className="pnl-journal">{journal.map(r => <article key={`${r.kind}/${r.id}`} className={`pnl-operation pnl-operation-${r.kind}`}><div><span className="pnl-tag">{r.kind === 'purchase' ? 'Закупка' : 'Комиссионные'}</span><h3>{r.comment}</h3><p>{r.kind === 'purchase' ? fmtDate(r.date) : pnlMonthLabel(r.date)}{r.author ? ` · ${r.author}` : ''}</p></div><strong>{pnlMoney(r.amount)}</strong><button className="pnl-btn pnl-danger" disabled={deleteBusy} onClick={() => { setRemoval(r); setDeleteError(''); }} aria-label={`Удалить ${r.kind === 'purchase' ? 'закупку' : 'комиссионные'}: ${r.comment}`}>Удалить</button></article>)}</div>}</div>
+    </PnlPanel>
+    <PnlPanel title="Электричество" description={`Счёт за ${pnlMonthLabel(month)} в рублях, не показания счётчика.`}><div className="pnl-bill-heading"><strong>{ready && report ? pnlMoney(report.electricity) : '—'}</strong><button className="pnl-btn" disabled={billBusy} onClick={() => { if (billLock.current) return; setBillError(''); setBill({ month, expected: confirmed?.finance.elecBills?.[month], value: String(confirmed?.finance.elecBills?.[month] ?? '') }); }}>Изменить счёт за месяц</button></div>{bill && <form className="pnl-entry-form" onSubmit={e => { e.preventDefault(); void saveBill(); }}><h3>Счёт за {pnlMonthLabel(bill.month)}</h3><p>Новая сумма заменит счёт только за указанный месяц. Нулевой счёт допустим.</p><label>Сумма счёта, ₽<input inputMode="decimal" value={bill.value} onChange={e => setBill({ ...bill, value: e.target.value })} disabled={billBusy}/></label><PnlFeedback error={billError}/><div className="pnl-form-actions"><button className="pnl-btn pnl-primary" disabled={billBusy}>{billBusy ? 'Сохраняем…' : 'Сохранить счёт'}</button><button className="pnl-btn" type="button" disabled={billBusy} onClick={() => setBill(null)}>Отмена</button>{billError && <button className="pnl-btn" type="button" disabled={billBusy} onClick={() => { setBill({ ...bill, expected: confirmed?.finance.elecBills?.[bill.month] }); setBillError(''); }}>Повторно сверить: сейчас {pnlMoney(Number(confirmed?.finance.elecBills?.[bill.month] ?? 0))}</button>}</div></form>}</PnlPanel>
+   </div>
+   <div hidden={view !== 'income' || !ready}><PnlPanel title="Доходы по выполненным заявкам" description="Ремонты, вошедшие в доходы выбранного месяца. Аренда камер включена отдельной строкой в обзоре.">{report?.repairs.length ? <div className="pnl-journal">{[...report.repairs].sort((a, b) => b.date.localeCompare(a.date)).map(r => <article className="pnl-operation pnl-operation-income" key={r.key}><div><span className="pnl-tag">{fmtDate(r.date)}</span><h3>{r.client}</h3><p>{r.object}</p><p>{r.description}</p></div><strong>{pnlMoney(r.amount)}</strong></article>)}</div> : <div className="pnl-empty">Выполненных заявок за этот месяц нет.</div>}</PnlPanel></div>
+   <div hidden={view !== 'settings'}><PnlPanel title="Постоянные расходы" description="Настройки текущего месяца. Для просмотра исторического результата используйте «Обзор»." action={!settingsOpen ? <button className="pnl-btn" onClick={() => setSettingsOpen(true)}>Изменить настройки</button> : undefined}>{settingsOpen && confirmed ? <PnlSettings finance={confirmed.finance} rentalIncome={liveRental} blocked={!ready} onClose={() => setSettingsOpen(false)}/> : <div hidden={!ready} className="pnl-fixed-list">{(confirmed?.finance.boxes ?? []).map((b, i) => <div key={b.id || i}><span>Аренда · {b.name || 'Бокс'}</span><strong>{pnlMoney(b.cost)}/мес.</strong></div>)}{(confirmed?.finance.salaries ?? []).map((s, i) => <div key={s.uid || i}><span>Зарплата / услуга · {s.name || 'Без названия'}</span><strong>{pnlMoney(s.salary)}/мес.</strong></div>)}{!confirmed?.finance.boxes?.length && !confirmed?.finance.salaries?.length && <p className="pnl-empty">Постоянные расходы пока не настроены.</p>}<p className="pnl-accounting-note">Тариф электричества: {pnlMoney(confirmed?.finance.kwPrice ?? 0)} / кВт·ч. Счета вносятся отдельно.</p></div>}</PnlPanel></div>
+   {removal && <section ref={removalRef} tabIndex={-1} className="pnl-delete-review" aria-label="Подтверждение удаления операции"><h2>Удалить операцию из учёта?</h2><p><b>{removal.comment}</b> · {removal.date} · {pnlMoney(removal.amount)}</p><p>Сумма перестанет учитываться в P&L. Восстановление возможно повторным вводом операции.</p><PnlFeedback error={deleteError}/><div className="pnl-form-actions"><button className="pnl-btn pnl-danger" onClick={() => void remove()} disabled={deleteBusy}>{deleteBusy ? 'Удаляем…' : 'Подтвердить удаление'}</button><button className="pnl-btn" onClick={() => setRemoval(null)} disabled={deleteBusy}>Оставить операцию</button></div></section>}
+  </PnlSourceBoundary>
+ </div>;
+}
+function PnlEntryForm({ kind, initialMonth, open, blocked, uid, author, onClose, onSuccess }: {
+    kind: PnlKind;
+    initialMonth: string;
+    open: boolean;
+    blocked: boolean;
+    uid: string;
+    author: string;
+    onClose: () => void;
+    onSuccess: (value: string) => void;
+}) {
+    const [amount, setAmount] = useState(''), [comment, setComment] = useState(''), [date, setDate] = useState(() => initialMonth === localPnlDate().slice(0, 7) ? localPnlDate() : `${initialMonth}-01`), [month, setMonth] = useState(initialMonth);
+    const [busy, setBusy] = useState(false), [error, setError] = useState('');
+    const [dirty,setDirty]=useState(false);
+    const lock=useRef(false),retry=useRef<PnlAttempt|null>(null);
+    useEffect(()=>{if(!open||busy)return;const next=pnlEntryPeriodOnOpen({date,month},dirty,initialMonth,localPnlDate());setDate(next.date);setMonth(next.month);},[open,initialMonth,dirty,busy]);
+    async function save() {
+        if (blocked || lock.current)
+            return;
+        setError('');
+        const value = parsePnlAmount(amount, true), period = kind === 'purchase' ? date.slice(0, 7) : month;
+        if (value === null || !validPnlMonth(period) || (kind === 'purchase' && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !comment.trim()))) {
+            setError('Укажите корректный период, сумму больше 0 с точностью до копеек и описание закупки.');
+            return;
+        }
+        retry.current=preparePnlAttempt(retry.current,genId(),new Date().toISOString());
+    const {id,addedAt}=retry.current;
+    lock.current = true;
+        setBusy(true);
+        try {
+            if (kind === 'purchase')
+                await addPnlPurchase({id,date,addedAt,amount:value,comment:comment.trim(),addedByName:author});
+            else
+                await addPnlCommission({id,category:'commission',month,amount:value,comment:comment.trim(),createdBy:uid});
+            setAmount('');
+            setComment('');
+            retry.current = null;
+        setDirty(false);
+            onSuccess(`${kind === 'purchase' ? 'Закупка' : 'Комиссионные'} сохранены за ${pnlMonthLabel(period)}: ${pnlMoney(value)}. Если выбран другой месяц отчёта, переключите период для просмотра.`);
+            onClose();
+        }
+        catch (e) {
+            setError(`${pnlError(e)} Введённые данные сохранены. Повторное сохранение использует тот же номер операции, чтобы не создавать дубль. Если операция уже есть с другими значениями, сверьте журнал.`);
+        }
+        finally {
+            lock.current = false;
+            setBusy(false);
+        }
+    }
+    return <form className="pnl-entry-form" onSubmit={e => { e.preventDefault(); void save(); }}><h3>{kind === 'purchase' ? 'Новая закупка' : 'Новые комиссионные'}</h3><fieldset disabled={busy || blocked}><div className="pnl-entry-fields"><label>{kind === 'purchase' ? 'Дата закупки' : 'Месяц начисления'}{kind === 'purchase' ? <input type="date" value={date} onChange={e => {setDirty(true);setDate(e.target.value);}}/> : <input type="month" value={month} onChange={e => {setDirty(true);setMonth(e.target.value);}}/>}</label><label>Сумма, ₽<input inputMode="decimal" value={amount} onChange={e => {setDirty(true);setAmount(e.target.value);}} placeholder="Например: 1 250,50"/></label><label className="pnl-entry-comment">{kind === 'purchase' ? 'Что закупили' : 'Комментарий (необязательно)'}<input value={comment} onChange={e => {setDirty(true);setComment(e.target.value);}} placeholder={kind === 'purchase' ? 'Материалы, запчасти, оборудование…' : 'Кому и за что начислено…'}/></label></div><PnlFeedback error={error}/><div className="pnl-form-actions"><button className="pnl-btn pnl-primary">{busy ? 'Сохраняем…' : kind === 'purchase' ? 'Сохранить закупку' : 'Сохранить комиссионные'}</button><button type="button" className="pnl-btn" onClick={onClose}>Скрыть форму</button></div></fieldset></form>;
 }

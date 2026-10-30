@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
@@ -7,7 +7,7 @@ import { repairStatus, taskStatus, repairFinancialMonth } from "../../shared/uti
 import { resolveFixedCosts } from "../../shared/utils/finance";
 import { fmtDate, fmtMoney, fmtDayMonth } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
-import { Modal } from "../../shared/ui/Modal";
+
 import { Input, Select, FormGroup } from "../../shared/ui/Input";
 import { Button } from "../../shared/ui/Button";
 import { PhotoGrid } from "../../shared/ui/PhotoUploader";
@@ -30,6 +30,12 @@ import { intakeKind, type IntakeRepair } from "../../shared/types/intake";
 import { suggestIntakeVehicles, suggestedVehicleForClient, vehicleMatchesSearch } from "../../shared/utils/clientVehicleSearch";
 import type { ServiceTask } from "../../shared/types/task";
 import type { PhotoData } from "../../shared/utils/photos";
+
+import {closureIssue,parseClosureAmount} from "../../shared/utils/repairClosure";
+import {prepareRepairClose,createRepairReview} from "../../shared/firebase/repairClose";
+import {requestStage,selectServiceRequests} from "../../shared/requests/workspaceLogic";
+import {ReportModal as Modal,ReportsWorkspace,ReportWorkComment,ReportQueueCard,ReportSourceBoundary,ReportCloseReview,useReportWriteBlocked,type ReportView} from "./ReportsWorkspace";
+import {selectReportItems,selectReportIntake,reportScope,confirmedReportData,reportArchiveMonths,reportTaskMonth,reportClosedTotal,DEFAULT_REPORT_FILTERS,type ReportFilters,type DoneItem} from "./reportsLogic";
 
 const FREON_TYPES = ["R134a", "R404A", "R410A", "R507", "R22", "R507a"];
 
@@ -64,19 +70,13 @@ function avatarColor(str: string) {
 
 // ─── Data shape ───────────────────────────────────────────────────────────────
 
-interface DoneItem {
-  repair:        Repair;
-  client:        Client;
-  vehicle?:      Vehicle;
-  assigneeNames: string;
-  createdByName: string;
-  mk:            string;
-}
-
 // ─── Intake close card — assign the car to a client, then close ───────────────
 
 function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: Client[] }) {
   const { myProfile, user } = useAuth();
+  const blocked=useReportWriteBlocked();
+  const [reviewing,setReviewing]=useState(false);
+  const [reviewedIntake,setReviewedIntake]=useState<IntakeRepair|null>(null);
   const editor = intakeRepairEditor(intake.id, {
     uid: user?.uid ?? "",
     name: myProfile?.name ?? user?.email ?? "Неизвестно",
@@ -123,7 +123,16 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
       .slice(0, 12);
   }, [clients, search]);
 
+  function checkReview():boolean {
+    const issue=closureIssue(repair);
+    if(issue){setError(issue);return false;}
+    if(parseClosureAmount(sum)===null){setError("Укажите корректную сумму: 0 или больше, не более двух знаков после запятой.");return false;}
+    if(mode==='existing'&&(!selectedClient||!equipChoice)){setError("Выберите клиента и технику.");return false;}
+    if(mode==='new'&&!nName.trim()){setError("Укажите имя клиента или название компании.");return false;}
+    setError("");return true;
+  }
   async function handleAssign() {
+    if(busy||blocked||!reviewedIntake||!checkReview())return;
     setError("");
     if (!sum.trim()) { setError("Укажите сумму"); return; }
     if (mode === "existing" && !equipChoice) { setError("Выберите конкретную машину из совпавших вариантов"); return; }
@@ -145,28 +154,27 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
           },
         },
         equipment,
-        cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
+        requireReady: true, cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
       };
     } else {
       if (!clientId) { setError("Выберите клиента"); return; }
       target = {
         client: { existingId: clientId },
         equipment,
-        cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
+        requireReady: true, cost: sum, closedBy: user?.uid ?? "", closedByName: myProfile?.name ?? "Менеджер",
       };
     }
 
     setBusy(true);
     try {
-      await assignIntakeRepairToClient(intake, target);
+      await assignIntakeRepairToClient(reviewedIntake!, target);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось закрыть");
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   return (
-    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderLeft: "3px solid #16a34a", borderRadius: 14, padding: "14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
+    <div className="reports-ready-card" style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderLeft: "3px solid #16a34a", borderRadius: 14, padding: "14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
         {photo
           ? <img src={photo} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }} />
@@ -180,11 +188,12 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
         </div>
       </div>
 
-      <RepairTaskWork repair={repair} tasks={tasks} editor={editor} canManageTasks />
+      <RepairTaskWork repair={repair} tasks={tasks} editor={editor} canManageTasks={!blocked&&!busy} />
 
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-        <FormGroup label="Сумма к оплате, ₽">
-          <Input type="number" placeholder="0" value={sum} onChange={(e) => setSum(e.target.value)} />
+        <fieldset className="reports-intake-fields" disabled={busy||blocked||reviewing}>
+        <FormGroup label="Итоговая стоимость, ₽">
+          <Input aria-label="Стоимость приёмки" inputMode="decimal" placeholder="0" value={sum} disabled={busy||blocked} onChange={(e) => {setSum(e.target.value);setReviewing(false);}} />
         </FormGroup>
 
         {matches.length > 0 && (
@@ -307,10 +316,9 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
           </>
         )}
 
-        {error && <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600 }}>⚠ {error}</div>}
-        <Button size="lg" onClick={() => void handleAssign()} disabled={busy}>
-          {busy ? "Закрытие..." : "Привязать клиента и закрыть"}
-        </Button>
+        </fieldset>
+        {error && <div role="alert" style={{ fontSize: 12, color: "#dc2626", fontWeight: 600 }}>⚠ {error}</div>}
+        {!reviewing?<Button size="lg" onClick={()=>{if(!blocked&&checkReview()){setReviewedIntake(intake);setReviewing(true);}}} disabled={busy||blocked}>Проверить привязку и стоимость</Button>:<ReportCloseReview name={`${mode==='new'?nName:selectedClient?.name||'Клиент'} · ${title} ${plate}`} amount={sum} busy={busy} blocked={blocked} onCancel={()=>setReviewing(false)} onConfirm={()=>void handleAssign()}/>}
       </div>
     </div>
   );
@@ -321,6 +329,11 @@ function IntakeCloseCard({ intake, clients }: { intake: IntakeRepair; clients: C
 function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?: (client: Client, vehicleId?: string) => void }) {
   const { repair, client, vehicle, assigneeNames } = item;
   const { staff } = useData();
+  const {user}=useAuth();
+  const blocked=useReportWriteBlocked();
+  const [error,setError]=useState("");
+  const [reviewing,setReviewing]=useState(false);
+  const [review,setReview]=useState<ReturnType<typeof createRepairReview>|null>(null);
   const [closeSum,     setCloseSum]     = useState(repair.cost ?? "");
   const [closing,      setClosing]      = useState(false);
   const [reopeningId,  setReopeningId]  = useState<string | null>(null);
@@ -330,43 +343,27 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
   const brand    = vehicle?.brand ?? "";
   const initials = brand.slice(0, 2).toUpperCase() || (vehicle?.plate ?? client.name).slice(0, 2).toUpperCase();
 
-  const unresolvedFreon = (repair.tasks ?? []).some(
-    (t: RepairTask) => t.freonTask && parseFloat(t.freonKg ?? "0") > 0 && !t.freonType,
-  );
-
-  async function handleClose() {
-    const trimmed = closeSum.trim();
-    if (!trimmed || unresolvedFreon) return;
-    setClosing(true);
-    const closedAt = new Date().toISOString();
-    await mutateClientRepair(client.id, repair, (current) => {
-      assertFieldsUnchanged(current, repair, ["cost", "status", "closedByManager"], "Ремонт");
-      return {
-        ...current,
-        cost:            trimmed,
-        closedByManager: true,
-        closedAt,
-        status:          "done" as const,
-      };
-    });
-    setClosing(false);
+  const closeIssue=closureIssue(repair);
+  const unresolvedFreon=!!closeIssue;
+  async function handleClose(){
+    if(closing||blocked||reopeningId||!review)return;
+    setError("");setClosing(true);
+    try{await mutateClientRepair(client.id,repair,current=>prepareRepairClose(current,review.repair,review.amount,new Date().toISOString(),user?.uid||""));}
+    catch(e){setError(e instanceof Error?e.message:"Не удалось закрыть заявку. Введённая сумма сохранена.");}
+    finally{setClosing(false);}
   }
-
-  async function handleReopenTask(taskId: string) {
-    setReopeningId(taskId);
-    const task = (repair.tasks ?? []).find((item) => item.id === taskId);
-    if (task) {
-      await mutateRepairTask(client.id, repair, task, (current) => {
-        assertFieldsUnchanged(current, task, ["status", "doneBy"], "Задача ремонта");
-        return { ...current, status: "in_progress", doneBy: [] };
-      });
-    }
-    setReopeningId(null);
+  async function handleReopenTask(taskId:string){
+    if(reopeningId||closing||blocked)return;
+    const task=repair.tasks?.find(t=>t.id===taskId);if(!task)return;
+    setError("");setReviewing(false);setReopeningId(taskId);
+    try{await mutateRepairTask(client.id,repair,task,current=>{assertFieldsUnchanged(current,task,["status","doneBy"],"Задача ремонта");return {...current,status:"in_progress",doneBy:[]};});}
+    catch(e){setError(e instanceof Error?e.message:"Не удалось вернуть задачу в работу.");}
+    finally{setReopeningId(null);}
   }
 
   return (
     <>
-    <div style={{
+    <div className="reports-ready-card" style={{
       background:   "var(--bg2)",
       borderRadius: 16,
       border:       "1px solid rgba(34,197,94,0.3)",
@@ -456,7 +453,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                 .filter(Boolean).join(", ");
               const taskPhotos = (t.photos ?? []).filter((p) => p.url ?? p.data);
               return (
-                <div key={t.id} style={{
+                <div className="reports-task-row" key={t.id} style={{
                   display:    "flex",
                   alignItems: "center",
                   gap:        8,
@@ -482,6 +479,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                     {names && (
                       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
                     )}
+                    <ReportWorkComment comment={t.workComment}/>
                     <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 1 }} />
                     {taskPhotos.length > 0 && (
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
@@ -504,7 +502,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                     <button
                       type="button"
                       onClick={() => void handleReopenTask(t.id)}
-                      disabled={!!reopeningId}
+                      aria-label={`Вернуть работу ${t.description} в работу`} disabled={!!reopeningId||closing||blocked}
                       title="Вернуть задачу в работу"
                       style={{
                         padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700,
@@ -525,6 +523,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
           </div>
         )}
 
+        {(repair.photos??[]).length>0&&<section className="reports-repair-photos"><strong>Фотографии заявки</strong><PhotoGrid photos={repair.photos??[]} readOnly onView={src=>setGallery({photos:repair.photos??[],index:Math.max(0,(repair.photos??[]).findIndex(p=>(p.url??p.data)===src))})}/></section>}
         {/* Freon warning */}
         {unresolvedFreon && (
           <div style={{
@@ -532,46 +531,18 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
             background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
             fontSize: 12, color: "#b45309", fontWeight: 600,
           }}>
-            ⚠ Укажите марку фреона в задаче заправки перед закрытием
+            ⚠ {closeIssue}
           </div>
         )}
 
-        {/* Close form */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <input
-            type="number"
-            placeholder="Сумма ₽"
-            value={closeSum}
-            onChange={(e) => setCloseSum(e.target.value)}
-            disabled={unresolvedFreon}
-            style={{
-              width: 130, padding: "8px 12px", borderRadius: 8,
-              fontSize: 14, fontWeight: 700,
-              background: "var(--bg3)",
-              border: `1px solid ${unresolvedFreon ? "rgba(245,158,11,0.3)" : "rgba(34,197,94,0.35)"}`,
-              color: "var(--text)", outline: "none",
-              fontFamily: "JetBrains Mono, monospace",
-              opacity: unresolvedFreon ? 0.5 : 1,
-            }}
-          />
-          <span style={{ fontSize: 14, color: "var(--text2)" }}>₽</span>
-          <button
-            type="button"
-            onClick={() => void handleClose()}
-            disabled={closing || !closeSum.trim() || unresolvedFreon}
-            style={{
-              padding: "8px 18px", borderRadius: 8,
-              fontSize: 13, fontWeight: 700,
-              background: closing || !closeSum.trim() || unresolvedFreon
-                ? "rgba(34,197,94,0.25)" : "var(--green)",
-              border: "none", color: "white",
-              cursor: closing || !closeSum.trim() || unresolvedFreon ? "not-allowed" : "pointer",
-              transition: "all 0.18s",
-            }}
-          >
-            {closing ? "Сохранение..." : "✓ Закрыть наряд"}
-          </button>
+        <label className="reports-close-form-label" htmlFor={`close-${client.id}-${repair.id}`}>Итоговая стоимость, ₽</label>
+        <div className="reports-close-form" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <input id={`close-${client.id}-${repair.id}`} aria-label={`Стоимость заявки ${repair.id}`} inputMode="decimal" placeholder="Например, 12500" value={closeSum} onChange={e=>{setCloseSum(e.target.value);setReviewing(false);}} disabled={closing||blocked}/>
+          {!reviewing&&<button type="button" className="btn btn-primary" disabled={closing||blocked||!!reopeningId||unresolvedFreon} onClick={()=>{if(parseClosureAmount(closeSum)===null){setError("Укажите корректную сумму: 0 или больше, не более двух знаков после запятой.");return;}setError("");setReview(createRepairReview(repair,closeSum));setReviewing(true);}}>Проверить и закрыть</button>}
         </div>
+        {reviewing&&<ReportCloseReview name={`${client.name} · ${item.objectLabel}`} amount={closeSum} busy={closing} blocked={blocked||!!reopeningId||unresolvedFreon} onCancel={()=>setReviewing(false)} onConfirm={()=>void handleClose()}/>}
+        {error&&<p className="reports-inline-error" role="alert">{error}</p>}
+
       </div>
     </div>
     {gallery && (
@@ -609,7 +580,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
   }
 
   return (
-    <Modal title="Детали ремонта" onClose={onClose}>
+    <Modal className="reports-modal" title="Детали ремонта" onClose={onClose}>
 
       {/* Vehicle + client header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 14px", background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)" }}>
@@ -654,7 +625,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
           color: isCancelled ? "var(--text3)" : "#16a34a",
           border: `1px solid ${isCancelled ? "var(--border)" : "rgba(34,197,94,0.3)"}`,
         }}>
-          {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Выполнено"}
+          {isCancelled ? "Отказ" : requestStage(repair)==="closed" ? "Закрыто" : "Выполнено"}
         </span>
       </div>
 
@@ -932,14 +903,18 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
   const [showDetail, setShowDetail] = useState(false);
   const [showEdit,   setShowEdit]   = useState(false);
   const [returning,  setReturning]  = useState(false);
+  const blocked=useReportWriteBlocked();
+  const [error,setError]=useState("");
   const isCancelled = repairStatus(repair) === "cancelled";
 
   async function handleReturn(e: React.MouseEvent) {
     e.stopPropagation();
+    if(returning||blocked)return;
+    setError("");
     const label = vehicle?.plate ?? client.name;
-    if (!window.confirm(`Вернуть заявку «${label}» обратно в ремонт?`)) return;
+    if (!window.confirm(`Снять закрытие заявки «${label}»? Работы сохранятся. Выполненная заявка вернётся на проверку менеджеру.`)) return;
     setReturning(true);
-    await mutateClientRepair(client.id, repair, (current) => {
+    try { await mutateClientRepair(client.id, repair, (current) => {
       assertFieldsUnchanged(current, repair, ["status", "closedByManager", "closedAt"], "Ремонт");
       return {
         ...current,
@@ -947,8 +922,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
         closedByManager: false,
         closedAt:        undefined,
       };
-    });
-    setReturning(false);
+    }); } catch(e){setError(e instanceof Error?e.message:"Не удалось снять закрытие заявки.");} finally {setReturning(false);}
   }
 
   function openDetail() {
@@ -962,7 +936,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
 
   return (
     <>
-      <div
+      <div className="reports-history-card"
         onClick={openDetail}
         style={{
           background:   "var(--bg2)",
@@ -1081,13 +1055,14 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
             </span>
           )}
           <Badge variant={isCancelled ? "gray" : "green"}>
-            {isCancelled ? "Отказ" : repair.closedByManager ? "Закрыто" : "Готово"}
+            {isCancelled ? "Отказ" : requestStage(repair)==="closed" ? "Закрыто" : "Готово"}
           </Badge>
+          <button type="button" className="reports-detail-button" onClick={e=>{e.stopPropagation();openDetail();}}>Детали заявки</button>
           {canReturn && (
             <button
               type="button"
               onClick={(e) => void handleReturn(e)}
-              disabled={returning}
+              disabled={returning||blocked}
               style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
                 background: returning ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.12)",
@@ -1096,7 +1071,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
                 opacity: returning ? 0.6 : 1,
               }}
             >
-              {returning ? "..." : "↩ В ремонт"}
+              {returning ? "..." : "Снять закрытие"}
             </button>
           )}
           {isOwner && (
@@ -1114,6 +1089,7 @@ function RepairCard({ item, isAdmin, showAmounts, isOwner, ownerUid, canReturn, 
           )}
         </div>
       </div>
+      {error&&<p className="reports-inline-error" role="alert">{error}</p>}
       {showDetail && <RepairDetailModal item={item} isAdmin={isAdmin} showAmounts={showAmounts} onOpenClient={onOpenClient} onClose={() => setShowDetail(false)} />}
       {showEdit   && <OwnerEditRepairModal item={item} uid={ownerUid} onClose={() => setShowEdit(false)} />}
     </>
@@ -1136,7 +1112,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
   const [open, setOpen] = useState(false);
 
   const totalCost = isAdmin && showAmounts
-    ? items.reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0)
+    ? reportClosedTotal(items)
     : 0;
 
   return (
@@ -1144,6 +1120,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        className="reports-month-button" aria-expanded={open}
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: 10,
           background: "var(--bg3)", borderRadius: 14,
@@ -1169,7 +1146,7 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
       {open && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((i) => (
-            <RepairCard key={i.repair.id} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient} />
+            <RepairCard key={`${i.client.id}/${i.repair.id}`} item={i} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient} />
           ))}
           {tasks.map((t) => (
             <div
@@ -1210,10 +1187,14 @@ function MonthBlock({ mk, items, tasks, isAdmin, showAmounts, isOwner, ownerUid,
 interface UnknownFreonItem { client: Client; repair: Repair; vehicle?: Vehicle }
 
 function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose: () => void }) {
+  const blocked=useReportWriteBlocked();
+  const [error,setError]=useState("");
   const [saving, setSaving] = useState<string | null>(null);
 
   async function applyType(item: UnknownFreonItem, freonType: string) {
-    setSaving(item.repair.id);
+    if(saving||blocked)return;
+    setError("");setSaving(item.repair.id);
+    try {
     await mutateClientRepair(item.client.id, item.repair, (current) => {
       assertFieldsUnchanged(current, item.repair, ["freonType", "tasks"], "Ремонт");
       return {
@@ -1222,11 +1203,12 @@ function FreonFixModal({ items, onClose }: { items: UnknownFreonItem[]; onClose:
         tasks: (current.tasks ?? []).map((task) => task.freonTask ? { ...task, freonType } : task),
       };
     });
-    setSaving(null);
+    } catch(e){setError(e instanceof Error?e.message:"Не удалось сохранить тип фреона.");} finally{setSaving(null);}
   }
 
   return (
-    <Modal title={`Уточнить тип фреона · ${items.length}`} onClose={onClose}>
+    <Modal className="reports-modal" title={`Уточнить тип фреона · ${items.length}`} onClose={onClose}>
+      {error&&<p className="reports-inline-error" role="alert">{error}</p>}
       {items.length === 0 ? (
         <div style={{ padding: "24px 0", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
           ✓ Все записи исправлены
@@ -1299,6 +1281,8 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
 }) {
   const { repair, client } = item;
   const { myProfile } = useAuth();
+  const blocked=useReportWriteBlocked();
+  const [error,setError]=useState("");
 
   const [freonType,   setFreonType]   = useState(repair.freonType ?? "");
   const [freonAmount, setFreonAmount] = useState(repair.freonAmount ?? "");
@@ -1309,7 +1293,8 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
   const [saving,      setSaving]      = useState(false);
 
   async function handleSave() {
-    setSaving(true);
+    if(saving||blocked)return;
+    setError("");setSaving(true);
     const editedAt = new Date().toISOString();
     try {
       await mutateClientRepair(client.id, repair, (current) => {
@@ -1336,7 +1321,7 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
       });
       onClose();
     } catch (error) {
-      if (!(error instanceof ConcurrentMutationError)) alert("Не удалось сохранить изменения");
+      setError(error instanceof Error?error.message:"Не удалось сохранить изменения. Данные остались в форме.");
     } finally {
       setSaving(false);
     }
@@ -1371,7 +1356,7 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
   };
 
   return (
-    <Modal title="✏️ Редактировать ремонт" onClose={onClose}>
+    <Modal className="reports-modal" title="✏️ Редактировать ремонт" onClose={onClose}>
 
       {/* Freon */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -1472,7 +1457,8 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
         </button>
       </div>
 
-      <Button size="lg" onClick={() => void handleSave()} disabled={saving}>
+      {error&&<p className="reports-inline-error" role="alert">{error}</p>}
+      <Button size="lg" onClick={() => void handleSave()} disabled={saving||blocked}>
         {saving ? "Сохранение..." : "Сохранить изменения"}
       </Button>
     </Modal>
@@ -1481,7 +1467,7 @@ function OwnerEditRepairModal({ item, uid, onClose }: {
 
 // ─── Freon report section ─────────────────────────────────────────────────────
 
-function FreonSection({ clients }: { clients: Client[] }) {
+function FreonSection({ clients,canManage }: { clients: Client[];canManage:boolean }) {
   const [open, setOpen] = useState(false);
   const [showFix, setShowFix] = useState(false);
 
@@ -1564,7 +1550,7 @@ function FreonSection({ clients }: { clients: Client[] }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setShowFix(true)}
+                  disabled={!canManage} onClick={() => setShowFix(true)}
                   style={{
                     fontSize: 10, fontWeight: 700, padding: "1px 8px", borderRadius: 5,
                     background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
@@ -1670,128 +1656,40 @@ function FreonSection({ clients }: { clients: Client[] }) {
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
 export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehicleId?: string) => void } = {}) {
-  const { clients, tasks, staff, freezers, finance: rawFinance, expenses, intakeRepairs } = useData();
-  const { myProfile, isOwner, user }   = useAuth();
-  const { canSeeReportsAmounts }       = usePermissions();
-  const isAdmin   = (myProfile?.role ?? "mechanic") !== "mechanic";
-  const showAmounts = isAdmin && canSeeReportsAmounts;
-  const canReturn = isOwner || myProfile?.role === "admin";
-  const ownerUid  = user?.uid ?? "";
-  const [search, setSearch] = useState("");
+  const liveData=useData();const {sourceStatus}=liveData;
+  const baseStatus=(['clients','staff','intakeRepairs','tasks'] as const).some(k=>sourceStatus[k]==='error')?'error':(['clients','staff','intakeRepairs','tasks'] as const).every(k=>sourceStatus[k]==='ready')?'ready':'loading';
+  const lastConfirmed=useRef(liveData);if(baseStatus==='ready')lastConfirmed.current=liveData;
+  const {clients,tasks,staff,freezers,finance:rawFinance,expenses,intakeRepairs}=confirmedReportData(liveData,lastConfirmed.current,baseStatus);
+  const {myProfile,isOwner,user}=useAuth();const {canSeeReportsAmounts}=usePermissions();
+  const isAdmin=isOwner||["owner","admin","manager"].includes(myProfile?.role||"");
+  const showAmounts=isAdmin&&canSeeReportsAmounts,canReturn=isOwner||myProfile?.role==="admin",ownerUid=user?.uid||"";
+  const [view,setView]=useState<ReportView>('queue');const [filters,setFilters]=useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
+  const [exportMK,setExportMK]=useState(new Date().toISOString().slice(0,7));
 
-  const now   = new Date();
-  const curMK = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [exportMK, setExportMK] = useState(curMK);
-
-  // Collect all non-in-progress repairs enriched with client/vehicle/assignees
-  const allItems = useMemo<DoneItem[]>(() => {
-    const result: DoneItem[] = [];
-    clients.forEach((c) => {
-      (c.repairs ?? []).forEach((r) => {
-        if (repairStatus(r) === "in_progress") return;
-        const vehicle = (c.vehicles ?? []).find((v) => v.id === r.vehicleId);
-        // Group closed repairs (and the Excel export) by the month they were
-        // closed; fall back to the start date for repairs closed before
-        // closedAt existed.
-        const mk      = repairFinancialMonth(r) || "0000-00";
-
-        // Collect unique assignees from all tasks
-        const uids = new Set<string>();
-        (r.tasks ?? []).forEach((t) => (t.assignees ?? []).forEach((uid) => uids.add(uid)));
-        const assigneeNames = Array.from(uids)
-          .map((uid) => staff.find((s) => s.id === uid)?.name ?? "")
-          .filter(Boolean)
-          .join(", ");
-
-        const createdByName = r.createdByName ?? "—";
-        result.push({ repair: r, client: c, vehicle, assigneeNames, createdByName, mk });
-      });
-    });
-    return result.sort((a, b) => (b.repair.date ?? "").localeCompare(a.repair.date ?? ""));
-  }, [clients, staff]);
-
-  // Done service tasks
-  const doneTasks = useMemo(
-    () => tasks.filter((t) => t.status === "done"),
-    [tasks],
-  );
-
-  // Repairs needing close: all tasks done but not yet closedByManager
-  const needsClose = useMemo(
-    () => allItems.filter((i) => repairStatus(i.repair) === "done" && !i.repair.closedByManager),
-    [allItems],
-  );
-
-  // Intake repairs whose tasks are all done — need a client + sum before closing
-  const intakeReady = useMemo(
-    () => intakeRepairs
-      .filter((i) => i && i.repair && i.vehicle && repairStatus(i.repair) === "done")
-      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
-    [intakeRepairs],
-  );
-
-  // Closed history: closedByManager OR cancelled
-  const closedItems = useMemo(
-    () => allItems.filter((i) => i.repair.closedByManager || i.repair.status === "cancelled"),
-    [allItems],
-  );
-
-  // Filter closed by search
-  const filteredClosed = useMemo(() => {
-    if (!search.trim()) return closedItems;
-    const q = search.toLowerCase();
-    return closedItems.filter(
-      (i) =>
-        i.client.name.toLowerCase().includes(q) ||
-        (i.vehicle?.plate ?? "").toLowerCase().includes(q) ||
-        (i.vehicle?.brand ?? "").toLowerCase().includes(q) ||
-        (i.repair.description ?? "").toLowerCase().includes(q),
-    );
-  }, [closedItems, search]);
-
-  // Group by month
-  const byMonth = useMemo(() => {
-    const map = new Map<string, { items: DoneItem[]; tasks: ServiceTask[] }>();
-
-    filteredClosed.forEach((item) => {
-      const mk   = item.mk;
-      const prev = map.get(mk) ?? { items: [], tasks: [] };
-      prev.items.push(item);
-      map.set(mk, prev);
-    });
-
-    if (!search.trim()) {
-      doneTasks.forEach((t) => {
-        let mk = "0000-00";
-        if (t.createdAt && typeof t.createdAt === "object" && "seconds" in t.createdAt) {
-          mk = new Date((t.createdAt as { seconds: number }).seconds * 1000).toISOString().slice(0, 7);
-        }
-        const prev = map.get(mk) ?? { items: [], tasks: [] };
-        prev.tasks.push(t);
-        map.set(mk, prev);
-      });
-    }
-
-    return Array.from(map.entries())
-      .filter(([, v]) => v.items.length + v.tasks.length > 0)
-      .sort(([a], [b]) => b.localeCompare(a));
-  }, [filteredClosed, doneTasks, search]);
-
-  const totalRevenue = isAdmin
-    ? closedItems
-        .filter((i) => i.repair.closedByManager)
-        .reduce((s, i) => s + (parseFloat(i.repair.cost ?? "0") || 0), 0)
-    : 0;
-
-  const exportMonths = useMemo(() => {
-    const months = new Set(closedItems.map((i) => i.mk).filter((mk) => mk !== "0000-00"));
-    return Array.from(months).sort((a, b) => b.localeCompare(a));
-  }, [closedItems]);
-
+  const exportReady=baseStatus==='ready'&&(['finance','freezers','expenses'] as const).every(k=>sourceStatus[k]==='ready');
+  const allQueue=useMemo(()=>selectReportItems(clients,staff,DEFAULT_REPORT_FILTERS,'queue'),[clients,staff]);
+  const allIntake=useMemo(()=>selectReportIntake(intakeRepairs,staff,DEFAULT_REPORT_FILTERS),[intakeRepairs,staff]);
+  const needsClose=useMemo(()=>selectReportItems(clients,staff,filters,'queue'),[clients,staff,filters]);
+  const intakeReady=useMemo(()=>selectReportIntake(intakeRepairs,staff,filters),[intakeRepairs,staff,filters]);
+  const closedItems=useMemo(()=>selectReportItems(clients,staff,DEFAULT_REPORT_FILTERS,'archive'),[clients,staff]);
+  const filteredClosed=useMemo(()=>selectReportItems(clients,staff,filters,'archive'),[clients,staff,filters]);
+  const doneTasks=useMemo(()=>filters.status==='closed'||filters.status==='cancelled'||(filters.kind!=='all'&&filters.kind!=='other')?[]:selectServiceRequests(tasks,reportScope(staff,filters,'archive')),[tasks,staff,filters]);
+  const byMonth=useMemo(()=>{
+    const map=new Map<string,{items:DoneItem[];tasks:ServiceTask[]}>();
+    filteredClosed.forEach(i=>{const bucket=map.get(i.mk)||{items:[],tasks:[]};bucket.items.push(i);map.set(i.mk,bucket);});
+    doneTasks.forEach(t=>{const mk=reportTaskMonth(t);if(filters.month!=='all'&&filters.month!==mk)return;const bucket=map.get(mk)||{items:[],tasks:[]};bucket.tasks.push(t);map.set(mk,bucket);});
+    return [...map.entries()].sort(([a],[b])=>b.localeCompare(a));
+  },[filteredClosed,doneTasks,filters.month]);
+  const totalRevenue=reportClosedTotal(closedItems);
+  const archiveMonths=useMemo(()=>reportArchiveMonths(closedItems,tasks),[closedItems,tasks]);
+  const exportMonths=useMemo(()=>[...new Set(closedItems.filter(i=>requestStage(i.repair)==='closed').map(i=>i.mk).filter(m=>m!=='0000-00'))].sort().reverse(),[closedItems]);
+  const selectedExport=exportMonths.includes(exportMK)?exportMK:exportMonths[0]||'';
   function exportMonthExcel() {
+    if(!showAmounts||!exportReady||!selectedExport)return;
+    const exportMK=selectedExport;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const finance = rawFinance as any;
-    const monthItems = closedItems.filter((i) => i.mk === exportMK && i.repair.closedByManager);
+    const monthItems = closedItems.filter((i) => i.mk === exportMK && requestStage(i.repair) === "closed");
     const [, m]      = exportMK.split("-");
     const mLabel     = `${MONTH_NAMES_FULL[parseInt(m) - 1]} ${exportMK.slice(0, 4)}`;
 
@@ -1919,113 +1817,23 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
     XLSX.writeFile(wb, `РефСервисДВ_Отчёт_${exportMK}.xlsx`);
   }
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-      {/* Intake — assign a client, then close — admin/manager only */}
-      {isAdmin && intakeReady.length > 0 && (
-        <div className="crm-section" style={{ animation: "fadeUp 0.4s ease 0.08s both" }}>
-          <div className="section-header">
-            <i className="ti ti-car-garage" style={{ fontSize: 17, color: "#16a34a" }} />
-            <span className="section-title" style={{ color: "#16a34a" }}>Приёмка — назначить клиента</span>
-            <span className="section-count">{intakeReady.length}</span>
-          </div>
-          <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
-            {intakeReady.map((i) => (
-              <IntakeCloseCard key={i.id} intake={i} clients={clients} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Needs close section — admin/manager only */}
-      {isAdmin && needsClose.length > 0 && (
-        <div className="crm-section" style={{ animation: "fadeUp 0.4s ease 0.1s both" }}>
-          <div className="section-header">
-            <i className="ti ti-clock-check" style={{ fontSize: 17, color: "#16a34a" }} />
-            <span className="section-title" style={{ color: "#16a34a" }}>Ожидают закрытия</span>
-            <span className="section-count">{needsClose.length} нарядов</span>
-          </div>
-          <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
-            {needsClose.map((i) => (
-              <NeedsCloseCard key={`${i.client.id}-${i.repair.id}`} item={i} onOpenClient={onOpenClient} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Closed history */}
-      <div className="crm-section" style={{ animation: "fadeUp 0.45s ease 0.15s both" }}>
-        <div className="section-header">
-          <i className="ti ti-file-export" style={{ fontSize: 17, color: "var(--text2)" }} />
-          <span className="section-title">Отчёты</span>
-          <span className="section-count">
-            {closedItems.length} рем.{doneTasks.length > 0 ? ` · ${doneTasks.length} задач` : ""}
-          </span>
-          {showAmounts && totalRevenue > 0 && (
-            <div className="section-actions">
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", fontFamily: "JetBrains Mono, monospace" }}>
-                {fmtMoney(totalRevenue)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Export toolbar */}
-        {isAdmin && exportMonths.length > 0 && (
-          <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={exportMK}
-              onChange={(e) => setExportMK(e.target.value)}
-              style={{
-                padding: "6px 10px", borderRadius: 8, fontSize: 13,
-                background: "var(--bg3)", border: "1px solid var(--border2)",
-                color: "var(--text)", outline: "none", cursor: "pointer",
-              }}
-            >
-              {exportMonths.map((mk) => {
-                const [y, mo] = mk.split("-");
-                return <option key={mk} value={mk}>{`${MONTH_NAMES_FULL[parseInt(mo) - 1]} ${y}`}</option>;
-              })}
-            </select>
-            <button
-              type="button"
-              onClick={() => exportMonthExcel()}
-              style={{
-                padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
-                background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)",
-                color: "#16a34a", cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
-              }}
-            >
-              <i className="ti ti-table-export" style={{ fontSize: 14 }} /> Скачать Excel
-            </button>
-          </div>
-        )}
-
-        {/* Search */}
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
-          <Input
-            placeholder="Поиск по клиенту, авто, марке, описанию..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {byMonth.length === 0 ? (
-          <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-            {search ? "Ничего не найдено" : "Нет завершённых работ"}
-          </div>
-        ) : (
-          <div style={{ padding: "8px 12px 12px" }}>
-            {byMonth.map(([mk, { items, tasks: mTasks }]) => (
-              <MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Freon report */}
-      <FreonSection clients={clients} />
-    </div>
-  );
+  return <ReportsWorkspace view={view} onView={setView} filters={filters} onFilters={setFilters} staff={staff} queueCount={allQueue.length+allIntake.length} intakeCount={allIntake.length} archiveCount={closedItems.length} total={totalRevenue} showAmounts={showAmounts} ready={baseStatus==='ready'} canManage={isAdmin}>
+    <ReportSourceBoundary status={baseStatus}>
+      <section className="reports-view-panel" hidden={view!=='queue'} aria-label="Заявки к закрытию">
+        {isAdmin&&<>
+          <div className="reports-section-heading"><h2>Проверка выполненных работ</h2><span>Найдено: {needsClose.length+intakeReady.length}</span></div>
+          <p className="reports-note">Откройте заявку, проверьте отчёты и фотографии. Укажите итоговую стоимость, затем подтвердите закрытие.</p>
+          {intakeReady.length>0&&<><div className="reports-section-heading is-intake"><h2>Приёмка — назначить клиента</h2><span>{intakeReady.length}</span></div><div className="reports-queue-list">{intakeReady.map(i=><ReportQueueCard key={i.id} title={intakeKind(i)==='chamber'?(i.chamber?.label||'Камера'):[i.vehicle?.brand,i.vehicle?.plate].filter(Boolean).join(' · ')||'Автомобиль'} subtitle={i.repair.description||'Проверка работ и привязка к клиенту'} meta={i.createdByName} kind="intake"><IntakeCloseCard intake={i} clients={clients}/></ReportQueueCard>)}</div></>}
+          {needsClose.length>0&&<div className="reports-queue-list">{needsClose.map(i=><ReportQueueCard key={`${i.client.id}/${i.repair.id}`} title={i.objectLabel} subtitle={`${i.client.name}${i.repair.description?' · '+i.repair.description:''}`} meta={[i.assigneeNames,i.repair.date?fmtDate(i.repair.date):'Без даты'].filter(Boolean).join(' · ')} kind="client"><NeedsCloseCard item={i} onOpenClient={onOpenClient}/></ReportQueueCard>)}</div>}
+          {!needsClose.length&&!intakeReady.length&&<div className="reports-message"><strong>Заявок к закрытию не найдено</strong><p>Проверьте фильтры. Здесь появляются выполненные работы, ожидающие подтверждения менеджера.</p></div>}
+        </>}
+      </section>
+      <section className="reports-view-panel" hidden={view!=='archive'} aria-label="Архив работ">
+        <div className="reports-archive-period"><label>Период архива<select aria-label="Период архива" value={filters.month} onChange={e=>setFilters({...filters,month:e.target.value})}><option value="all">Все периоды</option>{archiveMonths.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}</select></label><span>По фильтрам: {filteredClosed.length} заявок. Отдельные задачи показаны в своих месяцах.</span></div>
+        {showAmounts&&exportMonths.length>0&&<section className="reports-export-toolbar" aria-label="Экспорт отчёта"><label>Месяц для Excel<select aria-label="Месяц для Excel" value={selectedExport} onChange={e=>setExportMK(e.target.value)}>{exportMonths.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}</select></label><button type="button" disabled={!exportReady} onClick={exportMonthExcel}>Скачать Excel за месяц</button><p>Полный месяц: ремонты, расходы и P&amp;L. Поиск и фильтры списка не ограничивают экспорт. {exportReady?'Суммы отражают учёт CRM, а не подтверждение оплаты.':'Для экспорта нужны подтверждённые данные финансов, расходов и склада.'}</p></section>}
+        {!byMonth.length?<div className="reports-message">По выбранным условиям завершённых работ нет. Измените фильтры или период.</div>:byMonth.map(([mk,{items,tasks:mTasks}])=><MonthBlock key={mk} mk={mk} items={items} tasks={mTasks} isAdmin={isAdmin} showAmounts={showAmounts} isOwner={isOwner} ownerUid={ownerUid} canReturn={canReturn} onOpenClient={onOpenClient}/>)}
+      </section>
+      <section className="reports-view-panel" hidden={view!=='freon'} aria-label="Расход фреона"><p className="reports-note">Сводка по всем клиентским ремонтам, включая незакрытые. Группировка — по дате заявки. Фильтры очереди и архива здесь не применяются.</p><FreonSection clients={clients} canManage={isAdmin}/></section>
+    </ReportSourceBoundary>
+  </ReportsWorkspace>;
 }

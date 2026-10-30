@@ -271,3 +271,20 @@ describe("findPlateMatches", () => {
     assert.deepEqual(findPlateMatches(clients, ""), []);
   });
 });
+
+describe('reports guarded intake closing',()=>{
+ test('requireReady rejects unfinished work without deleting intake',async()=>{
+  const id=await newIntake();const intake=(await readIntake(id))!;
+  await assert.rejects(assignIntakeRepairToClient(intake,{client:{create:{name:'Проверка'}},equipment:{create:true},cost:'100',closedBy:'manager',closedByName:'Менеджер',requireReady:true} as any,dbFor('manager')),/Не все работы/);
+  assert.ok(await readIntake(id));
+ });
+ test('requireReady rejects stale review, then closes a fresh completed snapshot',async()=>{
+  const id=await newIntake();await mutateIntakeRepairEmbedded(id,r=>({...r,tasks:r.tasks.map(t=>({...t,status:'done',doneBy:t.assignees}))}),editor,dbFor('mech-1'));
+  const reviewed=(await readIntake(id))!;
+  await mutateIntakeRepairEmbedded(id,r=>({...r,tasks:r.tasks.map(t=>({...t,workComment:'Дополнение'}))}),editor,dbFor('mech-1'));
+  const target={client:{create:{name:'Проверка'}},equipment:{create:true as const},cost:'1 200,50',closedBy:'manager',closedByName:'Менеджер',requireReady:true};
+  await assert.rejects(assignIntakeRepairToClient(reviewed,target,dbFor('manager')),/изменено|изменён/);
+  const fresh=(await readIntake(id))!;const result=await assignIntakeRepairToClient(fresh,target,dbFor('manager'));
+  const client=await getDoc(doc(dbFor('reader'),'clients',result.clientId));assert.equal(client.data()!.repairs[0].cost,'1200.50');assert.equal(await readIntake(id),undefined);
+ });
+});

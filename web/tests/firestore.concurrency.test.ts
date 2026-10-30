@@ -398,3 +398,23 @@ describe("entity addressing helpers", () => {
     );
   });
 });
+
+// Reports closes through the same transactional array mutation used by the UI.
+import {prepareRepairClose} from '../src/shared/firebase/repairClose';
+test('reports close rejects a stale task review then atomically stores a fresh close',async()=>{
+ const original=repair('report-close',[{...task('checked'),status:'done',doneBy:['worker-a','worker-b']}]);await seedClient([original]);
+ await mutateRepairTask('client-1',original,original.tasks[0],t=>({...t,workComment:'Новые сведения'}),dbFor('worker-a'));
+ await assert.rejects(mutateClientRepair('client-1',original,current=>prepareRepairClose(current,original,'1500','2026-10-27T01:00:00Z','manager'),dbFor('manager')),ConcurrentMutationError);
+ const fresh=(await currentRepairs())[0];assert.equal(fresh.closedByManager,undefined);
+ await mutateClientRepair('client-1',fresh,current=>prepareRepairClose(current,fresh,'1 500,50','2026-10-27T01:00:00Z','manager'),dbFor('manager'));
+ const closed=(await currentRepairs())[0];assert.equal(closed.cost,'1500.50');assert.equal(closed.closedByManager,true);assert.equal(closed.tasks[0].workComment,'Новые сведения');assert.equal(closed.closedAt,'2026-10-27T01:00:00Z');
+});
+
+import {savePnlElectricity,addPnlCommission,removePnlPurchase} from '../src/shared/firebase/pnl';
+async function pnlDb():Promise<Firestore>{await testEnv.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'staff/pnl-manager'),{role:'manager'});});return dbFor('pnl-manager');}
+test('P&L electricity rejects a stale bill and preserves other months on a fresh save',async()=>{const db=await pnlDb();const ref=doc(db,'settings/finance');await setDoc(ref,{elecBills:{'2026-09':30,'2026-10':100},boxes:[{id:'b',cost:500}]});await assert.rejects(savePnlElectricity('2026-10',80,50,db),ConcurrentMutationError);assert.equal((await getDoc(ref)).data()?.elecBills['2026-10'],100);await savePnlElectricity('2026-10',0,100,db);const f=(await getDoc(ref)).data()!;assert.equal(f.elecBills['2026-09'],30);assert.equal(f.elecBills['2026-10'],0);assert.equal(f.boxes[0].cost,500);});
+test('P&L commission retry uses one id and rejects changed payload',async()=>{const db=await pnlDb();const e={id:'commission-once',category:'commission',month:'2026-10',amount:12.5,comment:'Демо',createdBy:'pnl-manager'};await addPnlCommission(e,db);await addPnlCommission(e,db);assert.equal((await getDoc(doc(db,'expenses/commission-once'))).data()?.amount,12.5);await assert.rejects(addPnlCommission({...e,amount:20},db),ConcurrentMutationError);});
+test('P&L purchase deletion checks exact entry and preserves concurrent neighbors',async()=>{const db=await pnlDb();const ref=doc(db,'settings/finance');const p={id:'p',date:'2026-10-01',addedAt:'2026-10-01',amount:10,comment:'Фильтр'};await setDoc(ref,{purchases:[{...p,amount:15},{...p,id:'neighbor'}]});await assert.rejects(removePnlPurchase(p,db),ConcurrentMutationError);await removePnlPurchase({...p,amount:15},db);assert.deepEqual((await getDoc(ref)).data()?.purchases.map((x:{id:string})=>x.id),['neighbor']);});
+test('P&L direct commission and bill writes stay denied to mechanics',async()=>{await pnlDb();const db=dbFor('pnl-mechanic');await assert.rejects(addPnlCommission({id:'denied',category:'commission',month:'2026-10',amount:10,comment:'Demo',createdBy:'pnl-mechanic'},db));await assert.rejects(savePnlElectricity('2026-10',10,undefined,db));});
+import * as pnlWrites from '../src/shared/firebase/pnl';
+test('P&L purchase uncertain retry with edited payload cannot create a second purchase',async()=>{const db=await pnlDb(),add=(pnlWrites as any).addPnlPurchase;assert.equal(typeof add,'function');const p={id:'purchase-once',date:'2026-10-01',addedAt:'2026-10-01',amount:10.25,comment:'Демо'};await add(p,db);await add(p,db);await assert.rejects(add({...p,comment:'Другое описание',amount:20},db),ConcurrentMutationError);const purchases=(await getDoc(doc(db,'settings/finance'))).data()?.purchases;assert.equal(purchases.length,1);assert.equal(purchases[0].amount,10.25);});

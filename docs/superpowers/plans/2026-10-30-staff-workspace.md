@@ -26,3 +26,6 @@
 - Task 2: complete. Profile writes reuse existing transactions; two new emulator cases verify email preservation and stale name/permission conflict rejection. Keyboard and responsive UI tested at 390 and 1280 pixels with synthetic data.
 - Review: independent reviewer found UTC close-date attribution issue (fixed with RED/GREEN regression) and header-close focus reachability issue (reproduced and fixed, verified keyboard wrap across the complete modal).
 - Final checks: typecheck and production build passed. Full emulator suite passed 281/281 tests, zero skipped/cancelled. Existing bundle-size warning remains. No production records changed; no commits/push/deployment. Temporary demo removed.
+
+## Authorized release follow-up
+User requested synchronization, commit, push and deployment. Merged origin/main at 75cf92b (seven reports/P&L release commits); resolved package.json by retaining all three feature test suites. Reports/P&L production code is unchanged from origin/main. Combined version passed typecheck, build and all 319 emulator/unit/index tests, with zero failures/cancellations/skips. Reviewed split/map calls in the staff implementation and incoming financial/report derivations for defined collections/strings. Publication uses the existing main-branch GitHub Pages workflow; no Functions or Firestore rules changes are required.
