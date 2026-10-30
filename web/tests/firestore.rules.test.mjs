@@ -594,6 +594,23 @@ describe("equipment monitoring access", () => {
 });
 
 describe("default deny", () => {
+  test("service command history is manager-only and all device state and command writes remain server-only", async () => {
+    for (const [uid, role] of [["svc-worker", "mechanic"], ["svc-manager", "manager"], ["svc-admin", "admin"], ["svc-owner", "owner"]]) await seedRole(uid, role);
+    await seed('serviceControllers/svc-demo', { name: 'Demo', enabled: true });
+    await seed('serviceControllerLogs/svc-demo/entries/one', { level: 'INFO', message: 'Demo only', receivedAt: '2026-10-30' });
+    await seed('serviceControllerCommands/svc-demo/commands/one', { command: 'SERVICE PING', status: 'queued', requestedAt: '2026-10-30' });
+    for (const uid of ['svc-worker', 'svc-manager', 'svc-admin', 'svc-owner']) {
+      const db = dbFor(uid);
+      await assertSucceeds(getDoc(doc(db, 'serviceControllers/svc-demo')));
+      await assertSucceeds(getDocs(query(collection(db, 'serviceControllerLogs/svc-demo/entries'), orderBy('receivedAt', 'desc'), limit(150))));
+      const history = getDocs(query(collection(db, 'serviceControllerCommands/svc-demo/commands'), orderBy('requestedAt', 'desc'), limit(20)));
+      if (uid === 'svc-worker') await assertFails(history); else await assertSucceeds(history);
+      await assertFails(setDoc(doc(db, 'serviceControllerCommands/svc-demo/commands/forged'), { command: 'SERVICE PING', status: 'queued' }));
+      await assertFails(updateDoc(doc(db, 'serviceControllers/svc-demo'), { enabled: false }));
+      await assertFails(setDoc(doc(db, 'serviceControllerLogs/svc-demo/entries/forged'), { message: 'forged' }));
+    }
+  });
+
   test("work history is immutable and worker visibility is restricted to event participants", async () => {
     await seedRole("worker", "mechanic"); await seedRole("other", "mechanic"); await seedRole("boss", "admin");
     await seed("workEvents/event", { visibleTo: ["worker"], type: "completed", actorId: "worker" });

@@ -15,7 +15,7 @@ export interface ServiceController {
   ip: string | null;
   simSignal: number | null;
   modemState: string;
-  gprsConnected: boolean;
+  gprsConnected: boolean | null;
   firmwareVersion: string | null;
   uptimeSeconds: number | null;
   freeHeapBytes: number | null;
@@ -31,4 +31,14 @@ export interface ServiceControllerLog {
   message: string;
   reportedAt: Date | null;
   receivedAt: Date | null;
+}
+
+export type ServiceCommandStatus = 'queued' | 'claimed' | 'dispatched' | 'completed' | 'failed' | 'unknown';
+export interface ServiceCommandRecord {
+  id: string;
+  command: ServiceControllerCommand;
+  status: ServiceCommandStatus;
+  requestedAt: Date | null;
+  completedAt: Date | null;
+  resultMessage: string | null;
 }
