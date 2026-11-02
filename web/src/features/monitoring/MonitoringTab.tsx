@@ -28,6 +28,7 @@ import {
   objectLabel,
   sensorDisplayName,
   temperatureRuleTargetsSensor,
+  simBalancePresentation,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -136,15 +137,17 @@ function DiagnosticsPanel({ status, connection, nowMs }: {
   connection: ConnectionStatus;
   nowMs: number;
 }) {
+  const balance = simBalancePresentation(status?.simBalance);
   if (!status) return <section className="crm-section monitor-diagnostics"><div className="section-header"><div className="section-title">Связь и диагностика</div><ConnectionBadge status={connection} /></div><div className="monitor-rules-empty">Контроллер ещё не передал статус связи и диагностики.</div></section>;
   return (
     <section className="crm-section monitor-diagnostics">
       <div className="section-header"><div><div className="section-title">Связь и диагностика</div><div className="monitor-history-subtitle">Статус контроллера, отдельно от температуры</div></div><ConnectionBadge status={connection} /></div>
       <div className="monitor-diagnostics-grid">
-        <div><span>GSM-сигнал</span><strong>{status.rssi === null ? "Нет данных" : `${status.rssi} / 31`}</strong></div>
+        <div><span>Сигнал сети</span><strong>{status.rssi === null ? "Нет данных" : `${status.rssi} / 31`}</strong></div>
         <div><span>Регистрация сети</span><strong>{registrationLabel(status)}</strong></div>
-        <div><span>GPRS</span><strong>{status.gprsConnected ? "Подключён" : "Нет подключения"}</strong></div>
-        <div><span>MQTT</span><strong>{status.mqttConnected ? "Подключён" : "Нет подключения"}</strong></div>
+        <div><span>Мобильный интернет</span><strong>{status.gprsConnected ? "Подключён" : "Нет подключения"}</strong></div>
+        <div><span>{status.transport === "https" ? "HTTPS → CRM" : "MQTT"}</span><strong>{status.transport === "https" ? (connection === "online" ? "Статус получен" : "Нет свежего статуса") : (status.mqttConnected ? "Подключён" : "Нет подключения")}</strong></div>
+        <div><span>Баланс SIM</span><strong>{balance.amount ?? "Нет данных"}</strong><small>{balance.stateLabel}{balance.lastSuccessAt ? ` · баланс на ${formatDateTime(balance.lastSuccessAt)}` : ""}</small></div>
         <div><span>Очередь точек</span><strong>{status.queueDepth}</strong></div>
         <div><span>Время работы</span><strong>{formatUptime(status.uptimeSeconds)}</strong></div>
         <div><span>Последняя ошибка</span><strong>{failureLabel(status.lastFailureCode)}</strong></div>

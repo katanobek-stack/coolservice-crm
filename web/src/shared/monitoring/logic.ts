@@ -5,6 +5,7 @@ import type {
   MonitoringTemperatureRule,
   MonitoringTargetType,
   MonitoringSensor,
+  MonitoringSimBalance,
   TemperaturePoint,
 } from "../types/monitoring";
 import type { Client } from "../types/client";
@@ -13,6 +14,19 @@ export type ReadingStatus = "missing" | "stale" | "fresh";
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 export const MIN_CHART_WINDOW_MS = 60_000;
+
+export function simBalancePresentation(balance: MonitoringSimBalance | undefined): {
+  amount: string | null; stateLabel: string; lastSuccessAt: Date | null;
+} {
+  const labels = {ok: "Получен", error: "Ошибка проверки", unsupported: "Запрос не поддерживается", unavailable: "Не удалось получить"};
+  return {
+    amount: balance && Number.isSafeInteger(balance.amountMinor) && balance.currency === "RUB"
+      ? new Intl.NumberFormat("ru-RU", {style:"currency",currency:"RUB"}).format(balance.amountMinor! / 100)
+      : null,
+    stateLabel: balance ? labels[balance.status] : "Нет данных",
+    lastSuccessAt: balance?.balanceAt ?? null,
+  };
+}
 
 /** CRM-facing name is intentionally separate from the stable sensorId. */
 export function sensorDisplayName(

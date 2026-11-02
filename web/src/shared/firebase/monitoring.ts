@@ -134,6 +134,15 @@ function mapControllerStatus(id: string, data: DocumentData): MonitoringControll
     queueDepth: data.queueDepth,
     lastFailureCode: data.lastFailureCode,
     uptimeSeconds: data.uptimeSeconds,
+    transport: data.transport === "https" ? "https" : "mqtt",
+    simBalance: data.simBalance && ["ok", "error", "unsupported", "unavailable"].includes(data.simBalance.status)
+      ? {
+        status: data.simBalance.status,
+        checkedAt: asDate(data.simBalance.checkedAt),
+        balanceAt: asDate(data.simBalance.balanceAt),
+        amountMinor: Number.isSafeInteger(data.simBalance.amountMinor) ? data.simBalance.amountMinor : undefined,
+        currency: data.simBalance.currency === "RUB" ? "RUB" : undefined,
+      } : undefined,
   };
 }
 

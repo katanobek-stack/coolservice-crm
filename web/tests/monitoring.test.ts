@@ -16,10 +16,22 @@ import {
   violatesTemperatureRule,
   sensorDisplayName,
   temperatureRuleTargetsSensor,
+  simBalancePresentation,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
 const NOW = Date.parse("2026-09-13T02:00:00.000Z");
+
+test("SIM balance distinguishes missing, real zero and stale value after failed query", () => {
+  assert.equal(simBalancePresentation(undefined).amount, null);
+  const balance = {status: "ok" as const, amountMinor: 0, currency: "RUB" as const, checkedAt: new Date(NOW), balanceAt: new Date(NOW)};
+  assert.match(simBalancePresentation(balance).amount!, /0[,.]00/);
+  const failed = simBalancePresentation({...balance,status:"error",checkedAt:new Date(NOW+60000)});
+  assert.match(failed.amount!, /0[,.]00/);
+  assert.equal(failed.lastSuccessAt?.getTime(),NOW);
+  assert.match(failed.stateLabel,/ошибка/i);
+  assert.equal(simBalancePresentation({status:"unsupported",checkedAt:new Date(NOW),balanceAt:null}).amount,null);
+});
 
 test("sensor charts show only their own thresholds with primary-only legacy fallback", () => {
   const rule = { sensorId: "temperature-1_2" };

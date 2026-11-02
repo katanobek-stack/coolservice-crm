@@ -204,6 +204,21 @@ after(async () => {
 });
 
 describe("ingestTelemetry emulator integration", () => {
+  test("HTTPS status and real zero balance coexist with legacy MQTT and preserve failed balance", async () => {
+    const checkedAt = new Date(Date.now()-20000).toISOString();
+    const body=controllerStatus({transport:"https",mqttConnected:false,simBalance:{status:"ok",amountMinor:0,currency:"RUB",checkedAt}});
+    assert.equal((await postControllerStatus(body)).status,202);
+    const ref=firestore.doc(`monitoringControllerStatus/${DEVICE_ID}`);
+    assert.equal((await ref.get()).data().simBalance.amountMinor,0);
+    assert.equal((await ref.get()).data().transport,"https");
+    const newer=controllerStatus({statusId:"balance:error",reportedAt:new Date(Date.now()-1000).toISOString(),transport:"https",mqttConnected:false,simBalance:{status:"error",checkedAt:new Date().toISOString()}});
+    assert.equal((await postControllerStatus(newer)).status,202);
+    const stored=(await ref.get()).data();
+    assert.equal(stored.simBalance.status,"error");assert.equal(stored.simBalance.amountMinor,0);
+    assert.equal(stored.simBalance.balanceAt.toDate().toISOString(),checkedAt);
+    assert.equal((await postControllerStatus(newer)).status,200);
+    assert.equal((await postControllerStatus(controllerStatus({statusId:"balance:invalid",simBalance:{status:"error",checkedAt,amountMinor:0}}))).status,400);
+  });
   test("stores controller diagnostics outside temperature data and deduplicates statusId", async () => {
     const body = controllerStatus();
     const first = await postControllerStatus(body);

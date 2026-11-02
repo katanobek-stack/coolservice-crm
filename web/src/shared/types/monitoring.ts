@@ -54,6 +54,8 @@ export interface MonitoringSensorState extends MonitoringDeviceState {
 }
 
 export interface MonitoringControllerStatus {
+  transport?: "mqtt" | "https";
+  simBalance?: MonitoringSimBalance;
   controllerId: string;
   statusId: string;
   reportedAt: Date | null;
@@ -66,6 +68,14 @@ export interface MonitoringControllerStatus {
   queueDepth: number;
   lastFailureCode: MonitoringFailureCode;
   uptimeSeconds: number;
+}
+
+export interface MonitoringSimBalance {
+  status: "ok" | "error" | "unsupported" | "unavailable";
+  checkedAt: Date | null;
+  balanceAt: Date | null;
+  amountMinor?: number;
+  currency?: "RUB";
 }
 
 export interface TemperaturePoint {

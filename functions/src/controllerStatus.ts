@@ -2,6 +2,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { onRequest } from "firebase-functions/v2/https";
 import { verifyDeviceKey } from "./telemetryKey";
+import { parseStatusExtensions, storedSimBalance, type StatusExtensions } from "./controllerStatusExtensions";
 
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{2,63}$/;
 const STATUS_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
@@ -22,7 +23,7 @@ const FAILURE_CODES = [
 type RegistrationState = typeof REGISTRATION_STATES[number];
 type FailureCode = typeof FAILURE_CODES[number];
 
-interface ValidStatus {
+interface ValidStatus extends StatusExtensions {
   controllerId: string;
   statusId: string;
   reportedAt: Date;
@@ -76,6 +77,7 @@ function parseStatus(body: unknown, nowMs: number): ValidStatus {
   const allowed = [
     "controllerId", "statusId", "reportedAt", "networkRegistered", "registrationState", "rssi",
     "gprsConnected", "mqttConnected", "queueDepth", "lastFailureCode", "uptimeSeconds",
+    "transport", "simBalance",
   ];
   if (!isRecord(body) || !hasOnlyKeys(body, allowed)) {
     throw new RequestValidationError("body contains unknown fields");
@@ -102,7 +104,14 @@ function parseStatus(body: unknown, nowMs: number): ValidStatus {
   ) {
     throw new RequestValidationError("status fields are invalid");
   }
+  let extensions: StatusExtensions;
+  try {
+    extensions = parseStatusExtensions(value, input => parseReportedAt(input, nowMs));
+  } catch (error) {
+    throw new RequestValidationError(error instanceof Error ? error.message : "invalid status extensions");
+  }
   return {
+    ...extensions,
     controllerId: value.controllerId,
     statusId: value.statusId,
     reportedAt: parseReportedAt(value.reportedAt, nowMs),
@@ -170,8 +179,10 @@ export const ingestControllerStatus = onRequest(
         if (existingEvent.exists) return { duplicate: true, currentUpdated: false };
 
         const reportedAt = Timestamp.fromDate(status.reportedAt);
+        const simBalance = storedSimBalance(current.data()?.simBalance, status.simBalance, Timestamp.fromDate);
         const eventData = {
           ...status,
+          ...(simBalance ? { simBalance } : {}),
           reportedAt,
           receivedAt,
           expireAt: Timestamp.fromMillis(receivedAt.toMillis() + STATUS_HISTORY_RETENTION_MS),
