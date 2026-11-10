@@ -13,6 +13,7 @@ import { AppointmentsTab } from "../features/appointments/AppointmentsTab";
 import { FreezersTab } from "../features/freezers/FreezersTab";
 import { DoneTab } from "../features/done/DoneTab";
 import { PnlTab } from "../features/pnl/PnlTab";
+import { CashflowTab } from "../features/cashflow/CashflowTab";
 import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
 import { ScheduleTab } from "../features/schedule/ScheduleTab";
@@ -27,7 +28,7 @@ import type { Client } from "../shared/types/client";
 export type Tab =
   | "stats" | "mytasks" | "dailyPlan" | "intake" | "phys" | "legal"
   | "calendar" | "freezers" | "done"
-  | "pnl" | "staff" | "backup" | "schedule" | "monitoring" | "serviceMonitor";
+  | "pnl" | "cashflow" | "staff" | "backup" | "schedule" | "monitoring" | "serviceMonitor";
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
@@ -53,13 +54,14 @@ const TABS: TabDef[] = [
   { id: "freezers", label: "Склад",     icon: "ti-package",          emoji: "📦", group: "service" },
   { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance", roles: ["manager", "admin"] },
   { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", roles: ["manager", "admin"] },
+  { id: "cashflow", label: "ДДС",       icon: "ti-cash-banknote",    emoji: "₽", group: "finance", roles: ["manager", "admin"] },
   { id: "staff",    label: "Персонал",  icon: "ti-id-badge",         emoji: "👥", group: "finance", roles: ["admin"] },
   { id: "backup",   label: "Бэкап",     icon: "ti-database-export",  emoji: "💾", group: "finance", roles: ["admin"] },
 ];
 
 function canSeeTab(t: TabDef, role: StaffRole, hidePnl = false): boolean {
   if (role === "owner") return true;
-  if (hidePnl && t.id === "pnl") return false;
+  if (hidePnl && (t.id === "pnl" || t.id === "cashflow")) return false;
   return !t.roles || t.roles.includes(role);
 }
 
@@ -77,6 +79,7 @@ const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   freezers: { title: "Склад",     sub: "камеры и аренда" },
   done:     { title: "Отчёты",    sub: "завершённые работы" },
   pnl:      { title: "P&L",       sub: "доходы и расходы" },
+  cashflow: { title: "ДДС",       sub: "деньги, платежи и план" },
   staff:    { title: "Персонал",  sub: "сотрудники" },
   backup:   { title: "Бэкап",     sub: "экспорт и импорт данных" },
 };
@@ -249,7 +252,7 @@ function Topbar({ tab, onSearch, onNewRepair, onOpenDevice }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "dailyPlan", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "done", "pnl"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "dailyPlan", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "done", "pnl", "cashflow"];
 
 function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
   tab:          Tab;
@@ -393,6 +396,7 @@ function Shell() {
       case "freezers": return <FreezersTab />;
       case "done":     return role !== "mechanic" ? <DoneTab onOpenClient={openClientProfile} /> : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
+      case "cashflow": return (role !== "mechanic" && canSeePLPanel) ? <CashflowTab /> : null;
       case "staff":    return isAdmin             ? <StaffTab />     : null;
       case "backup":   return isAdmin             ? <BackupTab />    : null;
       default:         return null;

@@ -215,6 +215,84 @@ service cloud.firestore {
       allow create, update, delete: if isAuth() && isManagerOrAbove();
     }
 
+    function canUseCashflow() {
+      return isOwner() || (isManagerOrAbove()
+        && get(staffPath(request.auth.uid)).data.get("permissions", {}).get("pl_panel", true) != false);
+    }
+
+    function validCashflowDay(value) {
+      return value is string && value >= "1900-01-01"
+        && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).year() == int(value[0:4])
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).month() == int(value[5:7])
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).day() == int(value[8:10]);
+    }
+
+    function cashflowNotFuture(value) {
+      return timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10]))
+        <= (request.time + duration.value(10, "h")).date();
+    }
+
+    function validCashflowCategory(data) {
+      return (data.kind == "income" && data.category in ["repairs", "rental", "subscription", "partsSale", "supplierRefund", "otherIncome", "equipmentSale", "loan", "ownerIn", "depositIn"])
+        || (data.kind == "expense" && data.category in ["parts", "freon", "salary", "rent", "utilities", "transport", "contractor", "marketing", "tax", "bank", "overhead", "clientRefund", "equipment", "loanRepayment", "interest", "ownerOut", "depositOut"])
+        || (data.kind == "transfer" && data.category == "transfer");
+    }
+
+    function validCashflowEntry(data) {
+      return data.keys().hasAll(["kind", "status", "date", "accountId", "targetAccountId", "amountCents", "category", "counterparty", "comment", "sourceKey", "sourceType", "createdBy", "createdAt"])
+        && data.keys().hasOnly(["kind", "status", "date", "accountId", "targetAccountId", "amountCents", "category", "counterparty", "comment", "sourceKey", "sourceType", "createdBy", "createdAt", "plannedDate", "postedBy", "postedAt", "voidReason", "voidedBy", "voidedAt"])
+        && validCashflowCategory(data)
+        && data.status in ["actual", "planned", "void"]
+        && validCashflowDay(data.date)
+        && (data.status != "actual" || cashflowNotFuture(data.date))
+        && data.amountCents is int && data.amountCents > 0 && data.amountCents <= 1000000000000
+        && data.accountId is string && data.accountId.size() > 0 && !data.accountId.matches('.*[/].*')
+        && data.targetAccountId is string
+        && exists(/databases/$(database)/documents/cashflowAccounts/$(data.accountId))
+        && data.date >= get(/databases/$(database)/documents/cashflowAccounts/$(data.accountId)).data.openedOn
+        && ((data.kind != "transfer" && data.targetAccountId == "")
+          || (data.kind == "transfer" && data.targetAccountId != data.accountId
+            && data.targetAccountId.size() > 0 && !data.targetAccountId.matches('.*[/].*')
+            && exists(/databases/$(database)/documents/cashflowAccounts/$(data.targetAccountId))
+            && data.date >= get(/databases/$(database)/documents/cashflowAccounts/$(data.targetAccountId)).data.openedOn))
+        && data.counterparty is string && data.counterparty.size() <= 200
+        && data.comment is string && data.comment.size() <= 1000
+        && data.sourceKey is string && data.sourceKey.size() <= 300
+        && data.sourceType in ["manual", "repair", "salary", "rent", "rental", "subscription"]
+        && data.createdBy is string && data.createdAt is timestamp;
+    }
+
+    match /cashflowAccounts/{accountId} {
+      allow read: if canUseCashflow();
+      allow create: if canUseCashflow()
+        && request.resource.data.keys().hasOnly(["name", "openedOn", "openingCents", "createdBy", "createdAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && validCashflowDay(request.resource.data.openedOn)
+        && request.resource.data.openingCents is int && request.resource.data.openingCents >= -1000000000000 && request.resource.data.openingCents <= 1000000000000
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      // Opening balances are immutable once introduced; corrections are explicit money entries.
+      allow update, delete: if false;
+    }
+
+    match /cashflowEntries/{entryId} {
+      allow read: if canUseCashflow();
+      allow create: if canUseCashflow() && validCashflowEntry(request.resource.data)
+        && request.resource.data.status in ["actual", "planned"]
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+        && !request.resource.data.keys().hasAny(["plannedDate", "postedBy", "postedAt", "voidReason", "voidedBy", "voidedAt"]);
+      allow update: if canUseCashflow() && validCashflowEntry(request.resource.data)
+        && ((resource.data.status == "planned" && request.resource.data.status == "actual"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "date", "plannedDate", "postedBy", "postedAt"])
+          && request.resource.data.plannedDate == resource.data.date
+          && request.resource.data.postedBy == request.auth.uid && request.resource.data.postedAt == request.time)
+        || (resource.data.status in ["actual", "planned"] && request.resource.data.status == "void"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "voidReason", "voidedBy", "voidedAt"])
+          && request.resource.data.voidReason is string && request.resource.data.voidReason.size() > 0 && request.resource.data.voidReason.size() <= 500
+          && request.resource.data.voidedBy == request.auth.uid && request.resource.data.voidedAt == request.time));
+      allow delete: if false;
+    }
+
     // P&L is visible to manager/admin/owner. No other settings documents are
     // currently used by the client application.
     match /settings/finance {
