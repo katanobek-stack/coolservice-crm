@@ -31,7 +31,7 @@ export function buildStaffResults(staff: StaffMember[], clients: Client[], intak
       if (!row) continue;
       if (repair.phase !== 'closed') { row.active++; continue; }
       // Intake has not yet been assigned/priced by the manager.
-      const closedDay = closedBusinessDay(repair.closedAt ?? repair.date);
+      const closedDay = closedBusinessDay(repair.workCompletedAt ?? repair.closedAt ?? repair.date);
       if (repair.source !== 'client' || closedDay.slice(0, 7) !== month) continue;
       const cost = Math.max(0, dashboardNumber(repair.cost));
       const share = cost / repair.mechanicIds.length;

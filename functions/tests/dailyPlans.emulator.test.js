@@ -163,6 +163,23 @@ test("comment-only updates do not reopen completed legacy tasks", async () => {
   const current = (await db.doc("servicetasks/task-1").get()).data();
   assert.equal(current.status, "done"); assert.deepEqual(current.doneBy, []);
 });
+
+test('last task completed through daily plan stamps both client and intake repair, reopening clears it', async () => {
+  const repair = { id: 'repair', tasks: [{ id: 'a', description: 'A', assignees: ['worker'], doneBy: [], status: 'in_progress' }] };
+  await db.doc('clients/client').set({ repairs: [repair], name: 'Клиент' });
+  await db.doc('intakeRepairs/intake').set({ repair });
+  await save([{ ...item('a'), source: { kind: 'repair', documentId: 'client', repairId: 'repair', taskId: 'a' } }, { ...item('intake-a'), source: { kind: 'intake', documentId: 'intake', taskId: 'a' } }]);
+  await publish();
+  const read = async kind => kind === 'a' ? (await db.doc('clients/client').get()).data().repairs[0] : (await db.doc('intakeRepairs/intake').get()).data().repair;
+  for (const itemId of ['a', 'intake-a']) {
+    await api.updateDailyPlanWork.run(request({ planId, itemId, done: true, comment: '' }, 'worker'));
+    const finished = await read(itemId); assert.ok(Number.isFinite(Date.parse(finished.workCompletedAt)));
+    await api.updateDailyPlanWork.run(request({ planId, itemId, comment: 'Проверено' }, 'worker'));
+    assert.equal((await read(itemId)).workCompletedAt, finished.workCompletedAt);
+    await api.updateDailyPlanWork.run(request({ planId, itemId, done: false, comment: '' }, 'worker'));
+    assert.equal((await read(itemId)).workCompletedAt, undefined);
+  }
+});
 test("a removed source cannot be completed and publication supports an empty day", async () => {
   await task(); await save([item()]); await publish(); await db.doc("servicetasks/task-1").delete();
   await assert.rejects(api.updateDailyPlanWork.run(request({ planId, itemId: "task-1", done: true, comment: "" }, "worker")), { code: "failed-precondition" });

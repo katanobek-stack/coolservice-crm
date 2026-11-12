@@ -58,6 +58,16 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
+test('intake completion survives later assignment and pricing by manager', async () => {
+  const id = await newIntake();
+  await mutateIntakeRepairEmbedded(id, repair => ({ ...repair, tasks: repair.tasks.map(task => ({ ...task, status: 'done' })) }), editor, dbFor('mech-1'));
+  const finished = (await readIntake(id))!;
+  assert.ok(finished.repair.workCompletedAt);
+  const result = await assignIntakeRepairToClient(finished, { client: { create: { name: 'Клиент' } }, equipment: { create: true }, cost: '100', closedBy: 'manager', closedByName: 'Менеджер', requireReady: true }, dbFor('manager'));
+  const client = await getDoc(doc(dbFor('reader'), 'clients', result.clientId));
+  assert.equal(client.data()!.repairs[0].workCompletedAt, finished.repair.workCompletedAt);
+});
+
 describe("intakeRepairs rules", () => {
   test("unauthenticated cannot read or write", async () => {
     const db = testEnv.unauthenticatedContext().firestore();

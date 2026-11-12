@@ -7,6 +7,7 @@ import {
   type Transaction,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./app";
+import { stampRepairCompletion } from '../utils/repair';
 import {
   backfillFixedCostHistory,
   sumBoxCost,
@@ -232,7 +233,8 @@ export function mutateClientRepair(
   mutation: (current: Repair) => Repair,
   firestore: Firestore = getFirebaseDb(),
 ): Promise<void> {
-  return updateClientArrayEntity(clientId, "repairs", repair, mutation, firestore);
+  const now = new Date().toISOString();
+  return updateClientArrayEntity(clientId, "repairs", repair, current => stampRepairCompletion(current, mutation(current), now), firestore);
 }
 
 export function removeClientRepair(

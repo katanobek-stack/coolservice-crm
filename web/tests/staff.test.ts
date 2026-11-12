@@ -66,6 +66,12 @@ test('UTC close timestamps belong to the Vladivostok business day and month', ()
   assert.equal(buildStaffResults(staff, repairs, [], '2026-10')[0].closed, 0);
 });
 
+test('staff results follow mechanic completion rather than delayed manager approval', () => {
+  const repairs = client([repair('late-approval', { workCompletedAt: '2026-10-31T13:00:00Z', closedAt: '2026-11-05T00:00:00Z' })]);
+  assert.equal(buildStaffResults(staff, repairs, [], '2026-10')[0].closed, 1);
+  assert.equal(buildStaffResults(staff, repairs, [], '2026-11')[0].closed, 0);
+});
+
 test('self and owner editing match database policy, with no client role escalation', () => {
   assert.deepEqual(staffEditPolicy('boss', 'owner', { id: 'boss', role: 'owner' }), { name: true, role: false, permissions: false });
   assert.equal(staffEditPolicy('a', 'admin', { id: 'a', role: 'admin' }).role, false);

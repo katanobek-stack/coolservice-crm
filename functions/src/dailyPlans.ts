@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { getApp } from "firebase-admin/app";
 import { auditId } from "./workAccountingLogic";
 import { appendWorkPhotos, parseWorkPhotos } from "./workPhotos";
+import { stampRepairCompletion } from './repairCompletion';
 import { parsePlanItems, planDate, safeId, planMessage, splitMessage, taskComplete, telegramGroupIds, type PlanSource, type PlanItem } from "./dailyPlanLogic";
 
 const REGION = "europe-west1";
@@ -172,7 +173,7 @@ export const updateDailyPlanWork = onCall({ region: REGION }, async request => {
       ...(data.comment.trim() ? { workComment: [task.workComment, `${by.name}: ${data.comment.trim()}`].filter(Boolean).join("\n") } : {}) };
     if (item.source.kind === "service") tx.update(source.ref, updated);
     else {
-      const repair = { ...source.repair, tasks: source.repair.tasks.map((t: DocumentData) => t.id === item.source.taskId ? updated : t) };
+      const repair = stampRepairCompletion(source.repair, { ...source.repair, tasks: source.repair.tasks.map((t: DocumentData) => t.id === item.source.taskId ? updated : t) }, new Date().toISOString());
       tx.update(source.ref, item.source.kind === "intake" ? { repair } : { repairs: source.document!.repairs.map((r: DocumentData) => r.id === item.source.repairId ? repair : r) });
     }
     // Separate photo evidence never adds another personal completion. Stable path

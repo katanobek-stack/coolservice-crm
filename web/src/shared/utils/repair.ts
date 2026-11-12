@@ -1,4 +1,5 @@
 import type { Repair, RepairTask } from "../types/client";
+export { stampRepairCompletion } from '../../../../functions/src/repairCompletion';
 
 export function getAssignees(t: RepairTask): string[] {
   if (t.assignees?.length) return t.assignees;
@@ -21,20 +22,24 @@ export function repairStatus(r: Repair): "done" | "in_progress" | "cancelled" {
   return tasks.every((t) => taskStatus(t) === "done") ? "done" : "in_progress";
 }
 
-type RepairDates = Pick<Repair, "closedAt" | "date">;
+type RepairDates = Pick<Repair, "closedAt" | "date" | "workCompletedAt">;
 
 /**
  * Month (`YYYY-MM`) a repair counts toward in financial reports, dashboards and
- * the Excel export: the month it was closed. Falls back to the start date for
- * repairs closed before `closedAt` existed, so historical revenue is not lost.
+ * the Excel export: completion of the mechanics' work, in Vladivostok time.
+ * Legacy repairs retain their manager-close/start-date fallback.
  * Returns `""` when neither date is set.
  */
 export function repairFinancialMonth(r: RepairDates): string {
-  return (r.closedAt ?? r.date ?? "").slice(0, 7);
+  return repairFinancialDay(r).slice(0, 7);
 }
 
 /** Day (`YYYY-MM-DD`) a repair counts as closed — same fallback as {@link repairFinancialMonth}. */
 export function repairFinancialDay(r: RepairDates): string {
+  if (r.workCompletedAt) {
+    const timestamp = Date.parse(r.workCompletedAt);
+    if (Number.isFinite(timestamp)) return new Date(timestamp + 10 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
   return (r.closedAt ?? r.date ?? "").slice(0, 10);
 }
 

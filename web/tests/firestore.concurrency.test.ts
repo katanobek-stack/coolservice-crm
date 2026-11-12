@@ -23,6 +23,7 @@ import {
 } from "../src/shared/firebase/concurrency";
 import type { Client, Repair, RepairTask } from "../src/shared/types/client";
 import type { StaffMember } from "../src/shared/types/staff";
+import { repairFinancialDay } from '../src/shared/utils/repair';
 
 const PROJECT_ID = "coolservice-crm-concurrency-test";
 const RULES_PATH = new URL("../../firestore.rules", import.meta.url);
@@ -79,6 +80,21 @@ before(async () => {
     projectId: PROJECT_ID,
     firestore: { rules: await readFile(RULES_PATH, "utf8") },
   });
+});
+
+test('repair task transaction records completion once and manager approval preserves it', async () => {
+  const original = repair('completion', [task('work')]);
+  await seedClient([original]);
+  await mutateRepairTask('client-1', original, original.tasks[0], current => ({ ...current, doneBy: ['worker-a', 'worker-b'], status: 'done' }), dbFor('worker-a'));
+  const finished = (await currentRepairs())[0];
+  assert.ok(finished.workCompletedAt);
+  await mutateClientRepair('client-1', finished, current => prepareRepairClose(current, finished, '100', '2026-12-05T00:00:00Z', 'manager'), dbFor('manager'));
+  const closed = (await currentRepairs())[0];
+  assert.equal(closed.workCompletedAt, finished.workCompletedAt);
+  assert.equal(closed.closedAt, '2026-12-05T00:00:00Z');
+  assert.equal(repairFinancialDay(closed), repairFinancialDay(finished));
+  await mutateRepairTask('client-1', closed, closed.tasks[0], current => ({ ...current, doneBy: [], status: 'in_progress' }), dbFor('manager'));
+  assert.equal((await currentRepairs())[0].workCompletedAt, undefined);
 });
 
 beforeEach(async () => {

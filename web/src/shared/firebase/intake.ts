@@ -16,6 +16,7 @@ import {
   runSafeTransaction,
 } from "./concurrency";
 import { closureIssue, parseClosureAmount } from "../utils/repairClosure";
+import { stampRepairCompletion } from '../utils/repair';
 import { genId } from "../utils/format";
 import { normalizePlate, platesMatch } from "../utils/plate";
 import { deletePhoto, deletePhotoObjects, repairPhotos } from "../utils/photos";
@@ -174,6 +175,7 @@ export async function mutateIntakeRepair(
     }
     const current = { id: snapshot.id, ...snapshot.data() } as IntakeRepair;
     const next = mutation(current);
+    next.repair = stampRepairCompletion(current.repair, next.repair, new Date().toISOString());
     transaction.set(ref, cleanForFirestore(next) as DocumentData);
   });
 }
@@ -383,7 +385,7 @@ export async function assignIntakeRepairToClient(
       throw new ConcurrentMutationError("Ремонт в приёмке изменился — обновите страницу");
     }
     if (target.requireReady) {
-      assertFieldsUnchanged(current.repair, intake.repair, ["tasks", "cost", "status", "closedByManager", "closedAt", "freonType", "freonAmount", "photos"], "Ремонт в приёмке");
+      assertFieldsUnchanged(current.repair, intake.repair, ["tasks", "cost", "status", "closedByManager", "closedAt", "workCompletedAt", "freonType", "freonAmount", "photos"], "Ремонт в приёмке");
       assertFieldsUnchanged(current, intake, ["vehicle", "chamber", "kind"], "Оборудование приёмки");
       const issue = closureIssue(current.repair);
       if (issue) throw new ConcurrentMutationError(issue);

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { useData } from "../../shared/context/DataContext";
 import { useAuth } from "../auth";
 import { usePermissions } from "../../shared/hooks/usePermissions";
-import { repairStatus, taskStatus, repairFinancialMonth } from "../../shared/utils/repair";
+import { repairStatus, taskStatus, repairFinancialMonth, repairFinancialDay } from "../../shared/utils/repair";
 import { resolveFixedCosts } from "../../shared/utils/finance";
 import { fmtDate, fmtMoney, fmtDayMonth } from "../../shared/utils/format";
 import { Badge } from "../../shared/ui/Badge";
@@ -637,9 +637,15 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
             <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(repair.date)}</span>
           </div>
         )}
+        {repair.workCompletedAt && (
+          <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>✓ Работы выполнены</span>
+            <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtDate(repairFinancialDay(repair))}</span>
+          </div>
+        )}
         {repair.closedAt && (
           <div style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
-            <span style={{ color: "var(--text3)", minWidth: 88 }}>✓ Закрыто</span>
+            <span style={{ color: "var(--text3)", minWidth: 88 }}>Оформлено менеджером</span>
             <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtDate(repair.closedAt.slice(0, 10))}</span>
           </div>
         )}
@@ -1708,7 +1714,7 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
       addFreon(freonMap, type, amt);
     });
 
-    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата закрытия", "Механики", "Создал заявку", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
+    const repHeaders = ["Клиент", "Телефон", "Авто", "Гос.номер", "Дата начала", "Дата выполнения / учёта", "Механики", "Создал заявку", "Фреон", "Кол-во кг", "Сумма ₽", "Описание"];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const repRows: any[][] = monthItems.map((i) => {
       const freonType = i.repair.freonType ?? (i.repair.tasks ?? []).find((t) => t.freonType)?.freonType ?? "";
@@ -1719,7 +1725,7 @@ export function DoneTab({ onOpenClient }: { onOpenClient?: (client: Client, vehi
         i.vehicle?.brand ?? i.vehicle?.model ?? "",
         i.vehicle?.plate ?? "",
         i.repair.date ?? "",
-        i.repair.closedAt?.slice(0, 10) ?? "",
+        repairFinancialDay(i.repair),
         i.assigneeNames,
         i.createdByName,
         freonType,

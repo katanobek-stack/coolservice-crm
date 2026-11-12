@@ -57,6 +57,8 @@ export interface Repair {
   status?: "in_progress" | "done" | "cancelled";
   closedByManager?: boolean;
   closedAt?: string;
+  /** Last transition to all repair tasks complete; manager approval stays in closedAt. */
+  workCompletedAt?: string;
   freonType?: string;
   freonAmount?: string;
   photos?: Photo[];
