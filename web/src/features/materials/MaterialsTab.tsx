@@ -72,7 +72,7 @@ export function MaterialsTab() {
     } catch (error) { setExportError(errorMessage(error)); }
   }
   return <div className="materials-workspace">
-    <header className="materials-hero"><div><span className="materials-eyebrow">Ресурсы сервиса</span><h1>Материалы и себестоимость</h1><p>Остатки на складе, расход в ремонтах и стоимость выполненной работы.</p></div><span className="materials-hero-icon" aria-hidden="true"><i className="ti ti-packages" /></span></header>
+    <header className="materials-hero"><div><span className="materials-eyebrow">Ресурсы сервиса</span><h1>Склад</h1><p>Запчасти, материалы, реальные остатки и расход в ремонтах.</p></div><span className="materials-hero-icon" aria-hidden="true"><i className="ti ti-packages" /></span></header>
     <nav className="materials-tabs" aria-label="Разделы материалов">{([['inventory', 'Склад'], ...(canManage && financial ? [['receipts', 'Приходы']] : []), ...(financial ? [['analytics', 'Результат ремонтов'], ['rates', 'Стоимость часа']] : [])] as [View, string][]).map(([key, label]) => <button type="button" aria-current={view === key ? 'page' : undefined} className={view === key ? 'active' : ''} key={key} onClick={() => setView(key)}>{label}</button>)}</nav>
     {!resources.ready && <div className="materials-notice" role={resources.error ? 'alert' : 'status'}>{resources.error || 'Загружаем каталог и остатки… Итоги появятся после загрузки.'}</div>}
     {resources.ready && resources.error && <div className="materials-notice materials-error" role="alert">{resources.error}</div>}
