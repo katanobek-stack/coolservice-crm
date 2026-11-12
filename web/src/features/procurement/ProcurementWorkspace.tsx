@@ -4,13 +4,13 @@ import type { MaterialItem } from '../../shared/types/resources';
 import { importProcurementCatalog, saveProcurementOrder, useProcurement } from '../../shared/firebase/procurement';
 import { calculateProcurement, parseDecimal, safeSupplierUrl } from './procurementLogic';
 import { ProcurementOrderEditor } from './ProcurementOrderEditor';
+import { ProcurementCatalog } from './ProcurementCatalog';
 import { StockLinkForm } from './StockLinkForm';
 import { exportProcurementOrder } from './procurementExport';
 import './procurement.css';
 
 const freshOrder = (): ProcurementOrderDraft => ({ id: crypto.randomUUID(), name: 'Закуп · ' + new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Vladivostok' }).format(new Date()), commission: '3', exchange: '', freightRate: '', lines: [] });
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить. Попробуйте ещё раз.';
-const fen = (value: number | null) => value === null ? 'Не указана' : (value / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' ¥';
 
 function recoverOrder(key: string) {
   try {
@@ -25,7 +25,7 @@ function recoverOrder(key: string) {
 
 export function ProcurementWorkspace({ materials, materialsReady = true, ownerId }: { materials: MaterialItem[]; materialsReady?: boolean; ownerId: string }) {
   const data = useProcurement(), fileInput = useRef<HTMLInputElement>(null);
-  const [view, setView] = useState<'catalog' | 'order'>('catalog'), [search, setSearch] = useState(''), [filter, setFilter] = useState('all'), [page, setPage] = useState(1);
+  const [view, setView] = useState<'catalog' | 'order'>('catalog');
   const storageKey = 'crm-procurement-draft:' + ownerId;
   const [initial] = useState(() => { const recovered = recoverOrder(storageKey); if (recovered) return recovered; const draft = freshOrder(); return { draft, revision: 0, saved: JSON.stringify(draft), pending: undefined }; });
   const [draft, setDraft] = useState(initial.draft), [revision, setRevision] = useState(initial.revision), [saved, setSaved] = useState(initial.saved);
@@ -45,11 +45,9 @@ export function ProcurementWorkspace({ materials, materialsReady = true, ownerId
     const sync = () => { const recovered = recoverOrder(storageKey); if (recovered?.draft.id === draft.id && recovered.revision > revision) { setRevision(recovered.revision); setSaved(recovered.saved); pendingSave.current = { fingerprint: '', requestId: '' }; } };
     window.addEventListener('procurement-saved', sync); return () => window.removeEventListener('procurement-saved', sync);
   }, [storageKey, draft.id, revision]);
-  const needle = search.trim().toLocaleLowerCase('ru-RU');
   const selected = new Set(draft.lines.map(line => line.catalogId));
-  const filtered = data.items.filter(item => (!needle || `${item.name} ${item.variant} ${item.suppliers.map(supplier => supplier.product + ' ' + supplier.url).join(' ')} ${item.sources.map(source => source.file).join(' ')}`.toLocaleLowerCase('ru-RU').includes(needle)) && (filter === 'all' || filter === 'review' && item.needsReview || filter === 'unlinked' && !item.linkedMaterialId || filter === 'low' && materials.some(material => material.id === item.linkedMaterialId && material.active && material.stockConfirmed !== false && material.quantityMilli <= material.minimumMilli))).sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
-  const pageCount = Math.max(1, Math.ceil(filtered.length / 20)), safePage = Math.min(page, pageCount), visible = filtered.slice((safePage - 1) * 20, safePage * 20);
   function pick(item: ProcurementCatalogItem) {
+    if (item.archived) return;
     if (selected.has(item.id)) { setDraft({ ...draft, lines: draft.lines.filter(line => line.catalogId !== item.id) }); return; }
     if (draft.lines.length >= 200) { setError('В одном заказе может быть до 200 позиций.'); return; }
     const supplier = item.suppliers[0];
@@ -100,16 +98,10 @@ export function ProcurementWorkspace({ materials, materialsReady = true, ownerId
   }
   return <div className="procurement-workspace">
     <div className="procurement-toolbar"><div><h2>Закуп и формирование склада</h2><p>Каталог → выбор товаров → заказ посреднику → сверка фактического наличия.</p></div><div className="materials-actions"><input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => void importFile(event)} /><button type="button" className="materials-btn" disabled={busy || !data.ready} onClick={() => fileInput.current?.click()}>Загрузить каталог</button><button type="button" className="materials-btn materials-primary" disabled={busy} onClick={() => setView('order')}>К заказу · {draft.lines.length}</button></div></div>
-    <div className="procurement-local-tabs"><button type="button" aria-pressed={view === 'catalog'} onClick={() => setView('catalog')}>Каталог · {data.items.length}</button><button type="button" aria-pressed={view === 'order'} onClick={() => setView('order')}>Текущий заказ</button></div>
+    <div className="procurement-local-tabs"><button type="button" aria-pressed={view === 'catalog'} onClick={() => setView('catalog')}>Каталог · {data.items.filter(item => !item.archived).length}</button><button type="button" aria-pressed={view === 'order'} onClick={() => setView('order')}>Текущий заказ</button></div>
     {data.error && <p role="alert" className="materials-notice materials-error">{data.error}</p>}{error && <p role="alert" className="materials-notice materials-error">{error}</p>}{notice && <p role="status" className="materials-notice materials-success">{notice}</p>}
     {!data.ready && !data.error && <p role="status" className="materials-notice">Загружаем каталог и заказы…</p>}
-    {view === 'catalog' && <section className="materials-panel"><header><div><h2>Товары из заказов</h2><p>Цены и количества — исторические. Перед новым закупом проверьте цену и модификацию.</p></div><span className="procurement-caption">{filtered.length} позиций</span></header><div className="materials-filters"><label>Поиск<input type="search" aria-label="Найти товар для закупа" value={search} placeholder="Название, модель, ссылка или заказ" onChange={event => { setSearch(event.target.value); setPage(1); }} /></label><label>Показать<select aria-label="Фильтр каталога закупа" value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}><option value="all">Все товары</option><option value="unlinked">Ещё не связаны со складом</option><option value="low">Заканчиваются на складе</option><option value="review">Нужно уточнить модификацию</option></select></label></div>
-      <fieldset className="procurement-fieldset" disabled={busy || !data.ready}><div className="procurement-catalog">{visible.map(item => {
-        const material = materials.find(value => value.id === item.linkedMaterialId);
-        return <article className={`procurement-card ${selected.has(item.id) ? 'procurement-selected' : ''}`} key={item.id}><div className="procurement-card-top">{item.imageDataUrl ? <img loading="lazy" src={item.imageDataUrl} alt="Фото товара из заказа" /> : <span className="procurement-no-photo">Фото позже</span>}<label className="materials-check"><input type="checkbox" aria-label={`В заказ: ${item.name}`} checked={selected.has(item.id)} onChange={() => pick(item)} />В заказ</label></div><h3>{item.name}</h3>{item.variant !== item.name && <p className="procurement-variant">{item.variant}</p>}{item.needsReview && <span className="materials-tag warning">Уточнить модификацию</span>}<p className="procurement-caption">Последняя цена: {fen(item.suppliers[0]?.priceFen ?? null)} за единицу заказа</p><div className="procurement-suppliers">{item.suppliers.map(supplier => safeSupplierUrl(supplier.url) && <a key={supplier.url} href={safeSupplierUrl(supplier.url)!} target="_blank" rel="noopener noreferrer">{supplier.site} · {supplier.product} ↗</a>)}</div><details><summary>История закупок · {item.sources.length}</summary>{item.reviewNote && <p className="procurement-caption">{item.reviewNote}</p>}<ul>{item.sources.map((source, index) => <li key={source.file + source.row + '_' + index}>{source.file}, строка {source.row}<br />{source.description || 'Модификация не указана'} · {source.quantity || 'Количество не указано'} · {fen(source.priceFen)}</li>)}</ul></details><div className="procurement-card-footer">{material ? <div className="procurement-caption">На складе: {material.name}<br />{material.stockConfirmed === false ? 'Остаток ещё не указан' : `Остаток: ${(material.quantityMilli / 1000).toLocaleString('ru-RU')}`}</div> : <button type="button" className="materials-btn" disabled={!materialsReady} onClick={() => setLinking(item)}>Сформировать позицию склада</button>}</div></article>;
-      })}</div></fieldset>
-      {data.ready && !visible.length && <p className="materials-empty">{data.items.length ? 'Товаров по этому фильтру нет.' : 'Загрузите подготовленный файл каталога. История закупок сохранится отдельно от фактических остатков.'}</p>}<div className="procurement-pagination"><button type="button" className="materials-btn" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Назад</button><span>{safePage} / {pageCount}</span><button type="button" className="materials-btn" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Далее</button></div>
-    </section>}
+    {view === 'catalog' && <ProcurementCatalog items={data.items} groups={data.groups} materials={materials} materialsReady={materialsReady} ready={data.ready} busy={busy} selectedForOrder={selected} pick={pick} link={setLinking} />}
     {view === 'order' && <><div className="procurement-order-picker"><label>Сохранённые заказы<select aria-label="Сохранённые заказы" disabled={busy} value="" onChange={event => { const order = data.orders.find(value => value.id === event.target.value); if (order) openOrder(order); }}><option value="">Выберите заказ</option>{[...data.orders].sort((a, b) => b.name.localeCompare(a.name, 'ru')).map(order => <option key={order.id} value={order.id}>{order.name} · {order.lines.length} позиций</option>)}</select></label><button type="button" className="materials-btn" disabled={busy} onClick={() => openOrder()}>Новый заказ</button></div><ProcurementOrderEditor draft={draft} catalog={data.items} onChange={setDraft} onSave={() => void save()} onExport={exportOrder} busy={busy || !data.ready} dirty={dirty} /></>}
     {linking && <StockLinkForm key={linking.id} item={linking} materials={materials} onClose={() => setLinking(null)} onSaved={() => { setLinking(null); setNotice('Позиция связана со складом. Для новой позиции внесите фактическое наличие через «Сверить остаток».'); }} />}
   </div>;

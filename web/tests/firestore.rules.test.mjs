@@ -651,3 +651,20 @@ describe("default deny", () => {
     await assertFails(setDoc(doc(db, "unknown/document-1"), { value: true }));
   });
 });
+
+describe('procurement catalogue groups', () => {
+  test('only financial managers can read groups and all catalogue writes require the server', async () => {
+    for (const [uid, role] of [['owner', 'owner'], ['manager', 'manager'], ['denied', 'manager'], ['worker', 'mechanic']]) await seedRole(uid, role, uid === 'denied' ? { permissions: { pl_panel: false } } : {});
+    await seed('procurementGroups/electrics', { name: 'Электрика', active: true, revision: 1 });
+    await seed('procurementSettings/groups', { initialized: true });
+    for (const uid of ['owner', 'manager']) {
+      await assertSucceeds(getDocs(collection(dbFor(uid), 'procurementGroups')));
+      await assertFails(setDoc(doc(dbFor(uid), 'procurementGroups/new'), { name: 'Новая' }));
+      await assertFails(updateDoc(doc(dbFor(uid), 'procurementGroups/electrics'), { active: false }));
+      await assertFails(deleteDoc(doc(dbFor(uid), 'procurementGroups/electrics')));
+      await assertFails(getDoc(doc(dbFor(uid), 'procurementSettings/groups')));
+    }
+    for (const uid of ['denied', 'worker']) await assertFails(getDocs(collection(dbFor(uid), 'procurementGroups')));
+    await assertFails(getDocs(collection(testEnv.unauthenticatedContext().firestore(), 'procurementGroups')));
+  });
+});

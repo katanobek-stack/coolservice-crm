@@ -62,3 +62,15 @@ test('uncounted stock does not appear as low or zero stock in reorder filtering'
   const common = { name: 'Деталь', unit: 'pcs' as const, quantityMilli: 0, minimumMilli: 1000, active: true, revision: 1 };
   assert.deepEqual(filterMaterials([{ ...common, id: 'unknown', stockConfirmed: false }, { ...common, id: 'known' }], '', true).map(item => item.id), ['known']);
 });
+
+test('catalogue views separate basket, personal and ungrouped; deleted groups become ungrouped', async () => {
+  const { catalogViewItems, catalogGroupCounts } = await import('../src/features/procurement/catalogLogic');
+  const groups = [{ id: 'personal', name: 'Личные', active: true, revision: 1, position: 1 }];
+  const base = { id: 'a', name: 'Контактор', variant: '', suppliers: [], sources: [], imageDataUrl: '', needsReview: false, reviewNote: '' };
+  const items = [base, { ...base, id: 'b', groupId: 'personal' }, { ...base, id: 'c', groupId: 'deleted' }, { ...base, id: 'd', archived: true }];
+  assert.equal(catalogViewItems(items, groups, 'all').length, 3);
+  assert.deepEqual(catalogViewItems(items, groups, 'ungrouped').map(item => item.id), ['a', 'c']);
+  assert.deepEqual(catalogViewItems(items, groups, 'personal').map(item => item.id), ['b']);
+  assert.deepEqual(catalogViewItems(items, groups, 'trash').map(item => item.id), ['d']);
+  assert.equal(catalogGroupCounts(items, groups).ungrouped, 2);
+});

@@ -3,7 +3,10 @@ export interface ProcurementSource { file: string; row: number; year: string; qu
 export interface ProcurementCatalogItem {
   id: string; name: string; variant: string; suppliers: ProcurementSupplier[]; sources: ProcurementSource[];
   imageDataUrl: string; needsReview: boolean; reviewNote: string; linkedMaterialId?: string; revision?: number;
+  groupId?: string; archived?: boolean;
 }
+export interface ProcurementGroup { id: string; name: string; active: boolean; revision: number; position: number }
+export interface CatalogMutation { operation: 'move' | 'rename' | 'trash' | 'restore'; items: { id: string; revision: number }[]; groupId?: string; name?: string; variant?: string }
 export interface ProcurementOrderLine {
   catalogId: string; name: string; variant: string; supplierUrl: string;
   quantity: string; unitPrice: string; chinaDelivery: string; receivedQuantity: string; weightKg: string;

@@ -2,10 +2,12 @@ import { getFirestore, FieldValue, type DocumentData, type Transaction } from 'f
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { createHash } from 'node:crypto';
 import { canManageProcurement, materialIdForCatalog, procurementId, validateCatalogItem, validateOrder } from './procurementLogic';
+import { runCatalogAction } from './procurementCatalog';
 
 const stamp = () => FieldValue.serverTimestamp();
 
 export async function runProcurementAction(tx: Transaction, action: string, data: DocumentData, uid: string): Promise<DocumentData> {
+  if (['initializeGroups', 'saveGroup', 'deleteGroup', 'updateCatalog'].includes(action)) return runCatalogAction(tx, action, data, uid);
   const db = getFirestore();
   if (action === 'importCatalog') {
     if (!Array.isArray(data.items) || !data.items.length || data.items.length > 25) throw new HttpsError('invalid-argument', 'Загружайте от 1 до 25 позиций за запрос');
@@ -28,6 +30,7 @@ export async function runProcurementAction(tx: Transaction, action: string, data
     const catalog = await tx.getAll(...order.lines.map(line => db.collection('procurementCatalog').doc(line.catalogId)));
     order.lines.forEach((line, index) => {
       const item = catalog[index].data();
+      if (item?.archived && !old?.lines?.some((previous: { catalogId: string }) => previous.catalogId === line.catalogId)) throw new HttpsError('failed-precondition', 'Товар в корзине. Сначала восстановите его.');
       if (!item || !item.suppliers?.some((supplier: { url: string }) => supplier.url === line.supplierUrl)) throw new HttpsError('failed-precondition', 'Товар или ссылка поставщика отсутствует в каталоге');
     });
     const revision = (old?.revision ?? 0) + 1;
@@ -38,6 +41,7 @@ export async function runProcurementAction(tx: Transaction, action: string, data
     const catalogId = procurementId(data.catalogId), catalogRef = db.collection('procurementCatalog').doc(catalogId);
     const catalog = (await tx.get(catalogRef)).data();
     if (!catalog) throw new HttpsError('not-found', 'Товар не найден');
+    if (catalog.archived) throw new HttpsError('failed-precondition', 'Товар в корзине. Сначала восстановите его.');
     if (catalog.linkedMaterialId) {
       const linked = await tx.get(db.collection('materialItems').doc(catalog.linkedMaterialId));
       if (!linked.exists) throw new HttpsError('failed-precondition', 'Связанная позиция склада удалена. Требуется проверка.');
