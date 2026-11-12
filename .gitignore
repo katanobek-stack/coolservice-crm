@@ -4,4 +4,6 @@ fix-freon.mjs
 firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log
+outputs/procurement-catalog/
+outputs/procurement-preview/
 web/.test-dist/

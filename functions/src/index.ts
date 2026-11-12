@@ -448,3 +448,4 @@ export const notifyIntakeUpdated = onDocumentUpdated(
   },
 );
 export { manageRepairResources } from './repairResources';
+export { manageProcurement } from './procurement';

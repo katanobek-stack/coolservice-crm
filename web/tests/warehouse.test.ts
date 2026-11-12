@@ -58,7 +58,7 @@ test("warehouse source loading and error never present stale counts or equipment
   for (const status of ["loading", "error"] as const) {
     const html = renderToStaticMarkup(createElement(WarehouseWorkspace, { freezers: fixtures, status, manager: true, onOpen() {}, onAdd() {} }));
     assert.doesNotMatch(html, /Бета|7\s?500|freezer-illustration/);
-    assert.match(html, status === "loading" ? /Загружаем оборудование/ : /Не удалось загрузить склад/);
+    assert.match(html, status === "loading" ? /Загружаем оборудование/ : /Не удалось загрузить аренду/);
   }
 });
 test("warehouse has accessible controls and preserves illustrations, management summary is hidden for mechanics", () => {

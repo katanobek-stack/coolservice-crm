@@ -2,6 +2,7 @@ import { getFirestore, FieldValue, type Transaction, type DocumentData } from 'f
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { createHash } from 'node:crypto';
 import { consumeStock, receiveStock, returnCost, laborCost, integer } from './resourceLogic';
+import { assertStockConfirmed } from './procurementLogic';
 
 const db = () => getFirestore();
 const stamp = () => FieldValue.serverTimestamp();
@@ -43,7 +44,7 @@ async function runAction(action:string,data:DocumentData,actor:Actor,tx:Transact
     if(!name||!['pcs','kg','ml','m'].includes(unit))throw new HttpsError('invalid-argument','Укажите название и единицу материала'); precision(unit,minimumMilli);
     const itemRef=ref('materialItems',materialId), old=(await tx.get(itemRef)).data();
     if(old&&(old.revision!==data.expectedRevision||old.unit!==unit))throw new HttpsError('aborted','Материал уже изменён. Обновите данные.');
-    tx.set(itemRef,{name,unit,minimumMilli,active:data.active!==false,quantityMilli:old?.quantityMilli??0,revision:(old?.revision??0)+1,updatedBy:actor.uid,updatedAt:stamp()});
+    tx.set(itemRef,{...old,name,unit,minimumMilli,active:data.active!==false,quantityMilli:old?.quantityMilli??0,revision:(old?.revision??0)+1,updatedBy:actor.uid,updatedAt:stamp()});
     if(!old)tx.create(ref('materialValuations',materialId),{valueCents:0});
     return {id:materialId};
   }
@@ -56,8 +57,8 @@ async function runAction(action:string,data:DocumentData,actor:Actor,tx:Transact
       const quantityMilli=amount(data.quantityMilli),note=text(data.note);precision(item.unit,quantityMilli);
       if(!note)throw new HttpsError('invalid-argument','Укажите причину сверки остатка');
       const before={quantityMilli:item.quantityMilli,valueCents:valuation?.valueCents??null};
-      const after=quantityMilli===before.quantityMilli?before:quantityMilli<before.quantityMilli?consumeStock(before,before.quantityMilli-quantityMilli):receiveStock(before,quantityMilli-before.quantityMilli,null);
-      tx.update(itemRef,{quantityMilli,revision:item.revision+1,updatedAt:stamp(),updatedBy:actor.uid});tx.set(valueRef,{valueCents:after.valueCents});
+      const after=quantityMilli===0?{quantityMilli:0,valueCents:0}:quantityMilli===before.quantityMilli?before:quantityMilli<before.quantityMilli?consumeStock(before,before.quantityMilli-quantityMilli):receiveStock(before,quantityMilli-before.quantityMilli,null);
+      tx.update(itemRef,{quantityMilli,stockConfirmed:true,revision:item.revision+1,updatedAt:stamp(),updatedBy:actor.uid});tx.set(valueRef,{valueCents:after.valueCents});
       tx.create(ref('materialMovements',operationId),{materialId,type:'count',quantityMilli:quantityMilli-before.quantityMilli,costCents:before.valueCents===null||after.valueCents===null?null:after.valueCents-before.valueCents,note,...audit});
       return {id:operationId};
     }
@@ -67,6 +68,7 @@ async function runAction(action:string,data:DocumentData,actor:Actor,tx:Transact
       tx.set(valueRef,{valueCents});tx.update(itemRef,{revision:item.revision+1,updatedAt:stamp(),updatedBy:actor.uid});
       return {id:materialId,previousValueCents:valuation?.valueCents??null,valueCents};
     }
+    assertStockConfirmed(item);
     const quantityMilli=amount(data.quantityMilli,1),costCents=data.costCents===null?null:amount(data.costCents);precision(item.unit,quantityMilli);
     if(costCents!==null)requireFinance(actor);
     const stock=receiveStock({quantityMilli:item.quantityMilli,valueCents:valuation?.valueCents??null},quantityMilli,costCents);
@@ -91,7 +93,7 @@ async function runAction(action:string,data:DocumentData,actor:Actor,tx:Transact
     if(action==='consumeMaterial') {
       const materialId=id(data.materialId),quantityMilli=amount(data.quantityMilli,1),itemRef=ref('materialItems',materialId),valueRef=ref('materialValuations',materialId);
       const item=(await tx.get(itemRef)).data(),valuation=(await tx.get(valueRef)).data();
-      if(!item||!item.active)throw new HttpsError('failed-precondition','Материал не доступен для списания');precision(item.unit,quantityMilli);
+      if(!item||!item.active)throw new HttpsError('failed-precondition','Материал не доступен для списания');assertStockConfirmed(item);precision(item.unit,quantityMilli);
       const stock=consumeStock({quantityMilli:item.quantityMilli,valueCents:valuation?.valueCents??null},quantityMilli);
       tx.update(itemRef,{quantityMilli:stock.quantityMilli,revision:item.revision+1,updatedAt:stamp(),updatedBy:actor.uid});tx.set(valueRef,{valueCents:stock.valueCents});
       tx.create(ref('repairResources',operationId),{...base,type:'material',materialId,materialName:item.name,unit:item.unit,quantityMilli,returnedMilli:0});

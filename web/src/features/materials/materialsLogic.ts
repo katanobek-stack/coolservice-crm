@@ -10,7 +10,7 @@ export function orphanResourceEntries(repairs: ResourceRepair[], entries: Repair
 export const materialUnits = { pcs: 'шт.', kg: 'кг', ml: 'мл', m: 'м' } as const;
 export function filterMaterials(items: MaterialItem[], search: string, lowOnly: boolean): MaterialItem[] {
   const query = search.trim().toLocaleLowerCase('ru-RU');
-  return items.filter(item => item.name.toLocaleLowerCase('ru-RU').includes(query) && (!lowOnly || (item.active && item.quantityMilli <= item.minimumMilli))).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'ru'));
+  return items.filter(item => item.name.toLocaleLowerCase('ru-RU').includes(query) && (!lowOnly || (item.active && item.stockConfirmed !== false && item.quantityMilli <= item.minimumMilli))).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'ru'));
 }
 export function resourceMoney(cents: number | null): string { return cents === null ? 'Нет данных' : new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 }).format(cents / 100); }
 export function resourceQuantity(milli: number): string { return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 3 }).format(milli / 1000); }

@@ -62,6 +62,9 @@ service cloud.firestore {
     match /resourceCosts/{id} { allow read: if canUseCashflow(); allow write: if false; }
     match /materialMovements/{id} { allow read: if canUseCashflow(); allow write: if false; }
     match /resourceRequests/{id} { allow read, write: if false; }
+    match /procurementCatalog/{id} { allow read: if isManagerOrAbove() && canUseCashflow(); allow write: if false; }
+    match /procurementOrders/{id} { allow read: if isManagerOrAbove() && canUseCashflow(); allow write: if false; }
+    match /procurementRequests/{id} { allow read, write: if false; }
 
     function isAssignedMechanicAppointmentUpdate() {
       return resource.data.assignees is list

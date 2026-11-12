@@ -56,7 +56,7 @@ function ResourcePanelBody({target,taskId,task}:{target:ResourceTarget;taskId:st
  }
  return <div style={{fontSize:12,color:'var(--text)',opacity:1}}>
   <fieldset disabled={busy} style={{border:0,padding:0,margin:0,display:'grid',gap:8}}>
-   <label>Материал<Select aria-label="Материал" value={materialId} onChange={event=>setMaterialId(event.target.value)}><option value="">Выберите материал</option>{data.items.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name} · {quantity(item.quantityMilli)} {units[item.unit]}</option>)}</Select></label>
+   <label>Материал<Select aria-label="Материал" value={materialId} onChange={event=>setMaterialId(event.target.value)}><option value="">Выберите материал</option>{data.items.filter(item=>item.active&&item.stockConfirmed!==false).map(item=><option key={item.id} value={item.id}>{item.name} · {quantity(item.quantityMilli)} {units[item.unit]}</option>)}</Select></label>
    {selected&&<span>Остаток: {quantity(selected.quantityMilli)} {units[selected.unit]}</span>}
    <label>Количество<Input aria-label="Количество материала" inputMode="decimal" value={amount} onChange={event=>setAmount(event.target.value)} placeholder="Например, 0,250"/></label>
    <Input aria-label="Примечание к расходу" value={note} onChange={event=>setNote(event.target.value)} placeholder="Примечание к расходу"/>

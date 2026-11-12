@@ -1,5 +1,5 @@
 export type MaterialUnit = 'pcs' | 'kg' | 'ml' | 'm';
-export interface MaterialItem { id: string; name: string; unit: MaterialUnit; quantityMilli: number; minimumMilli: number; active: boolean; revision: number }
+export interface MaterialItem { id: string; name: string; unit: MaterialUnit; quantityMilli: number; minimumMilli: number; active: boolean; revision: number; stockConfirmed?: boolean; procurementCatalogIds?: string[] }
 export interface MaterialValuation { id: string; valueCents: number | null }
 export interface ResourceRate { id: string; hourlyCostCents: number }
 export interface ResourceTarget { kind: 'client' | 'intake'; documentId: string; repairId: string }
