@@ -63,3 +63,13 @@ test('transfer is stored atomically and requires both real accounts', async () =
   await createCashflowEntry(payment('transfer', { kind: 'transfer', category: 'transfer', targetAccountId: 'cash' }), manager);
   assert.equal((await getDocs(collection(manager, 'cashflowEntries'))).size, 1);
 });
+
+test('resource stock is public to staff, cost is financial-only and all direct resource writes are denied',async()=>{
+  const publicNames=['materialItems','repairResources','repairResourceConfirmations','repairReworks'];
+  const privateNames=['materialValuations','resourceRates','resourceCosts','materialMovements'];
+  await env.withSecurityRulesDisabled(async ctx=>{for(const name of [...publicNames,...privateNames,'resourceRequests'])await setDoc(doc(ctx.firestore(),name,'test'),{quantityMilli:1000,costCents:100});});
+  for(const name of publicNames)await assertSucceeds(getDoc(doc(db('mechanic'),name,'test')));
+  for(const name of privateNames){await assertFails(getDoc(doc(db('mechanic'),name,'test')));await assertFails(getDoc(doc(db('denied'),name,'test')));await assertSucceeds(getDoc(doc(db('owner'),name,'test')));}
+  for(const name of [...publicNames,...privateNames,'resourceRequests'])for(const uid of ['owner','manager','mechanic'])await assertFails(setDoc(doc(db(uid),name,'forged'),{quantityMilli:100000,costCents:0}));
+  await assertFails(getDoc(doc(db('owner'),'resourceRequests','test')));
+});

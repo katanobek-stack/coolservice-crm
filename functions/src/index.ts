@@ -447,3 +447,4 @@ export const notifyIntakeUpdated = onDocumentUpdated(
     }
   },
 );
+export { manageRepairResources } from './repairResources';

@@ -18,6 +18,7 @@ import {
  * Every `fn` receives a freshly-read copy from the transaction.
  */
 export interface RepairEditor {
+  resourceTarget: { kind: 'client' | 'intake'; documentId: string };
   mutateRepair(fn: (repair: Repair) => Repair): Promise<void>;
   mutateTask(task: RepairTask, fn: (task: RepairTask) => RepairTask): Promise<void>;
   addTask(task: RepairTask): Promise<void>;
@@ -27,6 +28,7 @@ export interface RepairEditor {
 /** Editor for a repair stored in `clients/{clientId}.repairs[]`. */
 export function clientRepairEditor(clientId: string, repair: Repair): RepairEditor {
   return {
+    resourceTarget: { kind: 'client', documentId: clientId },
     mutateRepair: (fn) => mutateClientRepair(clientId, repair, fn),
     mutateTask: (task, fn) => mutateRepairTask(clientId, repair, task, fn),
     addTask: (task) => addRepairTask(clientId, repair, task),
@@ -40,6 +42,7 @@ export function intakeRepairEditor(
   editor: { uid: string; name: string },
 ): RepairEditor {
   return {
+    resourceTarget: { kind: 'intake', documentId: intakeId },
     mutateRepair: (fn) => mutateIntakeRepairEmbedded(intakeId, fn, editor),
     mutateTask: (task, fn) => mutateIntakeRepairTask(intakeId, task, fn, editor),
     addTask: (task) => addIntakeRepairTask(intakeId, task, editor),

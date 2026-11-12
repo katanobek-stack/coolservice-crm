@@ -37,6 +37,9 @@ import {requestStage,selectServiceRequests} from "../../shared/requests/workspac
 import {ReportModal as Modal,ReportsWorkspace,ReportWorkComment,ReportQueueCard,ReportSourceBoundary,ReportCloseReview,useReportWriteBlocked,type ReportView} from "./ReportsWorkspace";
 import {selectReportItems,selectReportIntake,reportScope,confirmedReportData,reportArchiveMonths,reportTaskMonth,reportClosedTotal,DEFAULT_REPORT_FILTERS,type ReportFilters,type DoneItem} from "./reportsLogic";
 
+import {ReworkPanel} from './ReworkPanel';
+import {ResourcePanel} from '../../shared/repair-work/ResourcePanel';
+
 const FREON_TYPES = ["R134a", "R404A", "R410A", "R507", "R22", "R507a"];
 
 const MONTH_NAMES_FULL = [
@@ -441,6 +444,8 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
           <CreatorLine name={item.createdByName} date={repair.createdAt} style={{ marginBottom: 8 }} />
         )}
 
+        <ReworkPanel clientId={client.id} repair={repair} />
+
         {/* Task list with reopen buttons */}
         {(repair.tasks ?? []).length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
@@ -480,6 +485,7 @@ function NeedsCloseCard({ item, onOpenClient }: { item: DoneItem; onOpenClient?:
                       <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 1 }}>👤 {names}</div>
                     )}
                     <ReportWorkComment comment={t.workComment}/>
+                    <ResourcePanel target={{kind:'client',documentId:client.id,repairId:repair.id}} taskId={t.id} />
                     <CreatorLine name={t.createdByName} date={t.createdAt} style={{ marginTop: 1 }} />
                     {taskPhotos.length > 0 && (
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
@@ -629,6 +635,8 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
         </span>
       </div>
 
+      <ReworkPanel clientId={client.id} repair={repair} canManage={isAdmin} />
+
       {/* Meta rows */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14, padding: "12px 14px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12 }}>
         {repair.date && (
@@ -738,6 +746,7 @@ function RepairDetailModal({ item, isAdmin, showAmounts, onOpenClient, onClose }
                       )}
                     </div>
                   </div>
+                  <ResourcePanel target={{kind:'client',documentId:client.id,repairId:repair.id}} taskId={t.id} />
                   {/* Per-task photos */}
                   {taskPhotos.length > 0 && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>

@@ -59,6 +59,17 @@ export interface Repair {
   closedAt?: string;
   /** Last transition to all repair tasks complete; manager approval stays in closedAt. */
   workCompletedAt?: string;
+  paymentDestination?: 'cash' | 'bank' | 'unspecified';
+  rework?: {
+    originalClientId: string;
+    originalRepairId: string;
+    originalTaskId: string;
+    cause: 'pending' | 'workmanship' | 'part' | 'other';
+    responsibleStaffIds: string[];
+    decisionNote: string;
+    confirmedBy?: string;
+    confirmedAt?: string;
+  };
   freonType?: string;
   freonAmount?: string;
   photos?: Photo[];

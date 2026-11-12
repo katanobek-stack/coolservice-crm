@@ -52,6 +52,17 @@ service cloud.firestore {
       return isAdminOrOwner() || isManager();
     }
 
+    // Resource balances and ledgers are changed only by trusted callable transactions.
+    match /materialItems/{id} { allow read: if hasStaffProfile() || isOwner(); allow write: if false; }
+    match /repairResources/{id} { allow read: if hasStaffProfile() || isOwner(); allow write: if false; }
+    match /repairResourceConfirmations/{id} { allow read: if hasStaffProfile() || isOwner(); allow write: if false; }
+    match /repairReworks/{id} { allow read: if hasStaffProfile() || isOwner(); allow write: if false; }
+    match /materialValuations/{id} { allow read: if canUseCashflow(); allow write: if false; }
+    match /resourceRates/{id} { allow read: if canUseCashflow(); allow write: if false; }
+    match /resourceCosts/{id} { allow read: if canUseCashflow(); allow write: if false; }
+    match /materialMovements/{id} { allow read: if canUseCashflow(); allow write: if false; }
+    match /resourceRequests/{id} { allow read, write: if false; }
+
     function isAssignedMechanicAppointmentUpdate() {
       return resource.data.assignees is list
         && request.auth.uid in resource.data.assignees

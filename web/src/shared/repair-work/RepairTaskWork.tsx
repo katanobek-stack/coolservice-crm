@@ -15,6 +15,10 @@ import type { Repair, RepairTask } from "../types/client";
 import type { RepairEditor } from "./editor";
 import { ReportText } from "../ui/ReportText";
 
+import { ResourcePanel } from './ResourcePanel';
+import { PaymentDestinationPanel } from '../../features/done/PaymentDestinationPanel';
+import { ReworkPanel } from '../../features/done/ReworkPanel';
+
 export const FREON_BADGES = ["R134a", "R404A", "R410A", "R507", "R22"] as const;
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
@@ -557,6 +561,8 @@ function RepairTaskRow({ task, repair, editor, canManageTasks }: {
             </div>
           )}
 
+          <ResourcePanel target={{ ...editor.resourceTarget, repairId: repair.id }} taskId={task.id} task={task} />
+
           <PhotoGrid photos={task.photos ?? []} onRemove={(id) => void removePhoto(id)} onView={setLightbox} />
 
           {!isDone && (
@@ -602,6 +608,8 @@ export function RepairTaskWork({ repair, tasks, editor, canManageTasks }: {
   if (tasks.length === 0) return null;
   return (
     <div style={{ padding: "0 12px 6px" }}>
+      {editor.resourceTarget.kind==='intake'&&<PaymentDestinationPanel target={{...editor.resourceTarget,repairId:repair.id}} repair={repair}/>}
+      {repair.rework && editor.resourceTarget.kind === 'client' && <ReworkPanel clientId={editor.resourceTarget.documentId} repair={repair} canManage={canManageTasks} />}
       {tasks.map((t) => (
         <RepairTaskRow key={t.id} task={t} repair={repair} editor={editor} canManageTasks={canManageTasks} />
       ))}

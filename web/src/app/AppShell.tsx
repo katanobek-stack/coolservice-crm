@@ -14,6 +14,7 @@ import { FreezersTab } from "../features/freezers/FreezersTab";
 import { DoneTab } from "../features/done/DoneTab";
 import { PnlTab } from "../features/pnl/PnlTab";
 import { CashflowTab } from "../features/cashflow/CashflowTab";
+import { MaterialsTab } from '../features/materials/MaterialsTab';
 import { StaffTab } from "../features/staff/StaffTab";
 import { BackupTab } from "../features/backup/BackupTab";
 import { ScheduleTab } from "../features/schedule/ScheduleTab";
@@ -27,7 +28,7 @@ import type { Client } from "../shared/types/client";
 
 export type Tab =
   | "stats" | "mytasks" | "dailyPlan" | "intake" | "phys" | "legal"
-  | "calendar" | "freezers" | "done"
+  | "calendar" | "freezers" | "materials" | "done"
   | "pnl" | "cashflow" | "staff" | "backup" | "schedule" | "monitoring" | "serviceMonitor";
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ const TABS: TabDef[] = [
   { id: "monitoring", label: "Мониторинг", icon: "ti-device-desktop-analytics", emoji: "🌡️", group: "service" },
   { id: "serviceMonitor", label: "Сервисный монитор", icon: "ti-heartbeat", emoji: "🖥️", group: "service" },
   { id: "freezers", label: "Склад",     icon: "ti-package",          emoji: "📦", group: "service" },
+  { id: "materials", label: "Материалы", icon: "ti-box", emoji: "🔩", group: "service" },
   { id: "done",     label: "Отчёты",    icon: "ti-file-export",      emoji: "✅", group: "finance", roles: ["manager", "admin"] },
   { id: "pnl",      label: "P&L",       icon: "ti-chart-bar",        emoji: "💰", group: "finance", roles: ["manager", "admin"] },
   { id: "cashflow", label: "ДДС",       icon: "ti-cash-banknote",    emoji: "₽", group: "finance", roles: ["manager", "admin"] },
@@ -77,6 +79,7 @@ const TAB_TITLES: Record<Tab, { title: string; sub: string }> = {
   monitoring: { title: "Мониторинг", sub: "температура и связь" },
   serviceMonitor: { title: "Сервисный монитор", sub: "диагностика контроллеров" },
   freezers: { title: "Склад",     sub: "камеры и аренда" },
+  materials: { title: 'Материалы', sub: 'остатки, расход и затраты на ремонты' },
   done:     { title: "Отчёты",    sub: "завершённые работы" },
   pnl:      { title: "P&L",       sub: "доходы и расходы" },
   cashflow: { title: "ДДС",       sub: "деньги, платежи и план" },
@@ -252,7 +255,7 @@ function Topbar({ tab, onSearch, onNewRepair, onOpenDevice }: {
 
 // ─── Mobile bottom nav ────────────────────────────────────────────────────────
 
-const MOBILE_TAB_IDS: Tab[] = ["stats", "dailyPlan", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "done", "pnl", "cashflow"];
+const MOBILE_TAB_IDS: Tab[] = ["stats", "dailyPlan", "mytasks", "intake", "phys", "calendar", "schedule", "monitoring", "serviceMonitor", "freezers", "materials", "done", "pnl", "cashflow"];
 
 function MobileNav({ tab, onTab, activeMine, pendingAppts, role, onSignOut, hidePnl }: {
   tab:          Tab;
@@ -394,6 +397,7 @@ function Shell() {
       case "monitoring": return <MonitoringTab focusDeviceId={monitoringFocusDeviceId} />;
       case "serviceMonitor": return <ServiceMonitorTab />;
       case "freezers": return <FreezersTab />;
+      case 'materials': return <MaterialsTab />;
       case "done":     return role !== "mechanic" ? <DoneTab onOpenClient={openClientProfile} /> : null;
       case "pnl":      return (role !== "mechanic" && canSeePLPanel) ? <PnlTab /> : null;
       case "cashflow": return (role !== "mechanic" && canSeePLPanel) ? <CashflowTab /> : null;

@@ -1,0 +1,123 @@
+const {test,beforeEach,after}=require('node:test');
+const assert=require('node:assert/strict');
+const {randomUUID}=require('node:crypto');
+const admin=require('firebase-admin');
+if(!process.env.FIRESTORE_EMULATOR_HOST)throw new Error('Emulator required; never use production');
+admin.initializeApp({projectId:'demo-repair-resources'});
+const db=admin.firestore(),api=require('../lib/repairResources').manageRepairResources;
+const invoke=(action,data={},uid='owner',requestId=randomUUID())=>api.run({auth:{uid,token:{}},data:{action,requestId,...data}});
+const target={kind:'client',documentId:'client',repairId:'repair'};
+const use=(quantityMilli,extra={})=>({target,taskId:'work',materialId:'fitting',quantityMilli,note:'Монтаж',...extra});
+beforeEach(async()=>{
+  for(const name of ['staff','clients','intakeRepairs','materialItems','materialValuations','materialMovements','repairResources','repairResourceConfirmations','repairReworks','resourceCosts','resourceRates','resourceRequests'])for(const doc of(await db.collection(name).get()).docs)await db.recursiveDelete(doc.ref);
+  for(const [uid,role,permissions]of[['owner','owner',{}],['manager','manager',{}],['worker','mechanic',{}],['other','mechanic',{}],['outsider','mechanic',{}],['denied','admin',{pl_panel:false}]])await db.doc(`staff/${uid}`).set({role,name:uid,permissions});
+  await db.doc('clients/client').set({name:'Клиент',repairs:[{id:'repair',serviceType:'refrigerator',date:'2026-10-01',cost:'20000',closedByManager:false,tasks:[{id:'work',description:'Работа',assignees:['worker','other'],doneBy:[],status:'in_progress'}]}]});
+  await invoke('saveMaterial',{id:'fitting',name:'Фитинг',unit:'pcs',minimumMilli:2000});
+  await invoke('receiveMaterial',{materialId:'fitting',quantityMilli:10000,costCents:10000,note:'Начальный остаток'});
+});
+after(async()=>admin.app().delete());
+test('roles, immutable unit, invalid quantities and private financial actions are enforced',async()=>{
+  await assert.rejects(invoke('saveMaterial',{id:'x',name:'X',unit:'pcs',minimumMilli:0},'worker'),{code:'permission-denied'});
+  await assert.rejects(invoke('saveResourceRate',{staffId:'worker',hourlyCostCents:1000},'denied'),{code:'permission-denied'});
+  await assert.rejects(invoke('saveMaterial',{id:'fitting',name:'X',unit:'kg',minimumMilli:0,expectedRevision:2}),{code:'aborted'});
+  await assert.rejects(invoke('consumeMaterial',use(1500),'worker'),{code:'invalid-argument'});
+  await assert.rejects(invoke('consumeMaterial',use(-1000),'worker'),{code:'invalid-argument'});
+  await assert.rejects(invoke('consumeMaterial',use(1000),'outsider'),{code:'permission-denied'});
+});
+test('receipts and consumption retry safely; changed payload cannot reuse request',async()=>{
+  const requestId=randomUUID(),data=use(2000);
+  const [a,b]=await Promise.all([invoke('consumeMaterial',data,'worker',requestId),invoke('consumeMaterial',data,'worker',requestId)]);
+  assert.equal(a.id,b.id);assert.equal((await db.doc('materialItems/fitting').get()).data().quantityMilli,8000);
+  assert.equal((await db.doc(`resourceCosts/${a.id}`).get()).data().costCents,2000);
+  await assert.rejects(invoke('consumeMaterial',use(1000),'worker',requestId),{code:'already-exists'});
+  const receiptId=randomUUID(),receipt={materialId:'fitting',quantityMilli:1000,costCents:2000,note:'Поступление'};
+  await invoke('receiveMaterial',receipt,'owner',receiptId);await invoke('receiveMaterial',receipt,'owner',receiptId);
+  assert.equal((await db.doc('materialItems/fitting').get()).data().quantityMilli,9000);
+  assert.equal((await db.doc(`resourceCosts/${a.id}`).get()).data().costCents,2000);
+});
+test('concurrent consumption cannot overspend stock; partial return restores cost once',async()=>{
+  const result=await Promise.allSettled([invoke('consumeMaterial',use(6000),'worker'),invoke('consumeMaterial',use(6000),'other')]);
+  assert.equal(result.filter(r=>r.status==='fulfilled').length,1);
+  const entry=result.find(r=>r.status==='fulfilled').value.id;
+  assert.equal((await db.doc('materialItems/fitting').get()).data().quantityMilli,4000);
+  const requestId=randomUUID(),returned=await invoke('returnMaterial',{entryId:entry,quantityMilli:2000,note:'Не использовано'},'owner',requestId);
+  await invoke('returnMaterial',{entryId:entry,quantityMilli:2000,note:'Не использовано'},'owner',requestId);
+  assert.equal((await db.doc('materialItems/fitting').get()).data().quantityMilli,6000);
+  assert.equal((await db.doc(`resourceCosts/${returned.id}`).get()).data().costCents,-2000);
+  await assert.rejects(invoke('returnMaterial',{entryId:entry,quantityMilli:5000,note:'Ошибка'}));
+});
+test('time uses actor and frozen rate, missing costs stay unknown; void is audited',async()=>{
+  await invoke('saveResourceRate',{staffId:'worker',hourlyCostCents:10000});
+  const data={target,taskId:'work',staffId:'worker',minutes:90,note:'Диагностика'};
+  const time=await invoke('addRepairTime',data,'worker');
+  await assert.rejects(invoke('addRepairTime',{...data,staffId:'other'},'worker'),{code:'permission-denied'});
+  await invoke('saveResourceRate',{staffId:'worker',hourlyCostCents:20000});
+  assert.equal((await db.doc(`resourceCosts/${time.id}`).get()).data().costCents,15000);
+  const unknown=await invoke('addRepairTime',{...data,staffId:'other'},'other');
+  assert.equal((await db.doc(`resourceCosts/${unknown.id}`).get()).data().costCents,null);
+  await assert.rejects(invoke('voidRepairTime',{entryId:time.id,note:'Чужая запись'},'other'),{code:'permission-denied'});
+  await invoke('voidRepairTime',{entryId:time.id,note:'Введено дважды'},'worker');
+  assert.equal((await db.doc(`repairResources/${time.id}`).get()).data().voidedBy,'worker');
+});
+test('stock count can be gradual; unknown valuation and later clarification never reprice past use',async()=>{
+  await invoke('saveMaterial',{id:'oil',name:'Масло',unit:'ml',minimumMilli:100000});
+  await invoke('receiveMaterial',{materialId:'oil',quantityMilli:500000,costCents:null,note:'Пересчёт'});
+  const used=await invoke('consumeMaterial',use(120000,{materialId:'oil'}),'worker');
+  const item=(await db.doc('materialItems/oil').get()).data();
+  await invoke('setMaterialValuation',{materialId:'oil',expectedRevision:item.revision,valueCents:3800});
+  assert.equal((await db.doc(`resourceCosts/${used.id}`).get()).data().costCents,null);
+  await assert.rejects(invoke('setMaterialValuation',{materialId:'oil',expectedRevision:item.revision,valueCents:4000}),{code:'aborted'});
+});
+test('linked rework retains original attribution, records new performers and never creates cashflow',async()=>{
+  const snap=(await db.doc('clients/client').get()).data(),original={...snap.repairs[0],closedByManager:true,status:'done',workCompletedAt:'2026-10-31T13:00:00Z'};
+  await db.doc('clients/client').update({repairs:[original]});
+  await assert.rejects(invoke('createRepairRework',{clientId:'client',originalRepairId:'repair',originalTaskId:'work',description:'Утечка',assignees:['other']},'worker'),{code:'permission-denied'});
+  const requestId=randomUUID(),data={clientId:'client',originalRepairId:'repair',originalTaskId:'work',description:'Устранить утечку',assignees:['other']};
+  const a=await invoke('createRepairRework',data,'manager',requestId),b=await invoke('createRepairRework',data,'manager',requestId);assert.equal(a.repairId,b.repairId);
+  await invoke('decideRepairRework',{clientId:'client',repairId:a.repairId,cause:'workmanship',responsibleStaffIds:['worker'],note:'Не обжат фитинг'},'manager');
+  const repair=(await db.doc('clients/client').get()).data().repairs.find(r=>r.id===a.repairId);
+  assert.equal(repair.cost,'0');assert.deepEqual(repair.tasks[0].assignees,['other']);assert.deepEqual(repair.rework.responsibleStaffIds,['worker']);
+  assert.equal(repair.rework.originalRepairId,'repair');assert.equal((await db.collection('cashflowEntries').get()).size,0);
+  assert.deepEqual((await db.doc(`repairReworks/${a.repairId}`).get()).data().responsibleStaffIds,['worker']);
+  await assert.rejects(invoke('decideRepairRework',{clientId:'client',repairId:a.repairId,cause:'other',responsibleStaffIds:[],note:'Устаревшее решение'},'manager'),{code:'aborted'});
+  await assert.rejects(invoke('decideRepairRework',{clientId:'client',repairId:a.repairId,cause:'part',responsibleStaffIds:['worker'],note:'Дефект детали'},'manager'),{code:'invalid-argument'});
+  await invoke('saveRepairPaymentDestination',{target,destination:'bank'},'manager');
+  assert.equal((await db.doc('clients/client').get()).data().repairs[0].paymentDestination,'bank');
+  assert.equal((await db.doc('clients/client').get()).data().repairs[0].workCompletedAt,original.workCompletedAt);
+});
+test('task accounting needs every performer and is invalidated by a later correction',async()=>{
+  const data={target,taskId:'work'};
+  await assert.rejects(invoke('confirmTaskResources',data,'worker'),{code:'failed-precondition'});
+  await invoke('addRepairTime',{...data,staffId:'worker',minutes:60,note:''},'worker');
+  await assert.rejects(invoke('confirmTaskResources',data,'worker'),{code:'failed-precondition'});
+  await invoke('addRepairTime',{...data,staffId:'other',minutes:30,note:''},'other');
+  await invoke('confirmTaskResources',data,'worker');
+  const confirmations=await db.collection('repairResourceConfirmations').get();assert.equal(confirmations.size,1);assert.deepEqual(confirmations.docs[0].data().assigneeIds,['worker','other']);
+  await invoke('consumeMaterial',use(1000),'worker');
+  assert.equal((await db.collection('repairResourceConfirmations').get()).size,0);
+});
+test('intake resource identity survives client assignment',async()=>{
+  const intakeTarget={kind:'intake',documentId:'intake',repairId:'intake-repair'};
+  const repair={id:'intake-repair',serviceType:'refrigerator',tasks:[{id:'work',assignees:['worker'],doneBy:[],status:'in_progress'}]};
+  await db.doc('intakeRepairs/intake').set({repair});
+  await invoke('consumeMaterial',use(1000,{target:intakeTarget}),'worker');
+  await db.doc('clients/assigned').set({name:'Назначенный клиент',repairs:[repair]});await db.doc('intakeRepairs/intake').delete();
+  await invoke('consumeMaterial',use(1000,{target:{kind:'client',documentId:'assigned',repairId:repair.id}}),'worker');
+  const rows=await db.collection('repairResources').where('repairId','==',repair.id).get();assert.equal(rows.size,2);
+  await assert.rejects(invoke('consumeMaterial',use(1000,{target:intakeTarget}),'worker'),{code:'not-found'});
+});
+test('explicit zero labor requires an explanation and is not an unknown hourly rate',async()=>{
+  const data={target,taskId:'work',staffId:'worker',minutes:0,note:''};
+  await assert.rejects(invoke('addRepairTime',data,'worker'),{code:'invalid-argument'});
+  const entry=await invoke('addRepairTime',{...data,note:'Заправка не требовалась'},'worker');
+  assert.equal((await db.doc(`resourceCosts/${entry.id}`).get()).data().costCents,0);
+});
+test('count reconciliation is manager-only, guarded by revision and audited without cashflow',async()=>{
+  const item=(await db.doc('materialItems/fitting').get()).data(),data={materialId:'fitting',expectedRevision:item.revision,quantityMilli:8000,note:'Пересчитали фактическое наличие'};
+  await assert.rejects(invoke('countMaterialStock',data,'worker'),{code:'permission-denied'});
+  const result=await invoke('countMaterialStock',data);
+  assert.equal((await db.doc('materialItems/fitting').get()).data().quantityMilli,8000);
+  assert.equal((await db.doc('materialValuations/fitting').get()).data().valueCents,8000);
+  assert.equal((await db.doc(`materialMovements/${result.id}`).get()).data().type,'count');
+  await assert.rejects(invoke('countMaterialStock',data),{code:'aborted'});
+});
