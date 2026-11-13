@@ -14,7 +14,7 @@ interface Props {
   pick: (item: ProcurementCatalogItem) => void; link: (item: ProcurementCatalogItem) => void;
 }
 export function ProcurementCatalog({ items, groups, materials, ready, busy, materialsReady, selectedForOrder, pick, link }: Props) {
-  const [view, setView] = useState('all'), [search, setSearch] = useState(''), [filter, setFilter] = useState('all'), [page, setPage] = useState(1);
+  const [view, setView] = useState('ungrouped'), [search, setSearch] = useState(''), [filter, setFilter] = useState('all'), [page, setPage] = useState(1);
   const [sorting, setSorting] = useState(false), [selection, setSelection] = useState<Map<string, number>>(new Map());
   const [saving, setSaving] = useState(false), [notice, setNotice] = useState(''), [error, setError] = useState('');
   const [dialog, setDialog] = useState<CatalogDialogSpec | null>(null), [photo, setPhoto] = useState<ProcurementCatalogItem | null>(null);
@@ -72,6 +72,10 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
     setDialog({ title: 'Убрать товары в корзину?', message: `Выбрано: ${selected.length}. Можно восстановить позже. История закупок, заказы и складские остатки сохранятся.`, submit: 'В корзину', save: async () => { await mutate({ operation: 'trash', items: selected }); } });
   }
   const navigate = (id: string) => { setView(id); setPage(1); };
+  function toggleSorting() {
+    if (!sorting && view === 'all') navigate('ungrouped');
+    setSorting(!sorting);
+  }
   const groupButton = (id: string, name: string) => <button key={id} type="button" disabled={disabled} aria-current={view === id ? 'page' : undefined} onClick={() => navigate(id)}><span>{name}</span><span>{counts[id] ?? 0}</span></button>;
   return <div className="procurement-sort-layout">
     <aside className="procurement-groups" aria-label="Группы товаров">
@@ -82,9 +86,10 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
     </aside>
     <section className="materials-panel procurement-catalog-panel">
       <header><div><h2>{currentGroup?.name ?? (view === 'ungrouped' ? 'Без группы' : trash ? 'Корзина' : 'Товары из заказов')}</h2><p>{trash ? 'Убраны из каталога. История и складские связи сохранены.' : sorting ? 'Отмечайте товары и переносите в группу одной кнопкой. Выбор для заказа остаётся отдельным.' : 'Цены исторические. Для распределения товаров включите «Разобрать каталог».'}</p></div>
-        <div className="materials-actions">{currentGroup && <><button className="materials-btn" disabled={disabled} onClick={() => editGroup(currentGroup)}>Переименовать группу</button><button className="materials-link" disabled={disabled} onClick={() => removeGroup(currentGroup)}>Удалить группу</button></>}{!trash && <button type="button" className={`materials-btn ${sorting ? 'materials-primary' : ''}`} disabled={disabled} onClick={() => setSorting(!sorting)}>{sorting ? 'Завершить разбор' : 'Разобрать каталог'}</button>}</div>
+        <div className="materials-actions">{currentGroup && <><button className="materials-btn" disabled={disabled} onClick={() => editGroup(currentGroup)}>Переименовать группу</button><button className="materials-link" disabled={disabled} onClick={() => removeGroup(currentGroup)}>Удалить группу</button></>}{!trash && <button type="button" className={`materials-btn ${sorting ? 'materials-primary' : ''}`} disabled={disabled} onClick={toggleSorting}>{sorting ? 'Завершить разбор' : 'Разобрать каталог'}</button>}</div>
       </header>
       {error && <p role="alert" className="materials-notice materials-error">{error}</p>}{notice && <p role="status" className="materials-notice materials-success">{notice}</p>}
+      <div className="materials-filters procurement-group-filter"><label>Группа товаров<select aria-label="Группа товаров" value={view} disabled={disabled} onChange={event => navigate(event.target.value)}><option value="ungrouped">Без группы · осталось {counts.ungrouped}</option><option value="all">Все товары · {counts.all}</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name} · {counts[group.id] ?? 0}</option>)}<option value="trash">Корзина · {counts.trash}</option></select></label>{view === 'ungrouped' && <p className="procurement-caption">Здесь только нераспределённые товары. После переноса в группу они исчезнут из этого списка.</p>}</div>
       <div className="materials-filters"><label>Поиск<input type="search" aria-label="Найти товар для закупа" value={search} placeholder="Название, модель, ссылка или заказ" onChange={event => { setSearch(event.target.value); setPage(1); }} /></label><label>Показать<select aria-label="Фильтр каталога закупа" value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}><option value="all">Все товары</option><option value="unlinked">Ещё не связаны со складом</option><option value="low">Заканчиваются на складе</option><option value="review">Нужно уточнить модификацию</option></select></label><span className="procurement-caption">Найдено: {filtered.length}</span></div>
       {selecting && <fieldset disabled={disabled} className="procurement-fieldset procurement-selection-toolbar"><div className="procurement-selection-count">Выбрано: <strong>{selection.size}</strong> / 100</div><button className="materials-btn" onClick={() => setSelection(new Map(visible.map(item => [item.id, item.revision ?? 1])))}>Выбрать видимые</button><button className="materials-link" onClick={() => setSelection(new Map())}>Снять выбор</button>
         {trash ? <button className="materials-btn materials-primary" disabled={!selection.size} onClick={() => void mutate({ operation: 'restore', items: refs() }).catch(() => {})}>Восстановить выбранные</button> : <><label>Перенести в группу<select aria-label="Перенести выбранные в группу" value="" disabled={!selection.size} onChange={event => move(event.target.value)}><option value="" disabled>Выберите группу</option><option value="ungrouped-choice">Без группы</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="materials-link procurement-danger" disabled={!selection.size} onClick={basket}>В корзину</button></>}
@@ -102,7 +107,7 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
           </div>
         </article>;
       })}</div></fieldset>
-      {ready && !visible.length && <p className="materials-empty">{trash ? 'Корзина пуста.' : 'В этой группе нет товаров по выбранному фильтру.'}</p>}
+      {ready && !visible.length && <p className="materials-empty">{trash ? 'Корзина пуста.' : view === 'ungrouped' && counts.ungrouped === 0 ? 'Все товары распределены по группам.' : 'В этой группе нет товаров по выбранному фильтру.'}</p>}
       <div className="procurement-pagination"><button className="materials-btn" disabled={disabled || safePage <= 1} onClick={() => setPage(safePage - 1)}>Назад</button><span>{safePage} / {pageCount}</span><button className="materials-btn" disabled={disabled || safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Далее</button></div>
     </section>
     {dialog && <CatalogDialog spec={dialog} onClose={() => setDialog(null)} />}

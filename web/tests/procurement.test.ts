@@ -74,3 +74,18 @@ test('catalogue views separate basket, personal and ungrouped; deleted groups be
   assert.deepEqual(catalogViewItems(items, groups, 'trash').map(item => item.id), ['d']);
   assert.equal(catalogGroupCounts(items, groups).ungrouped, 2);
 });
+
+test('catalogue opens with ungrouped cards and a visible group filter', async () => {
+  const { createElement } = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { ProcurementCatalog } = await import('../src/features/procurement/ProcurementCatalog');
+  const base = { id: 'unassigned', name: 'Ещё не распределённая деталь', variant: '', suppliers: [], sources: [], imageDataUrl: '', needsReview: false, reviewNote: '' };
+  const html = renderToStaticMarkup(createElement(ProcurementCatalog, {
+    items: [base, { ...base, id: 'assigned', name: 'Уже распределённая деталь', groupId: 'electric' }],
+    groups: [{ id: 'electric', name: 'Электрика', active: true, revision: 1, position: 0 }], materials: [], ready: true, busy: false, materialsReady: true, selectedForOrder: new Set<string>(), pick: () => {}, link: () => {},
+  }));
+  assert.match(html, /Ещё не распределённая деталь/);
+  assert.doesNotMatch(html, /Уже распределённая деталь/);
+  assert.match(html, /aria-label="Группа товаров"/);
+  assert.match(html, /Без группы · осталось 1/);
+});
