@@ -89,3 +89,23 @@ test('catalogue opens with ungrouped cards and a visible group filter', async ()
   assert.match(html, /aria-label="Группа товаров"/);
   assert.match(html, /Без группы · осталось 1/);
 });
+
+test('catalogue presentation defaults to a photo list with 50 rows and rejects invalid saved options', async () => {
+  const { parseCatalogPresentation } = await import('../src/features/procurement/catalogPresentation');
+  assert.deepEqual(parseCatalogPresentation(null), { layout: 'list', pageSize: 50 });
+  assert.deepEqual(parseCatalogPresentation('{broken'), { layout: 'list', pageSize: 50 });
+  assert.deepEqual(parseCatalogPresentation(JSON.stringify({ layout: 'compact', pageSize: 100 })), { layout: 'compact', pageSize: 100 });
+  assert.deepEqual(parseCatalogPresentation(JSON.stringify({ layout: 'unknown', pageSize: 5000 })), { layout: 'list', pageSize: 50 });
+});
+test('default list renders 50 of 101 items with photos and offers layout and page-size controls', async () => {
+  const { createElement } = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { ProcurementCatalog } = await import('../src/features/procurement/ProcurementCatalog');
+  const items = Array.from({ length: 101 }, (_, i) => ({ id: 'item-' + i, name: 'Деталь ' + i, variant: '', suppliers: [], sources: [], imageDataUrl: 'data:image/png;base64,AA==', needsReview: false, reviewNote: '' }));
+  const html = renderToStaticMarkup(createElement(ProcurementCatalog, { items, groups: [], materials: [], ready: true, busy: false, materialsReady: true, selectedForOrder: new Set<string>(), pick: () => {}, link: () => {} }));
+  assert.match(html, /procurement-layout-list/);
+  assert.match(html, /aria-label="Вид каталога"/);
+  assert.match(html, /aria-label="Позиций на странице"/);
+  assert.equal((html.match(/alt="Фото товара из заказа"/g) ?? []).length, 50);
+  assert.match(html, /1 \/ 3/);
+});
