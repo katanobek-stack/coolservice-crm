@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseDb, getFirebaseFunctions } from './app';
-import type { ProcurementCatalogItem, ProcurementOrder, ProcurementOrderDraft, ProcurementGroup, CatalogMutation } from '../types/procurement';
+import type { ProcurementCatalogItem, ProcurementOrder, ProcurementOrderDraft, ProcurementGroup, CatalogMutation, CatalogMergeInput } from '../types/procurement';
 import type { MaterialUnit } from '../types/resources';
 
 const api = async (action: string, requestId: string, payload: object) => {
@@ -16,6 +16,8 @@ export const initializeProcurementGroups = (requestId: string) => api('initializ
 export const saveProcurementGroup = (requestId: string, input: { id: string; name: string; expectedRevision: number }) => api('saveGroup', requestId, input);
 export const deleteProcurementGroup = (requestId: string, input: { id: string; expectedRevision: number }) => api('deleteGroup', requestId, input);
 export const updateProcurementCatalog = (requestId: string, input: CatalogMutation) => api('updateCatalog', requestId, input);
+export const mergeProcurementCatalog = (requestId: string, input: CatalogMergeInput) => api('mergeCatalog', requestId, input);
+export const setProcurementSupplier = (requestId: string, input: { catalogId: string; expectedRevision: number; url: string; disabled: boolean }) => api('setSupplierEnabled', requestId, input);
 
 export function useProcurement() {
   const [state, setState] = useState<{ items: ProcurementCatalogItem[]; orders: ProcurementOrder[]; groups: ProcurementGroup[]; ready: boolean; error: string }>({ items: [], orders: [], groups: [], ready: false, error: '' });

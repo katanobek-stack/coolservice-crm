@@ -106,3 +106,57 @@ test('group and batch payload limits reject invalid requests without modifying c
   await assert.rejects(call(store, 'updateCatalog', { operation: 'rename', items: batch(item.id, 1), name: 'x'.repeat(161), variant: '' }));
   assert.equal(store.get('procurementCatalog/' + item.id).revision, 1);
 });
+
+test('merge is group-scoped, preserves seller links and history, keeps aliases and never changes stock amounts', async () => {
+  const store = new Map(); await call(store, 'initializeGroups', {});
+  await call(store, 'importCatalog', { items: [item, { ...item, id: 'other', suppliers: [{ ...item.suppliers[0], url: 'https://detail.1688.com/offer/456.html' }], sources: [{ ...item.sources[0], file: 'other.xls' }] }] });
+  await call(store, 'updateCatalog', { operation: 'move', items: [...batch(item.id, 1), ...batch('other', 1)], groupId: 'electrics' });
+  const payload = { mergeId: 'merge-1', primaryId: item.id, items: [...batch(item.id, 2), ...batch('other', 2)], groupId: 'electrics', expectedGroupRevision: 1, name: 'Контактор 25А 220В', variant: '220В', confirmed: true, photoId: item.id };
+  const result = await call(store, 'mergeCatalog', payload);
+  assert.equal(result.id, item.id); const target = store.get('procurementCatalog/' + item.id);
+  assert.equal(target.suppliers.length, 2); assert.equal(target.sources.length, 2); assert.equal(target.groupId, 'electrics'); assert.equal(target.name, payload.name);
+  const alias = store.get('procurementCatalog/other'); assert.equal(alias.mergedIntoId, item.id); assert.equal(alias.archived, true);
+  assert.equal(store.has('procurementMerges/merge-1'), true);
+  for (const operation of ['restore', 'rename', 'move']) await assert.rejects(call(store, 'updateCatalog', { operation, items: batch('other', 3), name: 'Новое', variant: '', groupId: 'tools' }), { code: 'failed-precondition' });
+  await call(store, 'importCatalog', { items: [{ ...item, id: 'other' }] }); assert.equal(store.get('procurementCatalog/other').mergedIntoId, item.id);
+  assert.equal([...store.keys()].some(key => /materialItems|cashflow|materialMovements/.test(key)), false);
+});
+test('merge rejects different groups, different stock links and stale revisions; stock rename requires opt-in', async () => {
+  const store = new Map(); await call(store, 'initializeGroups', {}); await call(store, 'importCatalog', { items: [item, { ...item, id: 'other' }] });
+  const a = store.get('procurementCatalog/' + item.id), b = store.get('procurementCatalog/other'); a.groupId = 'electrics'; b.groupId = 'tools';
+  const payload = { mergeId: 'merge-2', primaryId: item.id, items: [...batch(item.id, 1), ...batch('other', 1)], groupId: 'electrics', expectedGroupRevision: 1, name: 'Новое имя', variant: '', confirmed: true };
+  await assert.rejects(call(store, 'mergeCatalog', payload), { code: 'failed-precondition' }); b.groupId = 'electrics'; a.linkedMaterialId = 'stock-a'; b.linkedMaterialId = 'stock-b';
+  await assert.rejects(call(store, 'mergeCatalog', payload), { code: 'failed-precondition' }); b.linkedMaterialId = 'stock-a';
+  store.set('materialItems/stock-a', { name: 'Складское имя', unit: 'pcs', quantityMilli: 5000, minimumMilli: 1000, revision: 3, procurementCatalogIds: [item.id, 'other'] });
+  store.set('materialValuations/stock-a', { valueCents: 12000 });
+  await assert.rejects(call(store, 'mergeCatalog', { ...payload, expectedMaterialRevision: 2 }), { code: 'aborted' });
+  await call(store, 'mergeCatalog', { ...payload, expectedMaterialRevision: 3, renameMaterial: true });
+  assert.equal(store.get('materialItems/stock-a').name, 'Новое имя'); assert.equal(store.get('materialItems/stock-a').quantityMilli, 5000); assert.equal(store.get('materialValuations/stock-a').valueCents, 12000);
+});
+test('disabled suppliers prevent new purchases without invalidating saved orders', async () => {
+  const store = new Map(); await call(store, 'importCatalog', { items: [item] });
+  const order = { id: 'old-order', name: 'История', commission: '3', exchange: '', freightRate: '', lines: [{ catalogId: item.id, name: item.name, variant: item.variant, supplierUrl: item.suppliers[0].url, quantity: '1', unitPrice: '', chinaDelivery: '', receivedQuantity: '', weightKg: '' }] };
+  await call(store, 'saveOrder', { order, expectedRevision: 0 });
+  await call(store, 'setSupplierEnabled', { catalogId: item.id, expectedRevision: 1, url: item.suppliers[0].url, disabled: true });
+  await assert.rejects(call(store, 'saveOrder', { order: { ...order, id: 'new-order' }, expectedRevision: 0 }), { code: 'failed-precondition' });
+  await call(store, 'saveOrder', { order, expectedRevision: 1 });
+});
+
+test('merged aliases remain usable in historical orders but cannot enter a new order or stock link', async () => {
+  const store = new Map(); await call(store, 'initializeGroups', {}); await call(store, 'importCatalog', { items: [item, { ...item, id: 'alias' }] });
+  store.get('procurementCatalog/' + item.id).groupId = 'electrics'; store.get('procurementCatalog/alias').groupId = 'electrics';
+  const order = { id: 'old-order', name: 'История', commission: '3', exchange: '', freightRate: '', lines: [{ catalogId: 'alias', name: 'Старое название', variant: '', supplierUrl: item.suppliers[0].url, quantity: '1', unitPrice: '', chinaDelivery: '', receivedQuantity: '', weightKg: '' }] };
+  await call(store, 'saveOrder', { order, expectedRevision: 0 });
+  await call(store, 'mergeCatalog', { mergeId: 'merge-old-order', primaryId: item.id, items: [...batch(item.id, 1), ...batch('alias', 1)], groupId: 'electrics', expectedGroupRevision: 1, name: 'Итоговое название', variant: '', confirmed: true });
+  await call(store, 'saveOrder', { order, expectedRevision: 1 });
+  assert.equal(store.get('procurementOrders/old-order').lines[0].name, 'Старое название');
+  await assert.rejects(call(store, 'saveOrder', { order: { ...order, id: 'new-order' }, expectedRevision: 0 }), { code: 'failed-precondition' });
+  await assert.rejects(call(store, 'linkMaterial', { catalogId: 'alias', expectedCatalogRevision: 2, name: 'Товар', unit: 'pcs', minimumMilli: 0 }), { code: 'failed-precondition' });
+});
+test('merging linked cards without rename opt-in keeps stock name and value', async () => {
+  const store = new Map(); await call(store, 'initializeGroups', {}); await call(store, 'importCatalog', { items: [item, { ...item, id: 'b' }] });
+  for (const id of [item.id, 'b']) { const card = store.get('procurementCatalog/' + id); card.groupId = 'electrics'; card.linkedMaterialId = 'stock'; }
+  store.set('materialItems/stock', { name: 'Складское имя', revision: 2, quantityMilli: 1000, procurementCatalogIds: [item.id, 'b'] }); store.set('materialValuations/stock', { valueCents: 5000 });
+  await call(store, 'mergeCatalog', { mergeId: 'no-rename', primaryId: item.id, items: [...batch(item.id, 1), ...batch('b', 1)], groupId: 'electrics', expectedGroupRevision: 1, name: 'Только каталог', variant: '', confirmed: true, expectedMaterialRevision: 2, renameMaterial: false });
+  assert.equal(store.get('materialItems/stock').name, 'Складское имя'); assert.equal(store.get('materialItems/stock').revision, 2); assert.equal(store.get('materialValuations/stock').valueCents, 5000);
+});

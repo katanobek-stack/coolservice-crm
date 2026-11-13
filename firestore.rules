@@ -65,6 +65,7 @@ service cloud.firestore {
     match /procurementCatalog/{id} { allow read: if isManagerOrAbove() && canUseCashflow(); allow write: if false; }
     match /procurementGroups/{id} { allow read: if isManagerOrAbove() && canUseCashflow(); allow write: if false; }
     match /procurementSettings/{id} { allow read, write: if false; }
+    match /procurementMerges/{id} { allow read, write: if false; }
     match /procurementOrders/{id} { allow read: if isManagerOrAbove() && canUseCashflow(); allow write: if false; }
     match /procurementRequests/{id} { allow read, write: if false; }
 

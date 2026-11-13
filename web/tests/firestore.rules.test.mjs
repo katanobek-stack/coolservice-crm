@@ -663,6 +663,7 @@ describe('procurement catalogue groups', () => {
       await assertFails(updateDoc(doc(dbFor(uid), 'procurementGroups/electrics'), { active: false }));
       await assertFails(deleteDoc(doc(dbFor(uid), 'procurementGroups/electrics')));
       await assertFails(getDoc(doc(dbFor(uid), 'procurementSettings/groups')));
+      await assertFails(getDoc(doc(dbFor(uid), 'procurementMerges/private-audit')));
     }
     for (const uid of ['denied', 'worker']) await assertFails(getDocs(collection(dbFor(uid), 'procurementGroups')));
     await assertFails(getDocs(collection(testEnv.unauthenticatedContext().firestore(), 'procurementGroups')));

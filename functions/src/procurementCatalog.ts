@@ -48,6 +48,7 @@ export async function runCatalogAction(tx: Transaction, action: string, data: Do
   snapshots.forEach((snapshot, index) => {
     const old = snapshot.data();
     if (!old) throw new HttpsError('not-found', 'Товар не найден');
+    if (old.mergedIntoId) throw new HttpsError('failed-precondition', 'Товар объединён. Используйте итоговую карточку.');
     if (old.revision !== items[index].revision) throw new HttpsError('aborted', 'Один из товаров изменён. Выберите товары заново.');
     if (old.archived && ['move', 'rename'].includes(data.operation)) throw new HttpsError('failed-precondition', 'Сначала восстановите товар из корзины');
   });

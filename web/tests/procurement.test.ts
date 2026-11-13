@@ -67,12 +67,12 @@ test('catalogue views separate basket, personal and ungrouped; deleted groups be
   const { catalogViewItems, catalogGroupCounts } = await import('../src/features/procurement/catalogLogic');
   const groups = [{ id: 'personal', name: 'Личные', active: true, revision: 1, position: 1 }];
   const base = { id: 'a', name: 'Контактор', variant: '', suppliers: [], sources: [], imageDataUrl: '', needsReview: false, reviewNote: '' };
-  const items = [base, { ...base, id: 'b', groupId: 'personal' }, { ...base, id: 'c', groupId: 'deleted' }, { ...base, id: 'd', archived: true }];
+  const items = [base, { ...base, id: 'b', groupId: 'personal' }, { ...base, id: 'c', groupId: 'deleted' }, { ...base, id: 'd', archived: true }, { ...base, id: 'alias-hidden', archived: true, mergedIntoId: 'a' }];
   assert.equal(catalogViewItems(items, groups, 'all').length, 3);
   assert.deepEqual(catalogViewItems(items, groups, 'ungrouped').map(item => item.id), ['a', 'c']);
   assert.deepEqual(catalogViewItems(items, groups, 'personal').map(item => item.id), ['b']);
   assert.deepEqual(catalogViewItems(items, groups, 'trash').map(item => item.id), ['d']);
-  assert.equal(catalogGroupCounts(items, groups).ungrouped, 2);
+  assert.equal(catalogGroupCounts(items, groups).ungrouped, 2); assert.equal(catalogGroupCounts(items, groups).trash, 1);
 });
 
 test('catalogue opens with ungrouped cards and a visible group filter', async () => {
@@ -108,4 +108,29 @@ test('default list renders 50 of 101 items with photos and offers layout and pag
   assert.match(html, /aria-label="Позиций на странице"/);
   assert.equal((html.match(/alt="Фото товара из заказа"/g) ?? []).length, 50);
   assert.match(html, /1 \/ 3/);
+});
+
+test('similarity suggestions stay inside active groups and ignore ungrouped, basket and merged aliases', async () => {
+  const { findSimilarCatalogItems } = await import('../src/features/procurement/catalogueSimilarity');
+  const base = { id: 'a', name: 'Товар Taobao 123', variant: 'Модификация не указана', suppliers: [{ url: 'https://item.taobao.com/item.htm?id=123', site: 'Taobao', product: '123', priceFen: 100 }], sources: [], imageDataUrl: 'same-photo', needsReview: true, reviewNote: '', groupId: 'electric' };
+  const groups = [{ id: 'electric', name: 'Электрика', active: true, revision: 1, position: 0 }, { id: 'tools', name: 'Инструменты', active: true, revision: 1, position: 1 }];
+  const items = [base, { ...base, id: 'b' }, { ...base, id: 'cross', groupId: 'tools' }, { ...base, id: 'none', groupId: '' }, { ...base, id: 'trash', archived: true }, { ...base, id: 'alias', mergedIntoId: 'a' }];
+  const pairs = findSimilarCatalogItems(items, groups);
+  assert.equal(pairs.length, 1); assert.deepEqual(pairs[0].items.map(item => item.id), ['a', 'b']); assert.equal(pairs[0].groupId, 'electric');
+  assert.equal(pairs[0].reasons.includes('Одинаковое фото'), true);
+});
+test('similarity can propose different sellers by photo/model but generic placeholder names do not match', async () => {
+  const { findSimilarCatalogItems } = await import('../src/features/procurement/catalogueSimilarity');
+  const groups = [{ id: 'g', name: 'Электрика', active: true, revision: 1, position: 0 }];
+  const base = { id: 'a', name: 'Контактор CHINT NXC-25', variant: '220V', suppliers: [], sources: [], imageDataUrl: '', needsReview: false, reviewNote: '', groupId: 'g' };
+  assert.equal(findSimilarCatalogItems([base, { ...base, id: 'b', name: 'CHINT NXC-25 контактор' }], groups).length, 1);
+  assert.equal(findSimilarCatalogItems([{ ...base, name: 'Товар Taobao 123' }, { ...base, id: 'b', name: 'Товар Taobao 456' }], groups).length, 0);
+});
+
+test('similarity excludes explicit differing dimensions and voltages even with the same image and seller', async () => {
+  const { findSimilarCatalogItems } = await import('../src/features/procurement/catalogueSimilarity');
+  const groups = [{ id: 'g', name: 'Фитинги', active: true, revision: 1, position: 0 }];
+  const base = { id: 'a', name: 'Гайка R134a размер 4', variant: '4分R134a', suppliers: [{ url: 'https://item.taobao.com/item.htm?id=123', site: 'Taobao', product: '123', priceFen: 1 }], sources: [], imageDataUrl: 'same-photo', needsReview: false, reviewNote: '', groupId: 'g' };
+  assert.equal(findSimilarCatalogItems([base, { ...base, id: 'b', name: 'Гайка R134a размер 6', variant: '6分R134a' }], groups).length, 0);
+  assert.equal(findSimilarCatalogItems([{ ...base, name: 'Катушка', variant: '12V' }, { ...base, id: 'b', name: 'Катушка', variant: '24V' }], groups).length, 0);
 });

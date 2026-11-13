@@ -3,10 +3,12 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { createHash } from 'node:crypto';
 import { canManageProcurement, materialIdForCatalog, procurementId, validateCatalogItem, validateOrder } from './procurementLogic';
 import { runCatalogAction } from './procurementCatalog';
+import { runMergeAction } from './procurementMerge';
 
 const stamp = () => FieldValue.serverTimestamp();
 
 export async function runProcurementAction(tx: Transaction, action: string, data: DocumentData, uid: string): Promise<DocumentData> {
+  if (['mergeCatalog', 'setSupplierEnabled'].includes(action)) return runMergeAction(tx, action, data, uid);
   if (['initializeGroups', 'saveGroup', 'deleteGroup', 'updateCatalog'].includes(action)) return runCatalogAction(tx, action, data, uid);
   const db = getFirestore();
   if (action === 'importCatalog') {
@@ -30,6 +32,8 @@ export async function runProcurementAction(tx: Transaction, action: string, data
     const catalog = await tx.getAll(...order.lines.map(line => db.collection('procurementCatalog').doc(line.catalogId)));
     order.lines.forEach((line, index) => {
       const item = catalog[index].data();
+      const historical = old?.lines?.some((previous: { catalogId: string; supplierUrl: string }) => previous.catalogId === line.catalogId && previous.supplierUrl === line.supplierUrl);
+      if ((item?.mergedIntoId || item?.suppliers?.find((supplier: { url: string; disabled?: boolean }) => supplier.url === line.supplierUrl)?.disabled) && !historical) throw new HttpsError('failed-precondition', 'Товар объединён или ссылка отключена. Выберите действующую ссылку итоговой карточки.');
       if (item?.archived && !old?.lines?.some((previous: { catalogId: string }) => previous.catalogId === line.catalogId)) throw new HttpsError('failed-precondition', 'Товар в корзине. Сначала восстановите его.');
       if (!item || !item.suppliers?.some((supplier: { url: string }) => supplier.url === line.supplierUrl)) throw new HttpsError('failed-precondition', 'Товар или ссылка поставщика отсутствует в каталоге');
     });
@@ -41,6 +45,7 @@ export async function runProcurementAction(tx: Transaction, action: string, data
     const catalogId = procurementId(data.catalogId), catalogRef = db.collection('procurementCatalog').doc(catalogId);
     const catalog = (await tx.get(catalogRef)).data();
     if (!catalog) throw new HttpsError('not-found', 'Товар не найден');
+    if (catalog.mergedIntoId) throw new HttpsError('failed-precondition', 'Товар объединён. Откройте итоговую карточку.');
     if (catalog.archived) throw new HttpsError('failed-precondition', 'Товар в корзине. Сначала восстановите его.');
     if (catalog.linkedMaterialId) {
       const linked = await tx.get(db.collection('materialItems').doc(catalog.linkedMaterialId));

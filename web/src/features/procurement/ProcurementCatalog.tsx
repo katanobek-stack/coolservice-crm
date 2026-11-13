@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CatalogMutation, ProcurementCatalogItem, ProcurementGroup } from '../../shared/types/procurement';
 import type { MaterialItem } from '../../shared/types/resources';
-import { initializeProcurementGroups, saveProcurementGroup, deleteProcurementGroup, updateProcurementCatalog } from '../../shared/firebase/procurement';
+import { initializeProcurementGroups, saveProcurementGroup, deleteProcurementGroup, updateProcurementCatalog, setProcurementSupplier } from '../../shared/firebase/procurement';
 import { Modal } from '../../shared/ui/Modal';
 import { catalogGroupCounts, catalogViewItems } from './catalogLogic';
 import { safeSupplierUrl } from './procurementLogic';
 import { catalogPresentationKey, readCatalogPresentation, type CatalogLayout, type CatalogPageSize } from './catalogPresentation';
+import { CatalogMergeDialog } from './CatalogMergeDialog';
+import { CatalogSimilarityPanel } from './CatalogSimilarityPanel';
 import { CatalogDialog, type CatalogDialogSpec } from './CatalogDialog';
 
 const fen = (value: number | null) => value === null ? 'Не указана' : (value / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' ¥';
@@ -22,6 +24,7 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
   const [sorting, setSorting] = useState(false), [selection, setSelection] = useState<Map<string, number>>(new Map());
   const [saving, setSaving] = useState(false), [notice, setNotice] = useState(''), [error, setError] = useState('');
   const [dialog, setDialog] = useState<CatalogDialogSpec | null>(null), [photo, setPhoto] = useState<ProcurementCatalogItem | null>(null);
+  const [comparing, setComparing] = useState<ProcurementCatalogItem[] | null>(null), [showSimilar, setShowSimilar] = useState(false);
   const pending = useRef({ key: '', id: '' }), attemptedInit = useRef(false);
   const disabled = busy || saving || !ready, trash = view === 'trash', selecting = sorting || trash;
   const activeGroups = groups.filter(group => group.active).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'ru'));
@@ -75,13 +78,24 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
     const selected = refs(); if (!selected.length) return;
     setDialog({ title: 'Убрать товары в корзину?', message: `Выбрано: ${selected.length}. Можно восстановить позже. История закупок, заказы и складские остатки сохранятся.`, submit: 'В корзину', save: async () => { await mutate({ operation: 'trash', items: selected }); } });
   }
+  function compareSelected() {
+    const chosen = items.filter(item => selection.has(item.id)).map(item => ({ ...item, revision: selection.get(item.id)! }));
+    if (chosen.length < 2 || chosen.length > 20) { setError('Для объединения выберите от 2 до 20 товаров.'); return; }
+    setComparing(chosen);
+  }
+  function supplierEnabled(item: ProcurementCatalogItem, url: string, disabled: boolean) {
+    const payload = { catalogId: item.id, expectedRevision: item.revision ?? 1, url, disabled };
+    void run('setSupplierEnabled', payload, id => setProcurementSupplier(id, payload)).catch(() => {});
+  }
   const navigate = (id: string) => { setView(id); setPage(1); };
   function toggleSorting() {
     if (!sorting && view === 'all') navigate('ungrouped');
     setSorting(!sorting);
   }
   const groupButton = (id: string, name: string) => <button key={id} type="button" disabled={disabled} aria-current={view === id ? 'page' : undefined} onClick={() => navigate(id)}><span>{name}</span><span>{counts[id] ?? 0}</span></button>;
-  return <div className="procurement-sort-layout">
+  return <><div className="procurement-similarity-toolbar"><div><strong>Проверка похожих товаров</strong><p>Подбор внутри ваших групп. Сортировка и остатки сохраняются; объединение — только после вашего подтверждения.</p></div><button type="button" className="materials-btn materials-primary" disabled={disabled} onClick={() => setShowSimilar(!showSimilar)}>{showSimilar ? 'Скрыть похожие товары' : 'Найти похожие в группах'}</button></div>
+    {showSimilar && <CatalogSimilarityPanel items={items} groups={groups} groupId={currentGroup?.id ?? ''} busy={disabled || !materialsReady} compare={setComparing} onClose={() => setShowSimilar(false)} />}
+    <div className="procurement-sort-layout">
     <aside className="procurement-groups" aria-label="Группы товаров">
       <strong>Группы товаров</strong>{groupButton('all', 'Все товары')}{groupButton('ungrouped', 'Без группы')}
       <div className="procurement-group-divider" />{activeGroups.map(group => groupButton(group.id, group.name))}
@@ -97,20 +111,21 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
       <div className="procurement-presentation-bar"><label>Вид<select aria-label="Вид каталога" value={layout} onChange={event => setPresentation(previous => ({ ...previous, layout: event.target.value as CatalogLayout }))}><option value="cards">Карточки</option><option value="compact">Компактные карточки</option><option value="list">Список с фото</option></select></label><label>На странице<select aria-label="Позиций на странице" value={pageSize} disabled={disabled} onChange={event => { setPresentation(previous => ({ ...previous, pageSize: Number(event.target.value) as CatalogPageSize })); setPage(1); }}><option value={20}>20 позиций</option><option value={50}>50 позиций</option><option value={100}>100 позиций</option></select></label><span className="procurement-caption">Показаны {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, filtered.length)} из {filtered.length}</span></div>
       <div className="materials-filters"><label>Поиск<input type="search" aria-label="Найти товар для закупа" value={search} placeholder="Название, модель, ссылка или заказ" onChange={event => { setSearch(event.target.value); setPage(1); }} /></label><label>Показать<select aria-label="Фильтр каталога закупа" value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}><option value="all">Все товары</option><option value="unlinked">Ещё не связаны со складом</option><option value="low">Заканчиваются на складе</option><option value="review">Нужно уточнить модификацию</option></select></label><span className="procurement-caption">Найдено: {filtered.length}</span></div>
       {selecting && <fieldset disabled={disabled} className="procurement-fieldset procurement-selection-toolbar"><div className="procurement-selection-count">Выбрано: <strong>{selection.size}</strong> / 100</div><button className="materials-btn" onClick={() => setSelection(new Map(visible.map(item => [item.id, item.revision ?? 1])))}>Выбрать видимые</button><button className="materials-link" onClick={() => setSelection(new Map())}>Снять выбор</button>
-        {trash ? <button className="materials-btn materials-primary" disabled={!selection.size} onClick={() => void mutate({ operation: 'restore', items: refs() }).catch(() => {})}>Восстановить выбранные</button> : <><label>Перенести в группу<select aria-label="Перенести выбранные в группу" value="" disabled={!selection.size} onChange={event => move(event.target.value)}><option value="" disabled>Выберите группу</option><option value="ungrouped-choice">Без группы</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="materials-link procurement-danger" disabled={!selection.size} onClick={basket}>В корзину</button></>}
+        {trash ? <button className="materials-btn materials-primary" disabled={!selection.size} onClick={() => void mutate({ operation: 'restore', items: refs() }).catch(() => {})}>Восстановить выбранные</button> : <><label>Перенести в группу<select aria-label="Перенести выбранные в группу" value="" disabled={!selection.size} onChange={event => move(event.target.value)}><option value="" disabled>Выберите группу</option><option value="ungrouped-choice">Без группы</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button type="button" className="materials-btn" disabled={selection.size < 2 || selection.size > 20 || !materialsReady} title="Выберите от 2 до 20 товаров внутри одной группы" onClick={compareSelected}>Сравнить и объединить</button><button className="materials-link procurement-danger" disabled={!selection.size} onClick={basket}>В корзину</button></>}
       </fieldset>}
       <fieldset disabled={disabled} className="procurement-fieldset"><div className={`procurement-catalog procurement-layout-${layout}`}>{visible.map(item => {
         const material = materials.find(value => value.id === item.linkedMaterialId), group = activeGroups.find(value => value.id === item.groupId);
         const info = <>
-          <p className="procurement-caption">Последняя цена: {fen(item.suppliers[0]?.priceFen ?? null)}</p><div className="procurement-suppliers">{item.suppliers.map(supplier => safeSupplierUrl(supplier.url) && <a key={supplier.url} href={safeSupplierUrl(supplier.url)!} target="_blank" rel="noopener noreferrer">{supplier.site} · {supplier.product} ↗</a>)}</div>
+          <p className="procurement-caption">Последняя цена: {fen(item.suppliers[0]?.priceFen ?? null)}</p><div className="procurement-suppliers">{item.suppliers.map(supplier => safeSupplierUrl(supplier.url) && <div key={supplier.url} className="procurement-supplier-option"><a href={safeSupplierUrl(supplier.url)!} target="_blank" rel="noopener noreferrer">{supplier.site} · {supplier.product} ↗</a>{supplier.disabled && <span className="procurement-caption">Не использовать для нового заказа</span>}{!trash && <button type="button" className="materials-link" onClick={() => supplierEnabled(item, supplier.url, !supplier.disabled)}>{supplier.disabled ? 'Использовать ссылку' : 'Не использовать ссылку'}</button>}</div>)}</div>
           <details><summary>История закупок · {item.sources.length}</summary>{item.reviewNote && <p className="procurement-caption">{item.reviewNote}</p>}<ul>{item.sources.map((source, index) => <li key={index}>{source.file}, строка {source.row}<br />{source.description || 'Модификация не указана'} · {source.quantity || 'Количество не указано'} · {fen(source.priceFen)}</li>)}</ul></details>
           <div className="procurement-card-footer">{!trash && <><button className="materials-link" onClick={() => editItem(item)}>Изменить название</button>{!sorting && <label className="procurement-quick-move">Переместить<select aria-label={`Группа товара: ${item.name}`} value={group?.id ?? ''} onChange={event => move(event.target.value, item)}><option value="">Без группы</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>}</>}
             {material ? <p className="procurement-caption">На складе: {material.name}<br />{material.stockConfirmed === false ? 'Остаток ещё не указан' : `Остаток: ${(material.quantityMilli / 1000).toLocaleString('ru-RU')}`}</p> : !trash && <button type="button" className="materials-btn" disabled={!materialsReady} onClick={() => link(item)}>Сформировать позицию склада</button>}
           </div>
+          {!!item.mergedCardIds?.length && <details><summary>Объединённые исходные карточки · {item.mergedCardIds.length}</summary>{item.mergedCardIds.map(id => { const original = items.find(value => value.id === id); return original && <div key={id} className="procurement-merge-original">{original.imageDataUrl && <img loading="lazy" src={original.imageDataUrl} alt={original.name} />}<span>{original.name} · {original.variant}<br />{original.sources.map(source => source.file + ', строка ' + source.row).join('; ')}</span></div>; })}</details>}
         </>;
         return <article key={item.id} className={`procurement-card ${(selecting ? selection.has(item.id) : selectedForOrder.has(item.id)) ? 'procurement-selected' : ''}`}>
           <div className="procurement-card-top">{item.imageDataUrl ? <button type="button" className="procurement-photo-button" aria-label={`Увеличить фото: ${item.name}`} onClick={() => setPhoto(item)}><img loading="lazy" src={item.imageDataUrl} alt="Фото товара из заказа" /></button> : <span className="procurement-no-photo">Фото позже</span>}
-            {selecting ? <label className="materials-check"><input type="checkbox" aria-label={`Разобрать: ${item.name}`} checked={selection.has(item.id)} onChange={() => choose(item)} />Выбрать</label> : <label className="materials-check"><input type="checkbox" aria-label={`В заказ: ${item.name}`} checked={selectedForOrder.has(item.id)} onChange={() => pick(item)} />В заказ</label>}
+            {selecting ? <label className="materials-check"><input type="checkbox" aria-label={`Разобрать: ${item.name}`} checked={selection.has(item.id)} onChange={() => choose(item)} />Выбрать</label> : <label className="materials-check"><input type="checkbox" aria-label={`В заказ: ${item.name}`} disabled={!selectedForOrder.has(item.id) && !item.suppliers.some(supplier => !supplier.disabled)} checked={selectedForOrder.has(item.id)} onChange={() => pick(item)} />В заказ</label>}
           </div><div className="procurement-card-identity"><span className="procurement-group-tag">{group?.name ?? 'Без группы'}</span><h3 title={item.name}>{item.name}</h3>{item.variant !== item.name && <p className="procurement-variant" title={item.variant}>{item.variant}</p>}{item.needsReview && <span className="materials-tag warning">Уточнить модификацию</span>}</div>
           {layout === 'cards' ? <div className="procurement-card-info">{info}</div> : <details className="procurement-card-details"><summary>Подробнее</summary><div className="procurement-card-info">{info}</div></details>}
         </article>;
@@ -118,7 +133,8 @@ export function ProcurementCatalog({ items, groups, materials, ready, busy, mate
       {ready && !visible.length && <p className="materials-empty">{trash ? 'Корзина пуста.' : view === 'ungrouped' && counts.ungrouped === 0 ? 'Все товары распределены по группам.' : 'В этой группе нет товаров по выбранному фильтру.'}</p>}
       <div className="procurement-pagination"><button className="materials-btn" disabled={disabled || safePage <= 1} onClick={() => setPage(safePage - 1)}>Назад</button><span>{safePage} / {pageCount}</span><button className="materials-btn" disabled={disabled || safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Далее</button></div>
     </section>
+    {comparing && <CatalogMergeDialog items={comparing} groups={groups} materials={materials} materialsReady={materialsReady} onClose={() => setComparing(null)} onSaved={() => { setComparing(null); setSelection(new Map()); setNotice('Товары объединены. Ссылки и история сохранены.'); }} />}
     {dialog && <CatalogDialog spec={dialog} onClose={() => setDialog(null)} />}
     {photo && <Modal className="procurement-dialog procurement-photo-dialog" title={photo.name} onClose={() => setPhoto(null)}><img src={photo.imageDataUrl} alt={photo.name} /><p>{photo.variant}</p></Modal>}
-  </div>;
+  </div></>;
 }

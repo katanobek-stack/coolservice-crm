@@ -47,10 +47,11 @@ export function ProcurementWorkspace({ materials, materialsReady = true, ownerId
   }, [storageKey, draft.id, revision]);
   const selected = new Set(draft.lines.map(line => line.catalogId));
   function pick(item: ProcurementCatalogItem) {
-    if (item.archived) return;
+    if (item.archived || item.mergedIntoId) return;
     if (selected.has(item.id)) { setDraft({ ...draft, lines: draft.lines.filter(line => line.catalogId !== item.id) }); return; }
     if (draft.lines.length >= 200) { setError('В одном заказе может быть до 200 позиций.'); return; }
-    const supplier = item.suppliers[0];
+    const supplier = item.suppliers.find(value => !value.disabled);
+    if (!supplier) { setError('Нет действующих ссылок покупки. Включите ссылку в карточке товара.'); return; }
     setDraft({ ...draft, lines: [...draft.lines, { catalogId: item.id, name: item.name, variant: item.variant, supplierUrl: supplier.url, quantity: '1', unitPrice: supplier.priceFen === null ? '' : String(supplier.priceFen / 100), chinaDelivery: '', receivedQuantity: '', weightKg: '' }] });
   }
   async function importFile(event: ChangeEvent<HTMLInputElement>) {
