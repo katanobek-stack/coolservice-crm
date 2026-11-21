@@ -123,7 +123,6 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     throw new RequestValidationError(`measurements must contain 1-${MAX_MEASUREMENTS_PER_PACKET} items`);
   }
 
-  let previousTime = Number.NEGATIVE_INFINITY;
   const sensorTimeKeys = new Set<string>();
   const parsed = measurements.map((measurement, index): ValidMeasurement => {
     if (!isRecord(measurement) || !hasOnlyKeys(measurement, ["measuredAt", "temperatureC", "timeQuality", "deliveryQuality", "sensorId"])) {
@@ -157,18 +156,11 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
       throw new RequestValidationError(`measurements[${index}].sensorId is invalid`);
     }
     const measuredAt = parseMeasuredAt(measurement.measuredAt, nowMs);
-    // Multiple DS18B20 sensors are sampled during the same controller cycle,
-    // so adjacent sensors may legitimately have the same measuredAt. Packet
-    // order remains deterministic and stableMeasurementId still uses its index.
-    if (measuredAt.getTime() < previousTime) {
-      throw new RequestValidationError("measurements must be ordered by measuredAt values");
-    }
     const sensorTimeKey = `${sensorId ?? "default"}\u0000${measuredAt.getTime()}`;
     if (sensorTimeKeys.has(sensorTimeKey)) {
       throw new RequestValidationError("one sensor cannot have duplicate measuredAt values in a packet");
     }
     sensorTimeKeys.add(sensorTimeKey);
-    previousTime = measuredAt.getTime();
     return {
       measuredAt,
       temperatureC: measurement.temperatureC,
@@ -178,6 +170,11 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     };
   });
 
+  // RTC/NTP correction across a reboot can move acquisition timestamps backwards.
+  // Normalize only after validation, without changing timestamps or the caller's
+  // frozen payload. Stable sort keeps equal-time probes deterministic on replay;
+  // existing ordered packets retain their measurement indexes and identities.
+  parsed.sort((left, right) => left.measuredAt.getTime() - right.measuredAt.getTime());
   return { deviceId, packetId, measurements: parsed, ...(body.deliveryLink ? { deliveryLink: body.deliveryLink as "gsm" | "wifi" } : {}) };
 }
 

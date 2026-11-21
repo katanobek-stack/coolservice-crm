@@ -64,6 +64,23 @@ async function send(packetId, measurements, deliveryLink) {
   return result;
 }
 const events = () => [...documents].filter(([path]) => path.startsWith("monitoringAlertEvents/")).map(([, value]) => value);
+test("actual ingest: RTC backward step preserves every timestamp, chronological alerts and replay identity", async () => {
+  setup(); rule("rtc-step", "temperature-1");
+  const points = [sample(30000, "temperature-1", -15), sample(17000, "temperature-1", -14), sample(17000, "temperature-1_2", -19)];
+  const original = structuredClone(points);
+  assert.equal((await send("rtc-step:immutable", points, "wifi")).code, 202);
+  assert.deepEqual(points, original, "input/frozen batch must not be modified");
+  const packet = documents.get(`monitoringTelemetry/${DEVICE}/packets/rtc-step:immutable`);
+  assert.deepEqual(packet.measurements.map(p => p.measuredAt.toMillis()), [base+17000,base+17000,base+30000]);
+  assert.equal(documents.get(`monitoringDeviceState/${DEVICE}/sensors/temperature-1`).temperatureC, -15);
+  assert.equal(documents.get(`monitoringDeviceState/${DEVICE}`).measuredAt.toMillis(),base+30000);
+  assert.equal(events().length, 1);
+  assert.equal(events()[0].state, "recovered");
+  const size = documents.size;
+  assert.equal((await send("rtc-step:immutable", points, "gsm")).body.outcome, "duplicate");
+  assert.equal(documents.size, size);
+  assert.equal(packet.deliveryLink, "wifi");
+});
 test('delivery channel is recorded once and a retry over another link keeps original provenance', async()=>{
   setup();const points=[sample(0,'temperature-1',20)];
   await send('direct-channel:1',points,'gsm');
