@@ -128,7 +128,7 @@ function failureLabel(code: MonitoringControllerStatus["lastFailureCode"]): stri
     none: "Нет", modem_not_ready: "Модем не готов", network_not_registered: "Нет регистрации в сети",
     ntp_sync_failed: "Не удалось синхронизировать время", gprs_connect_failed: "Не удалось подключить GPRS",
     tcp_connect_failed: "Не удалось подключить TCP", mqtt_connect_failed: "Не удалось подключить MQTT",
-    publish_send_failed: "Не удалось отправить публикацию", puback_timeout: "Тайм-аут подтверждения MQTT",
+    publish_send_failed: "Не удалось отправить данные", puback_timeout: "Тайм-аут подтверждения MQTT",
     modem_restarted: "Модем перезапущен", esp_restarted: "ESP32 перезапущен",
   };
   return labels[code];
@@ -220,7 +220,7 @@ function SensorNameEditor({ deviceId, sensor, displayName, canManage }: {
   return <div className="monitor-sensor-name-form"><input value={value} maxLength={80} placeholder={displayName} onChange={(event) => setValue(event.target.value)} disabled={saving} aria-label={`Название ${sensor?.sensorId ?? "датчика"}`} /><button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "…" : "Сохранить"}</button><button type="button" disabled={saving} onClick={() => { setValue(sensor?.name ?? ""); setEditing(false); setError(""); }}>Отмена</button>{error && <span>{error}</span>}</div>;
 }
 
-const DELAYED_DELIVERY_MESSAGE = "Точка измерена при отсутствии подтверждённой MQTT-связи и доставлена позже";
+const DELAYED_DELIVERY_MESSAGE = "Точка измерена без недавнего подтверждения связи и доставлена позже";
 
 function qualityDetails(point: TemperaturePoint): string[] {
   const details: string[] = [];
@@ -506,7 +506,7 @@ function TemperatureChart({ points, period, rules }: {
         </div>
       )}
       <div className="monitor-chart-legend">
-        <span><i className="monitor-legend-line" /> Точка доставлена при подтверждённой MQTT-связи</span>
+        <span><i className="monitor-legend-line" /> Точка измерена при недавно подтверждённой связи</span>
         <span><i className="monitor-legend-line monitor-legend-line--delayed" /> {DELAYED_DELIVERY_MESSAGE}</span>
         <span><i className="monitor-legend-line monitor-legend-line--estimated" /> Пунктир: время оценочное — восстановлено после отсутствия UTC</span>
         <span>Линия лишь соединяет соседние измерения и не означает наличие данных между ними</span>
