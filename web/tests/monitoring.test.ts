@@ -17,10 +17,18 @@ import {
   sensorDisplayName,
   temperatureRuleTargetsSensor,
   simBalancePresentation,
+  controllerDeliveryLabel,
 } from "../src/shared/monitoring/logic";
 import type { MonitoringControllerStatus, MonitoringDeviceState, TemperaturePoint } from "../src/shared/types/monitoring";
 
 const NOW = Date.parse("2026-09-13T02:00:00.000Z");
+test("delivery label distinguishes confirmed channel from unknown HTTPS and MQTT",()=>{
+  assert.equal(controllerDeliveryLabel({transport:'https',activeLink:'wifi'}),'Wi-Fi → CRM');
+  assert.equal(controllerDeliveryLabel({transport:'https',activeLink:'gsm'}),'GSM → CRM');
+  assert.equal(controllerDeliveryLabel({transport:'https'}),'HTTPS → CRM');
+  assert.equal(controllerDeliveryLabel(undefined),'Канал не известен');
+  assert.equal(controllerDeliveryLabel({transport:'mqtt'}),'MQTT → VPS');
+});
 
 test("SIM balance distinguishes missing, real zero and stale value after failed query", () => {
   assert.equal(simBalancePresentation(undefined).amount, null);

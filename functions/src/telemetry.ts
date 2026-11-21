@@ -27,7 +27,8 @@ const SENSOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const UTC_ISO_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/;
 const MIN_DEVICE_KEY_LENGTH = 32;
 const MAX_DEVICE_KEY_LENGTH = 256;
-const MAX_MEASUREMENTS_PER_PACKET = 12;
+// Ten 30-second cycles from three probes in one five-minute delivery.
+const MAX_MEASUREMENTS_PER_PACKET = 30;
 const MIN_TEMPERATURE_C = -55;
 const MAX_TEMPERATURE_C = 125;
 const MAX_FUTURE_CLOCK_SKEW_MS = 10 * 60 * 1000;
@@ -44,6 +45,7 @@ interface TimedMeasurement {
 type ValidMeasurement = TimedMeasurement;
 
 interface ValidPacket {
+  deliveryLink?: "gsm" | "wifi";
   deviceId: string;
   packetId: string;
   measurements: ValidMeasurement[];
@@ -99,11 +101,14 @@ function parseMeasuredAt(value: unknown, nowMs: number): Date {
 }
 
 function parsePacket(body: unknown, nowMs: number): ValidPacket {
-  if (!isRecord(body) || !hasOnlyKeys(body, ["deviceId", "packetId", "measurements"])) {
+  if (!isRecord(body) || !hasOnlyKeys(body, ["deviceId", "packetId", "measurements", "deliveryLink"])) {
     throw new RequestValidationError("body must contain only deviceId, packetId and measurements");
   }
 
   const { deviceId, packetId, measurements } = body;
+  if (body.deliveryLink !== undefined && body.deliveryLink !== "gsm" && body.deliveryLink !== "wifi") {
+    throw new RequestValidationError("deliveryLink must be gsm or wifi");
+  }
   if (typeof deviceId !== "string" || !DEVICE_ID_PATTERN.test(deviceId)) {
     throw new RequestValidationError("deviceId is invalid");
   }
@@ -173,7 +178,7 @@ function parsePacket(body: unknown, nowMs: number): ValidPacket {
     };
   });
 
-  return { deviceId, packetId, measurements: parsed };
+  return { deviceId, packetId, measurements: parsed, ...(body.deliveryLink ? { deliveryLink: body.deliveryLink as "gsm" | "wifi" } : {}) };
 }
 
 function publicValidationMessage(error: RequestValidationError): string {
@@ -574,6 +579,7 @@ export const ingestTelemetry = onRequest(
           measuredAt: Timestamp.fromDate(measurement.measuredAt),
         }));
         transaction.create(packetRef, {
+          ...(packet.deliveryLink ? { deliveryLink: packet.deliveryLink } : {}),
           deviceId: packet.deviceId,
           packetId: packet.packetId,
           measurements: storedMeasurements,

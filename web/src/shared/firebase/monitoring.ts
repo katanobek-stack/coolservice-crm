@@ -135,6 +135,14 @@ function mapControllerStatus(id: string, data: DocumentData): MonitoringControll
     lastFailureCode: data.lastFailureCode,
     uptimeSeconds: data.uptimeSeconds,
     transport: data.transport === "https" ? "https" : "mqtt",
+    activeLink: data.activeLink === "gsm" || data.activeLink === "wifi" ? data.activeLink : undefined,
+    wifiConnected: typeof data.wifiConnected === "boolean" ? data.wifiConnected : undefined,
+    wifiRssi: Number.isInteger(data.wifiRssi) && data.wifiRssi >= -127 && data.wifiRssi <= 0 ? data.wifiRssi : undefined,
+    gsmFailure: typeof data.gsmFailure === "string" ? data.gsmFailure : undefined,
+    storageState: data.storageState === "flash" || data.storageState === "fault" ? data.storageState : undefined,
+    resetReason: typeof data.resetReason === "string" ? data.resetReason : undefined,
+    lastGsmAckAt: asDate(data.lastGsmAckAt),
+    lastWifiAckAt: asDate(data.lastWifiAckAt),
     simBalance: data.simBalance && ["ok", "error", "unsupported", "unavailable"].includes(data.simBalance.status)
       ? {
         status: data.simBalance.status,

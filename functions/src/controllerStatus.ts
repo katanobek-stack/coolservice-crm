@@ -77,7 +77,8 @@ function parseStatus(body: unknown, nowMs: number): ValidStatus {
   const allowed = [
     "controllerId", "statusId", "reportedAt", "networkRegistered", "registrationState", "rssi",
     "gprsConnected", "mqttConnected", "queueDepth", "lastFailureCode", "uptimeSeconds",
-    "transport", "simBalance",
+    "transport", "simBalance", "activeLink", "wifiConnected", "wifiRssi", "gsmFailure",
+    "storageState", "resetReason", "lastGsmAckAt", "lastWifiAckAt",
   ];
   if (!isRecord(body) || !hasOnlyKeys(body, allowed)) {
     throw new RequestValidationError("body contains unknown fields");

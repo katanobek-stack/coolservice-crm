@@ -7,6 +7,14 @@ export interface IncomingSimBalance {
 }
 export interface StatusExtensions {
   transport?: "mqtt" | "https";
+  activeLink?: "gsm" | "wifi";
+  wifiConnected?: boolean;
+  wifiRssi?: number;
+  gsmFailure?: string;
+  storageState?: "flash" | "fault";
+  resetReason?: string;
+  lastGsmAckAt?: Date;
+  lastWifiAckAt?: Date;
   simBalance?: IncomingSimBalance;
 }
 
@@ -14,6 +22,31 @@ export function parseStatusExtensions(
   body: Record<string, unknown>, parseUtc: (value: unknown) => Date,
 ): StatusExtensions {
   const result: StatusExtensions = {};
+  if (body.activeLink !== undefined) {
+    if (body.activeLink !== "gsm" && body.activeLink !== "wifi") throw new Error("invalid activeLink");
+    result.activeLink = body.activeLink;
+  }
+  if (body.wifiConnected !== undefined) {
+    if (typeof body.wifiConnected !== "boolean") throw new Error("invalid wifiConnected");
+    result.wifiConnected = body.wifiConnected;
+  }
+  if (body.wifiRssi !== undefined) {
+    if (!Number.isInteger(body.wifiRssi) || (body.wifiRssi as number) < -127 || (body.wifiRssi as number) > 0) throw new Error("invalid wifiRssi");
+    result.wifiRssi = body.wifiRssi as number;
+  }
+  if (body.storageState !== undefined) {
+    if (body.storageState !== "flash" && body.storageState !== "fault") throw new Error("invalid storageState");
+    result.storageState = body.storageState;
+  }
+  for (const key of ["gsmFailure", "resetReason"] as const) {
+    if (body[key] !== undefined) {
+      if (typeof body[key] !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body[key] as string)) throw new Error(`invalid ${key}`);
+      result[key] = body[key] as string;
+    }
+  }
+  for (const key of ["lastGsmAckAt", "lastWifiAckAt"] as const) {
+    if (body[key] !== undefined) result[key] = parseUtc(body[key]);
+  }
   if (body.transport !== undefined) {
     if (body.transport !== "mqtt" && body.transport !== "https") throw new Error("transport must be mqtt or https");
     result.transport = body.transport;

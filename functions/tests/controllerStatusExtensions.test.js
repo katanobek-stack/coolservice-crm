@@ -6,6 +6,11 @@ const parseUtc = value => {
   return new Date(value);
 };
 const at = '2026-11-02T03:00:00.000Z';
+test('direct link status validates independent GSM/WiFi health and optional timestamps', () => {
+  const value=parseStatusExtensions({transport:'https',activeLink:'wifi',wifiConnected:true,wifiRssi:-65,gsmFailure:'delivery_failed',storageState:'flash',resetReason:'1',lastGsmAckAt:at},parseUtc);
+  assert.equal(value.activeLink,'wifi');assert.equal(value.wifiRssi,-65);assert.deepEqual(value.lastGsmAckAt,new Date(at));
+  for(const bad of [{activeLink:'mqtt'},{wifiConnected:'yes'},{wifiRssi:5},{storageState:'volatile'},{gsmFailure:'x'.repeat(65)}])assert.throws(()=>parseStatusExtensions(bad,parseUtc));
+});
 test('legacy fields remain absent and HTTPS is explicit', () => {
   assert.deepEqual(parseStatusExtensions({}, parseUtc), {});
   assert.deepEqual(parseStatusExtensions({transport:'https'}, parseUtc), {transport:'https'});

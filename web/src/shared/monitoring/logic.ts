@@ -11,6 +11,15 @@ import type {
 import type { Client } from "../types/client";
 
 export type ReadingStatus = "missing" | "stale" | "fresh";
+export function controllerDeliveryLabel(status: Pick<MonitoringControllerStatus, "transport" | "activeLink"> | undefined): string {
+  if (!status) return "Канал не известен";
+  if (status.transport !== "https") return "MQTT → VPS";
+  return status.activeLink === "wifi" ? "Wi-Fi → CRM" : status.activeLink === "gsm" ? "GSM → CRM" : "HTTPS → CRM";
+}
+export function gsmDeliveryFailureLabel(value: string | undefined): string {
+  const labels: Record<string,string> = {none:"Ошибок доставки нет",unknown:"Ещё не проверен",modem_not_ready:"Модем не отвечает",network_not_registered:"Нет регистрации",tcp_connect_failed:"Нет соединения с CRM",delivery_failed:"Нет подтверждения от CRM",crm_auth_failed:"Ошибка ключа контроллера",crm_validation_failed:"Ошибка формата данных"};
+  return value ? labels[value] ?? "Ошибка GSM" : "Нет данных";
+}
 export type ConnectionStatus = "unknown" | "offline" | "online";
 export const MAX_RENDERED_TEMPERATURE_POINTS = 600;
 export const MIN_CHART_WINDOW_MS = 60_000;

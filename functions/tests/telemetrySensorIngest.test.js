@@ -57,13 +57,50 @@ function rule(id, sensorId, direction = "above", thresholdC = -15) {
   documents.set(`monitoringDevices/${DEVICE}/temperatureRules/${id}`, { ...version, versions: [version] });
 }
 function sample(offset, sensorId, temperatureC) { return { sensorId, temperatureC, measuredAt: new Date(base + offset).toISOString() }; }
-async function send(packetId, measurements) {
+async function send(packetId, measurements, deliveryLink) {
   const result = { code: 200, set() { return this; }, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
-  await ingestTelemetry({ method: "POST", is: () => true, get: () => `Bearer ${TEST_KEY}`, body: { deviceId: DEVICE, packetId, measurements } }, result);
+  await ingestTelemetry({ method: "POST", is: () => true, get: () => `Bearer ${TEST_KEY}`, body: { deviceId: DEVICE, packetId, measurements, ...(deliveryLink ? {deliveryLink} : {}) } }, result);
   assert.ok([200, 202].includes(result.code), JSON.stringify(result.body));
   return result;
 }
 const events = () => [...documents].filter(([path]) => path.startsWith("monitoringAlertEvents/")).map(([, value]) => value);
+test('delivery channel is recorded once and a retry over another link keeps original provenance', async()=>{
+  setup();const points=[sample(0,'temperature-1',20)];
+  await send('direct-channel:1',points,'gsm');
+  assert.equal(documents.get(`monitoringTelemetry/${DEVICE}/packets/direct-channel:1`).deliveryLink,'gsm');
+  assert.equal((await send('direct-channel:1',points,'wifi')).body.outcome,'duplicate');
+  assert.equal(documents.get(`monitoringTelemetry/${DEVICE}/packets/direct-channel:1`).deliveryLink,'gsm');
+});
+
+test("actual ingest: ten cycles of three probes retain all 30 points and replay is deduplicated", async () => {
+  setup(); base = Date.now() - 600_000;
+  const points = Array.from({ length: 10 }, (_, cycle) => [
+    sample(cycle * 30_000, "batch-one", -18 + cycle / 10),
+    sample(cycle * 30_000, "batch-two", -20 + cycle / 10),
+    sample(cycle * 30_000, "batch-mean", -19 + cycle / 10),
+  ]).flat();
+  const result = await send("batch:ten-cycles", points);
+  assert.equal(result.code, 202);
+  assert.equal(result.body.measurementsCreated, 30);
+  const stored = documents.get(`monitoringTelemetry/${DEVICE}/packets/batch:ten-cycles`);
+  assert.equal(stored.measurements.length, 30);
+  assert.equal(stored.measurements[0].measuredAt.toMillis(), base);
+  assert.equal(stored.measurements[29].measuredAt.toMillis(), base + 270_000);
+  assert.equal(documents.get(`monitoringDeviceState/${DEVICE}/sensors/batch-one`).temperatureC, -17.1);
+  assert.equal([...documents.keys()].filter(path => path.startsWith(`monitoringTelemetry/${DEVICE}/points/`)).length, 30);
+  const size = documents.size;
+  assert.equal((await send("batch:ten-cycles", points)).body.outcome, "duplicate");
+  assert.equal(documents.size, size);
+});
+
+test("actual ingest: oversized 31-value packet is rejected without writes", async () => {
+  setup(); base = Date.now() - 600_000;
+  const points = Array.from({ length: 31 }, (_, n) => sample(n * 1000, "batch-one", -18));
+  const result = { code: 200, set() { return this; }, status(code) { this.code=code; return this; }, json(body) { this.body=body; return this; } };
+  await ingestTelemetry({ method: "POST", is: () => true, get: () => `Bearer ${TEST_KEY}`, body: { deviceId: DEVICE, packetId: "batch:oversized", measurements: points } }, result);
+  assert.equal(result.code, 400);
+  assert.equal(documents.size, 2);
+});
 
 test("actual ingest: both directions, unrelated probe, equality recovery and packet dedupe", async () => {
   setup(); rule("rule-one", "temperature-1"); rule("rule-two", "temperature-1_2", "below", -25);

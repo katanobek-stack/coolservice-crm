@@ -29,6 +29,8 @@ import {
   sensorDisplayName,
   temperatureRuleTargetsSensor,
   simBalancePresentation,
+  controllerDeliveryLabel,
+  gsmDeliveryFailureLabel,
   type ChartWindow,
   type ConnectionStatus,
   type ReadingStatus,
@@ -146,8 +148,11 @@ function DiagnosticsPanel({ status, connection, nowMs }: {
         <div><span>Сигнал сети</span><strong>{status.rssi === null ? "Нет данных" : `${status.rssi} / 31`}</strong></div>
         <div><span>Регистрация сети</span><strong>{registrationLabel(status)}</strong></div>
         <div><span>Мобильный интернет</span><strong>{status.gprsConnected ? "Подключён" : "Нет подключения"}</strong></div>
-        <div><span>{status.transport === "https" ? "HTTPS → CRM" : "MQTT"}</span><strong>{status.transport === "https" ? (connection === "online" ? "Статус получен" : "Нет свежего статуса") : (status.mqttConnected ? "Подключён" : "Нет подключения")}</strong></div>
+        <div><span>{controllerDeliveryLabel(status)}</span><strong>{status.transport === "https" ? (connection === "online" ? "Статус получен" : "Нет свежего статуса") : (status.mqttConnected ? "Подключён" : "Нет подключения")}</strong></div>
         <div><span>Баланс SIM</span><strong>{balance.amount ?? "Нет данных"}</strong><small>{balance.stateLabel}{balance.lastSuccessAt ? ` · баланс на ${formatDateTime(balance.lastSuccessAt)}` : ""}</small></div>
+        {status.activeLink && <div><span>GSM: доставка в CRM</span><strong>{gsmDeliveryFailureLabel(status.gsmFailure)}</strong><small>Последнее подтверждение: {status.lastGsmAckAt ? formatDateTime(status.lastGsmAckAt) : "ещё нет"}</small></div>}
+        {status.activeLink && <div><span>Резервный Wi-Fi</span><strong>{status.wifiConnected ? "Подключён" : "Нет подключения"}</strong><small>{status.wifiRssi !== undefined ? `${status.wifiRssi} dBm · ` : ""}Последнее подтверждение: {status.lastWifiAckAt ? formatDateTime(status.lastWifiAckAt) : "ещё нет"}</small></div>}
+        {status.storageState && <div><span>Сохранение точек</span><strong>{status.storageState === "flash" ? "Постоянная память" : "Ошибка хранения — требуется проверка"}</strong></div>}
         <div><span>Очередь точек</span><strong>{status.queueDepth}</strong></div>
         <div><span>Время работы</span><strong>{formatUptime(status.uptimeSeconds)}</strong></div>
         <div><span>Последняя ошибка</span><strong>{failureLabel(status.lastFailureCode)}</strong></div>

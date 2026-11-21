@@ -54,6 +54,14 @@ export interface MonitoringSensorState extends MonitoringDeviceState {
 }
 
 export interface MonitoringControllerStatus {
+  activeLink?: "gsm" | "wifi";
+  wifiConnected?: boolean;
+  wifiRssi?: number;
+  gsmFailure?: string;
+  storageState?: "flash" | "fault";
+  resetReason?: string;
+  lastGsmAckAt?: Date | null;
+  lastWifiAckAt?: Date | null;
   transport?: "mqtt" | "https";
   simBalance?: MonitoringSimBalance;
   controllerId: string;
