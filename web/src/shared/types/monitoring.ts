@@ -43,6 +43,8 @@ export interface MonitoringDeviceState {
 /** A stable, technical sensor identifier registered under a controller. */
 export interface MonitoringSensor {
   sensorId: string;
+  /** Retain history while hiding retired channels from the current workspace. */
+  archived?: boolean;
   /** Optional operator-facing name. The sensorId is never derived from it. */
   name?: string;
   lastSeenAt: Date | null;

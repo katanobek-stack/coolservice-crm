@@ -67,3 +67,12 @@ test('a failed source keeps the draft subtree mounted but unavailable for editin
  const html=renderToStaticMarkup(createElement(boundary.MonitoringSourceBoundary,{status:{...ready,states:'error'}},createElement('input',{value:'Несохранённое правило',readOnly:true})));
  assert.match(html,/Несохранённое правило/);assert.match(html,/hidden/);assert.match(html,/role="alert"/);
 });
+
+test('real probes keep three cards including an absent third; archived simulation never leaks from old state',()=>{
+ const sensors=[{sensorId:'ds18b20-1',lastSeenAt:null},{sensorId:'ds18b20-2',lastSeenAt:null},{sensorId:'ds18b20-3',lastSeenAt:null},{sensorId:'sim-probe-1',archived:true,lastSeenAt:null},{sensorId:'sim-probe-2',archived:true,lastSeenAt:null},{sensorId:'sim-average',archived:true,lastSeenAt:null}];
+ const states=new Map([['ds18b20-1',state()],['ds18b20-2',state()],['sim-probe-1',state()],['sim-probe-2',state()],['sim-average',state()]]);
+ const views=api.selectedSensorViews({selectedId:'x',owner:'x',registryReady:true,statesReady:true,error:'',sensors,states,parent:state()});
+ assert.deepEqual(views.map(v=>v.sensorId),['ds18b20-1','ds18b20-2','ds18b20-3']);
+ assert.equal(views[2].state,undefined);
+ assert.equal(states.size,5,'archived history/state is retained');
+});

@@ -93,6 +93,7 @@ function mapSensor(id: string, data: DocumentData): MonitoringSensor | null {
   if (typeof data.sensorId !== "string" || data.sensorId !== id) return null;
   return {
     sensorId: id,
+    archived: data.archived === true,
     name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : undefined,
     lastSeenAt: asDate(data.lastSeenAt),
   };

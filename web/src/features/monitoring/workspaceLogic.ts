@@ -35,8 +35,9 @@ export function filterMonitorRows(rows:readonly MonitorRow[],filter:MonitorFilte
 export interface SensorView{sensorId:string;sensor:MonitoringSensor;state:MonitoringDeviceState|undefined;index:number}
 export function selectedSensorViews(input:{selectedId:string|null;owner:string|null;registryReady:boolean;statesReady:boolean;error:string;sensors:MonitoringSensor[];states:Map<string,MonitoringSensorState>;parent:MonitoringDeviceState|undefined}):SensorView[]{
  if(!input.selectedId||input.owner!==input.selectedId||!input.registryReady||!input.statesReady||input.error)return [];
- const ids=new Set([...input.sensors.map(s=>s.sensorId),...input.states.keys()]);
- if(!ids.size&&input.parent?.measuredAt)ids.add('default');
+ const archived=new Set(input.sensors.filter(s=>s.archived).map(s=>s.sensorId));
+ const ids=new Set([...input.sensors.map(s=>s.sensorId),...input.states.keys()].filter(id=>!archived.has(id)));
+ if(!ids.size&&!input.sensors.length&&!input.states.size&&input.parent?.measuredAt)ids.add('default');
  return [...ids].sort((a,b)=>a.localeCompare(b,'en')).map((sensorId,index)=>({sensorId,index,sensor:input.sensors.find(s=>s.sensorId===sensorId)??{sensorId,lastSeenAt:null},state:input.states.get(sensorId)??(sensorId==='default'?input.parent:undefined)}));
 }
 export function monitorSensorColor(sensorId:string):string{const colors=['#2563eb','#087e8b','#7c3aed','#158065','#b45309','#be3b68'];let hash=0;for(const c of sensorId)hash=(hash*31+c.charCodeAt(0))>>>0;return colors[hash%colors.length];}
